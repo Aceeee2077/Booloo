@@ -1,0 +1,9 @@
+:root { font-family: "Segoe UI", "Microsoft YaHei", sans-serif; color: #513a2c; }
+* { box-sizing: border-box; }
+html, body { width: 188px; height: 284px; margin: 0; overflow: hidden; background: transparent; }
+.menu { margin: 5px; padding: 5px; border: 1px solid #e9cbb6; border-radius: 12px; background: #fff8f2; box-shadow: 0 3px 10px #75411630; }
+.menu-title { margin: 3px 8px 2px; color: #a06b4b; font: 11px/15px "Segoe UI", "Microsoft YaHei", sans-serif; }
+button { display: flex; align-items: center; gap: 9px; width: 100%; height: 34px; padding: 0 9px; border: 0; border-radius: 8px; background: transparent; color: #513a2c; font: 13px "Segoe UI", "Microsoft YaHei", sans-serif; text-align: left; cursor: pointer; }
+button:hover, button:focus-visible { background: #ffead9; color: #c45b2e; outline: none; }
+button span:first-child { width: 17px; font-size: 15px; text-align: center; }
+button.quit { border-top: 1px solid #efdacb; border-radius: 0 0 8px 8px; }

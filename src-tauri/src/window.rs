@@ -8,7 +8,8 @@
 // ============================================================================
 
 use crate::config::ConfigState;
-use serde_json::Value;
+use serde::Deserialize;
+use serde_json::{json, Value};
 use std::fs;
 use std::path::PathBuf;
 use std::sync::Mutex;
@@ -23,6 +24,17 @@ pub struct DragAnchor {
     win_y: i32,
     cur_x: f64,
     cur_y: f64,
+    visual_bounds: Option<VisualBounds>,
+}
+
+/// Opaque body bounds in the renderer's 300px CSS canvas. The transparent window
+/// padding is deliberately excluded from edge collision and snapping.
+#[derive(Clone, Copy, Deserialize)]
+pub struct VisualBounds {
+    x: f64,
+    y: f64,
+    w: f64,
+    h: f64,
 }
 
 #[derive(Default)]
@@ -41,9 +53,10 @@ fn config_bool(window: &WebviewWindow, key: &str, fallback: bool) -> bool {
 /// dragged off-screen. By default that area is the current monitor's work area (the
 /// taskbar is respected); with "cross monitors" enabled it becomes the bounding box
 /// of every monitor instead.
-fn clamp_to_monitor(window: &WebviewWindow, x: i32, y: i32) -> (i32, i32) {
+fn clamp_to_monitor(window: &WebviewWindow, x: i32, y: i32, visual: Option<VisualBounds>) -> (i32, i32) {
     let stay_on_one = config_bool(window, "stayOnOneDisplay", true);
-    clamp_to(window, x, y, !stay_on_one)
+    let visual = if config_bool(window, "snapToEdge", false) { visual } else { None };
+    clamp_to(window, x, y, !stay_on_one, visual)
 }
 
 /// Bounding rectangle the pet must stay inside: either its current monitor's work
@@ -75,16 +88,119 @@ fn bounds(window: &WebviewWindow, all_monitors: bool) -> Option<(i32, i32, i32, 
     Some((min_x, min_y, max_x - min_x, max_y - min_y))
 }
 
-fn clamp_to(window: &WebviewWindow, x: i32, y: i32, all_monitors: bool) -> (i32, i32) {
+fn physical_visual(window: &WebviewWindow, visual: Option<VisualBounds>) -> Option<(i32, i32, i32, i32)> {
+    let visual = visual?;
+    let scale = window.scale_factor().ok()?;
+    let size = window.outer_size().ok()?;
+    if ![visual.x, visual.y, visual.w, visual.h].iter().all(|n| n.is_finite())
+        || visual.w < 1.0 || visual.h < 1.0
+    {
+        return None;
+    }
+    let x0 = (visual.x * scale).floor() as i32;
+    let y0 = (visual.y * scale).floor() as i32;
+    let x1 = ((visual.x + visual.w) * scale).ceil() as i32;
+    let y1 = ((visual.y + visual.h) * scale).ceil() as i32;
+    // A bad renderer rectangle must never let the entire window disappear.
+    if x0 < 0 || y0 < 0 || x1 > size.width as i32 || y1 > size.height as i32 {
+        return None;
+    }
+    Some((x0, y0, x1, y1))
+}
+
+fn clamp_position(x: i32, y: i32, area: (i32, i32, i32, i32), visible: (i32, i32, i32, i32)) -> (i32, i32) {
+    let (bx, by, bw, bh) = area;
+    let (vx0, vy0, vx1, vy1) = visible;
+    let min_x = bx - vx0;
+    let min_y = by - vy0;
+    let max_x = (bx + bw - vx1).max(min_x);
+    let max_y = (by + bh - vy1).max(min_y);
+    (x.clamp(min_x, max_x), y.clamp(min_y, max_y))
+}
+
+#[cfg(test)]
+mod edge_tests {
+    use super::clamp_position;
+
+    #[test]
+    fn allows_transparent_padding_outside_each_work_area_edge() {
+        let area = (0, 0, 1920, 1040);
+        // The pet occupies only x=100..200, y=170..290 inside a 300px window.
+        let visible = (100, 170, 200, 290);
+        assert_eq!(clamp_position(-500, 300, area, visible).0, -100);
+        assert_eq!(clamp_position(2500, 300, area, visible).0, 1720);
+        assert_eq!(clamp_position(600, 2500, area, visible).1, 750);
+        assert_eq!(clamp_position(600, -500, area, visible).1, -170);
+    }
+
+    #[test]
+    fn whole_window_bounds_remain_available_when_snapping_is_off() {
+        let area = (0, 0, 1920, 1040);
+        let window = (0, 0, 300, 300);
+        assert_eq!(clamp_position(-100, 1000, area, window), (0, 740));
+    }
+}
+
+fn clamp_to(window: &WebviewWindow, x: i32, y: i32, all_monitors: bool, visual: Option<VisualBounds>) -> (i32, i32) {
     let Ok(size) = window.outer_size() else {
         return (x, y);
     };
     let Some((bx, by, bw, bh)) = bounds(window, all_monitors) else {
         return (x, y);
     };
-    let max_x = (bx + bw - size.width as i32).max(bx);
-    let max_y = (by + bh - size.height as i32).max(by);
-    (x.clamp(bx, max_x), y.clamp(by, max_y))
+    let visible = physical_visual(window, visual)
+        .unwrap_or((0, 0, size.width as i32, size.height as i32));
+    clamp_position(x, y, (bx, by, bw, bh), visible)
+}
+
+/// How much room the pet's visible box has before it touches the work-area sides.
+///
+/// The animation system uses this to stop a walk at the screen edge and to satisfy
+/// `nearScreenEdge` behavior conditions. Computed here rather than in the renderer
+/// because only the main process knows the monitor's scale factor — comparing CSS
+/// pixels from the page against physical window coordinates is wrong on any
+/// display that is not at 100%.
+#[tauri::command]
+pub fn window_edge_gaps(window: WebviewWindow, visual: Option<VisualBounds>) -> Value {
+    let Ok(size) = window.outer_size() else {
+        return json!({ "left": 0, "right": 0, "bottom": 0, "workWidth": 0, "workHeight": 0 });
+    };
+    let Ok(position) = window.outer_position() else {
+        return json!({ "left": 0, "right": 0, "bottom": 0, "workWidth": 0, "workHeight": 0 });
+    };
+    let scale = window.scale_factor().unwrap_or(1.0);
+    let visible = physical_visual(&window, visual)
+        .unwrap_or((0, 0, size.width as i32, size.height as i32));
+    // Follow the pet onto whichever display it currently sits on.
+    let area = window
+        .current_monitor()
+        .ok()
+        .flatten()
+        .map(|monitor| {
+            let work = monitor.work_area();
+            (
+                work.position.x,
+                work.position.y,
+                work.size.width as i32,
+                work.size.height as i32,
+            )
+        })
+        .or_else(|| bounds(&window, false));
+    let Some((bx, by, bw, bh)) = area else {
+        return json!({ "left": 0, "right": 0, "bottom": 0, "workWidth": 0, "workHeight": 0 });
+    };
+    let (vx0, _vy0, vx1, vy1) = visible;
+    let left = (position.x + vx0) - bx;
+    let right = (bx + bw) - (position.x + vx1);
+    let bottom = (by + bh) - (position.y + vy1);
+    json!({
+        "left": left.max(0),
+        "right": right.max(0),
+        "bottom": bottom.max(0),
+        "workWidth": bw,
+        "workHeight": bh,
+        "scale": scale,
+    })
 }
 
 // ---------- Position memory ----------
@@ -151,7 +267,16 @@ pub async fn show_pet_window(app: AppHandle) -> Result<(), String> {
         Some((x, y)) => {
             // Clamp against every monitor: a position saved on a display that is now
             // unplugged must land back on-screen, not be pulled to the primary.
-            let (x, y) = clamp_to(&pet, x, y, true);
+            // Keep remembered partially off-screen placements if the window centre
+            // still belongs to a connected display (edge-snapped pets use these).
+            let size = pet.outer_size().map_err(|e| e.to_string())?;
+            let margin_x = size.width as i32 / 3;
+            let margin_y = size.height as i32 / 3;
+            let area = bounds(&pet, true);
+            let (x, y) = area.map(|area| clamp_position(
+                x, y, area,
+                (margin_x, margin_y, size.width as i32 - margin_x, size.height as i32 - margin_y),
+            )).unwrap_or((x, y));
             let _ = pet.set_position(PhysicalPosition::new(x, y));
         }
         // First run (or a forgotten position): start centred.
@@ -163,17 +288,17 @@ pub async fn show_pet_window(app: AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn window_move(window: WebviewWindow, dx: i32, dy: i32) -> Result<(), String> {
+pub fn window_move(window: WebviewWindow, dx: i32, dy: i32, visual_bounds: Option<VisualBounds>) -> Result<(), String> {
     let position = window.outer_position().map_err(|e| e.to_string())?;
-    let (x, y) = clamp_to_monitor(&window, position.x + dx, position.y + dy);
+    let (x, y) = clamp_to_monitor(&window, position.x + dx, position.y + dy, visual_bounds);
     window
         .set_position(PhysicalPosition::new(x, y))
         .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-pub fn window_move_to(window: WebviewWindow, x: i32, y: i32) -> Result<(), String> {
-    let (x, y) = clamp_to_monitor(&window, x, y);
+pub fn window_move_to(window: WebviewWindow, x: i32, y: i32, visual_bounds: Option<VisualBounds>) -> Result<(), String> {
+    let (x, y) = clamp_to_monitor(&window, x, y, visual_bounds);
     window
         .set_position(PhysicalPosition::new(x, y))
         .map_err(|e| e.to_string())
@@ -188,6 +313,40 @@ pub fn window_position(window: WebviewWindow) -> Result<(i32, i32), String> {
 #[tauri::command]
 pub fn window_center_here(window: WebviewWindow) -> Result<(), String> {
     center_on_work_area(&window)
+}
+
+fn centered_visual_position(area: (i32, i32, i32, i32), visual: (i32, i32, i32, i32)) -> (i32, i32) {
+    let (x, y, width, height) = area;
+    let (vx0, vy0, vx1, vy1) = visual;
+    (x + width / 2 - (vx0 + vx1) / 2, y + height / 2 - (vy0 + vy1) / 2)
+}
+
+/// Where the window should move so the visible pet, rather than transparent
+/// padding around it, ends up in the middle of the current work area.
+#[tauri::command]
+pub fn window_center_target(window: WebviewWindow, visual_bounds: Option<VisualBounds>) -> Result<(i32, i32), String> {
+    let monitor = window.current_monitor().map_err(|e| e.to_string())?
+        .or(window.primary_monitor().map_err(|e| e.to_string())?);
+    let Some(monitor) = monitor else { return window_position(window); };
+    let size = window.outer_size().map_err(|e| e.to_string())?;
+    let area = monitor.work_area();
+    let visual = physical_visual(&window, visual_bounds)
+        .unwrap_or((0, 0, size.width as i32, size.height as i32));
+    Ok(centered_visual_position((area.position.x, area.position.y,
+        area.size.width as i32, area.size.height as i32), visual))
+}
+
+#[cfg(test)]
+mod reminder_tests {
+    use super::centered_visual_position;
+
+    #[test]
+    fn centers_the_visible_pet_instead_of_its_transparent_window() {
+        let position = centered_visual_position((0, 0, 1920, 1040), (84, 160, 216, 292));
+        assert_eq!(position, (810, 294));
+        assert_eq!(position.0 + (84 + 216) / 2, 960);
+        assert_eq!(position.1 + (160 + 292) / 2, 520);
+    }
 }
 
 /// Centre the window on the work area (not the full monitor) of the display it is on.
@@ -219,7 +378,7 @@ pub fn center_pet(app: &AppHandle) {
 }
 
 #[tauri::command]
-pub fn drag_begin(window: WebviewWindow, state: State<'_, DragState>) -> Result<(), String> {
+pub fn drag_begin(window: WebviewWindow, state: State<'_, DragState>, visual_bounds: Option<VisualBounds>) -> Result<(), String> {
     let position = window.outer_position().map_err(|e| e.to_string())?;
     let cursor = window.cursor_position().map_err(|e| e.to_string())?;
     *state.0.lock().unwrap() = Some(DragAnchor {
@@ -227,6 +386,7 @@ pub fn drag_begin(window: WebviewWindow, state: State<'_, DragState>) -> Result<
         win_y: position.y,
         cur_x: cursor.x,
         cur_y: cursor.y,
+        visual_bounds,
     });
     Ok(())
 }
@@ -240,23 +400,22 @@ pub fn drag_move(window: WebviewWindow, state: State<'_, DragState>) -> Result<(
     let cursor = window.cursor_position().map_err(|e| e.to_string())?;
     let x = anchor.win_x + (cursor.x - anchor.cur_x).round() as i32;
     let y = anchor.win_y + (cursor.y - anchor.cur_y).round() as i32;
-    let (x, y) = clamp_to_monitor(&window, x, y);
+    let (x, y) = clamp_to_monitor(&window, x, y, anchor.visual_bounds);
     window
         .set_position(PhysicalPosition::new(x, y))
         .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-pub fn drag_end(window: WebviewWindow, state: State<'_, DragState>) {
+pub fn drag_end(window: WebviewWindow, state: State<'_, DragState>, visual_bounds: Option<VisualBounds>) {
     *state.0.lock().unwrap() = None;
     if config_bool(&window, "snapToEdge", false) {
-        snap_to_edge(&window);
+        snap_to_edge(&window, visual_bounds);
     }
 }
 
 /// Snap flush to the nearest work-area edge when the pet is dropped close to it.
-fn snap_to_edge(window: &WebviewWindow) {
-    const THRESHOLD: i32 = 28;
+fn snap_to_edge(window: &WebviewWindow, visual_bounds: Option<VisualBounds>) {
     let Ok(position) = window.outer_position() else {
         return;
     };
@@ -271,20 +430,21 @@ fn snap_to_edge(window: &WebviewWindow) {
     let top = area.position.y;
     let right = area.position.x + area.size.width as i32;
     let bottom = area.position.y + area.size.height as i32;
-    let width = size.width as i32;
-    let height = size.height as i32;
+    let (vx0, vy0, vx1, vy1) = physical_visual(window, visual_bounds)
+        .unwrap_or((0, 0, size.width as i32, size.height as i32));
+    let threshold = (28.0 * window.scale_factor().unwrap_or(1.0)).round() as i32;
 
     let mut x = position.x;
     let mut y = position.y;
-    if (position.x - left).abs() <= THRESHOLD {
-        x = left;
-    } else if (right - (position.x + width)).abs() <= THRESHOLD {
-        x = right - width;
+    if (position.x + vx0 - left).abs() <= threshold {
+        x = left - vx0;
+    } else if (right - (position.x + vx1)).abs() <= threshold {
+        x = right - vx1;
     }
-    if (position.y - top).abs() <= THRESHOLD {
-        y = top;
-    } else if (bottom - (position.y + height)).abs() <= THRESHOLD {
-        y = bottom - height;
+    if (position.y + vy0 - top).abs() <= threshold {
+        y = top - vy0;
+    } else if (bottom - (position.y + vy1)).abs() <= threshold {
+        y = bottom - vy1;
     }
 
     if x != position.x || y != position.y {
@@ -360,57 +520,58 @@ pub fn quit_app(app: AppHandle) {
 /// (tray included). Async commands run on the runtime's thread pool instead, which
 /// leaves the main thread free to service the window creation.
 #[tauri::command]
-pub async fn open_settings(app: AppHandle) -> Result<(), String> {
+pub async fn open_settings(app: AppHandle, section: Option<String>) -> Result<(), String> {
     if let Some(existing) = app.get_webview_window("settings") {
         let _ = existing.show();
         let _ = existing.set_focus();
+        // Already open: just tell it which section to scroll to (the wardrobe
+        // entry in the pet's right-click menu relies on this).
+        if let Some(section) = section {
+            let _ = existing.emit("settings-focus-section", section);
+        }
         return Ok(());
     }
-    build_settings(&app)
+    build_settings(&app, section)
 }
 
-fn build_settings(app: &AppHandle) -> Result<(), String> {
-    tauri::WebviewWindowBuilder::new(
+/// Close the native settings window, including its transparent host surface.
+#[tauri::command]
+pub fn close_settings(app: AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window("settings") {
+        // Hide first so Windows drops the compositor surface before the webview is
+        // destroyed. `window.close()` in the page can leave that surface visible.
+        window.hide().map_err(|e| e.to_string())?;
+        window.close().map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+fn build_settings(app: &AppHandle, section: Option<String>) -> Result<(), String> {
+    let window = tauri::WebviewWindowBuilder::new(
         app,
         "settings",
         tauri::WebviewUrl::App("renderer/settings.html".into()),
     )
     .title("Prismoo")
-    .inner_size(880.0, 680.0)
-    .min_inner_size(720.0, 520.0)
+    .decorations(false)
+    .inner_size(640.0, 650.0)
+    .min_inner_size(520.0, 520.0)
     .center()
     .build()
-    .map(|_| ())
-    .map_err(|e| e.to_string())
-}
-
-/// Open (or focus) the standalone chat window.
-#[tauri::command]
-pub async fn open_chat(app: AppHandle) -> Result<(), String> {
-    if let Some(existing) = app.get_webview_window("chat") {
-        let _ = existing.show();
-        let _ = existing.set_focus();
-        return Ok(());
+    .map_err(|e| e.to_string())?;
+    // The page is not listening yet while the window is being built, so the
+    // request waits for the renderer to announce itself instead of racing it.
+    if let Some(section) = section {
+        let handle = app.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(700));
+            if let Some(panel) = handle.get_webview_window("settings") {
+                let _ = panel.emit("settings-focus-section", section);
+            }
+        });
     }
-    build_chat(&app)
-}
-
-fn build_chat(app: &AppHandle) -> Result<(), String> {
-    tauri::WebviewWindowBuilder::new(app, "chat", tauri::WebviewUrl::App("renderer/chat.html".into()))
-        .title("Prismoo")
-        .inner_size(900.0, 720.0)
-        .min_inner_size(720.0, 560.0)
-        .center()
-        .build()
-        .map(|_| ())
-        .map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-pub fn close_chat(app: AppHandle) {
-    if let Some(window) = app.get_webview_window("chat") {
-        let _ = window.close();
-    }
+    let _ = window;
+    Ok(())
 }
 
 /// Whether Prismoo is registered to start with the OS session.
@@ -431,61 +592,4 @@ pub fn autolaunch_set(app: AppHandle, enabled: bool) -> bool {
         manager.disable()
     };
     manager.is_enabled().unwrap_or(enabled)
-}
-
-/// The running app version (from Cargo.toml / tauri.conf.json).
-#[tauri::command]
-pub fn app_version(app: AppHandle) -> String {
-    app.package_info().version.to_string()
-}
-
-/// Diagnostic: what Tauri thinks the monitors and the pet window look like.
-#[tauri::command]
-pub fn debug_monitors(window: WebviewWindow) -> Value {
-    let monitors: Vec<Value> = window
-        .available_monitors()
-        .unwrap_or_default()
-        .iter()
-        .map(|m| {
-            let area = m.work_area();
-            serde_json::json!({
-                "pos": [m.position().x, m.position().y],
-                "size": [m.size().width, m.size().height],
-                "work": [area.position.x, area.position.y, area.size.width, area.size.height],
-                "scale": m.scale_factor(),
-            })
-        })
-        .collect();
-    let position = window.outer_position().ok();
-    let size = window.outer_size().ok();
-    serde_json::json!({
-        "monitors": monitors,
-        "windowPos": position.map(|p| [p.x, p.y]),
-        "windowSize": size.map(|s| [s.width, s.height]),
-        "windowScale": window.scale_factor().ok(),
-    })
-}
-
-/// Open the GitHub Releases page — the manual stand-in until the updater is ported.
-#[tauri::command]
-pub fn open_releases(app: AppHandle) -> Result<(), String> {
-    use tauri_plugin_opener::OpenerExt;
-    app.opener()
-        .open_url(
-            "https://github.com/Aceeee2077/Desk-Petrick/releases/latest",
-            None::<&str>,
-        )
-        .map_err(|e| e.to_string())
-}
-
-/// Set the pet window's opacity (0.5 - 1.0).
-#[tauri::command]
-pub fn set_window_opacity(app: AppHandle, opacity: f64) -> Result<(), String> {
-    if let Some(pet) = app.get_webview_window("pet") {
-        // Tauri has no per-window alpha on Windows; keep the value in the config
-        // and apply it in the renderer (CSS opacity) instead.
-        let _ = pet;
-    }
-    let _ = opacity;
-    Ok(())
 }

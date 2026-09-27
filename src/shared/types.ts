@@ -1,10 +1,10 @@
 // ============================================================================
 // Petric shared type definitions
 // This file contains only type declarations (no runtime exports). Compiled as
-// a "script file", these types are globally visible in the main / preload /
-// renderer processes without any imports. Since the renderer's app.ts /
-// settings.ts are single scripts (no import/export), the module system is
-// deliberately avoided here so all three sides can use them directly.
+// a "script file", these types are globally visible in the renderer without any
+// imports. Since the renderer files (lite-app.ts / lite-settings.ts) are single
+// scripts (no import/export), the module system is deliberately avoided here so
+// every file can use the types directly.
 // ============================================================================
 
 /** Pet skin (legacy IDs dog/default now display the built-in fox/rabbit art). */
@@ -63,10 +63,9 @@ interface UpdateState {
   channel: UpdateChannel;
 }
 
-/** Procedural pixel accessory worn by the generated robot sprite. */
-type Accessory = 'none' | 'hat' | 'scarf' | 'glasses';
-
-/** One point of the daily affinity growth history */
+/**
+ * One point of the daily affinity growth history
+ */
 interface AffinityPoint {
   /** Local date YYYY-MM-DD */
   date: string;
@@ -80,6 +79,27 @@ type CustomImageMode = 'single' | 'sheet';
 /** Animation state */
 type PetState = 'idle' | 'walking' | 'sleeping' | 'click';
 
+/**
+ * A rectangle on the 300x300 pet canvas, in canvas pixels.
+ *
+ * Used for everything that needs to point at the pet: its visible silhouette
+ * (`petBox`), the rectangle its art was drawn into (`petDrawRect`), the opaque box
+ * handed to the native window for edge snapping (`__prismooVisualBounds`), and the
+ * anchor coordinate space the accessory system normalizes against.
+ */
+interface PetBox {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/** Native file drop coordinates are physical pixels within the pet webview. */
+interface PetFileDrop {
+  paths: string[];
+  position: { x: number; y: number };
+}
+
 /** i18n dictionary value: a string, or an array (e.g. the click speech lines) */
 type I18nValue = string | string[];
 
@@ -89,7 +109,7 @@ interface I18nPayload {
   dict: Record<string, I18nValue>;
 }
 
-/** Renderer i18n handle exposed by src/renderer/i18n.ts (window.PetricI18n) */
+/** Legacy shape of the renderer i18n handle (the lite pages use lite-i18n.ts globals). */
 interface PetricI18n {
   /** Translate a key; unknown keys fall back to the key itself. */
   t(key: string, params?: Record<string, string | number>): string;
@@ -147,9 +167,55 @@ interface AiProvider {
   model: string;
 }
 
-/** Custom image query / selection result */
-interface CustomImageResult {
+/**
+ * Import request for a custom accessory. The backend opens the file picker
+ * itself, so this carries only the metadata the user filled in.
+ */
+interface AccessoryImportRequest {
+  name: string;
+  /** Wardrobe category the card is filed under. */
+  category?: string;
+  slot: AccessorySlot;
+  anchor?: AccessoryAnchorName;
+  offsetX?: number;
+  offsetY?: number;
+  rotation?: number;
+  scale?: number;
+  /** Painter's-algorithm z-index of the imported art. */
+  zIndex?: number;
+  /** Start with a gentle spring (default true). */
+  physics?: boolean;
+  description?: string;
+}
+
+/** What `importAccessory` reports back. */
+interface AccessoryImportResult {
   ok: boolean;
+  /** The freshly created definition (already registry-shaped). */
+  accessory?: UserAccessoryDefinition;
+  /** Localized failure reason. */
+  error?: string;
+}
+
+/** Partial edit applied to an installed accessory. */
+interface AccessoryUpdateRequest {
+  name?: string;
+  slot?: AccessorySlot;
+  anchor?: AccessoryAnchorName;
+  category?: string;
+  transform?: Partial<AccessoryTransform>;
+  physics?: boolean;
+}
+
+/** Result of an update / delete. */
+interface AccessoryMutationResult {
+  ok: boolean;
+  accessory?: UserAccessoryDefinition;
+  error?: string;
+}
+
+/** Custom image query / selection result */
+interface CustomImageResult {  ok: boolean;
   /** pet-custom:// resource URL, can be assigned directly to img.src / GLTFLoader */
   url?: string;
   /** Currently configured display mode */
@@ -160,10 +226,26 @@ interface CustomImageResult {
   error?: string;
   /** The stored raster has already been converted to a transparent cutout. */
   cutoutApplied?: boolean;
+  /** Anchor table (skill `anchors.json` format) found next to the custom image.
+   *  When absent the renderer derives anchors from the pet's silhouette. */
+  anchors?: unknown;
+  /** Accessory config items (skill format) found next to the custom image.
+   *  When empty the built-in catalog is used. */
+  accessories?: unknown[];
+  /** Frame-sequence manifest (`custom/frames/manifest.json`) when present. Actions
+   *  that declare `frames` play those PNGs instead of the single still image. */
+  frames?: unknown;
 }
 
 /** App configuration (persisted to userData/config.json) */
 interface AppConfig {
+  /** Show a short pet reaction when files are dropped onto its visible body. */
+  fileDropReactions?: boolean;
+  /** Bring the pet to the screen center at the chosen standing interval. */
+  standReminderEnabled?: boolean;
+  standReminderMinutes?: number;
+  /** Active built-in skin id or imported PetPack id. */
+  currentPetId: string;
   /** Pet skin */
   skin: PetSkin;
   /** Animation speed multiplier 0.5 ~ 2 */
@@ -202,6 +284,8 @@ interface AppConfig {
   customImageMode: CustomImageMode;
   /** Custom image path (for reference) */
   customImagePath: string;
+  /** Changes after a confirmed import, even when the saved filename is reused. */
+  customImageRevision?: number;
   /** Auto-cutout: remove the solid / simple background from imported images (single & billboard modes) */
   autoCutout: boolean;
   /** Cutout color tolerance 8 ~ 60 (higher = more aggressive background removal) */
@@ -210,8 +294,28 @@ interface AppConfig {
   locale: Locale;
   /** UI theme: light = orange-white gradient, dark = the original purple tone */
   theme: Theme;
-  /** Procedural pixel accessory for built-in sprite pets */
-  accessory: Accessory;
+  /**
+   * Wardrobe: what the pet is wearing, one accessory id per slot
+   * (`effects` is a list — see src/shared/accessory-types.ts). Persisted here so
+   * the equipment survives a restart with no separate storage. A config file
+   * written before the wardrobe existed simply has no such key.
+   */
+  equippedAccessories: EquippedAccessories;
+  /** Draw the anchor / frame debug overlay for the accessory system on the pet. */
+  accessoryDebug: boolean;
+  /**
+   * Pet needs (0..100). Read by behavior conditions — `sleep` requires low energy,
+   * `dance` a good mood — and nudged by interaction and by behaviors' `effects`.
+   * Drifts on a slow tick, so the numbers survive a restart without needing a
+   * simulation clock.
+   */
+  petStats: PetStatsSnapshot;
+  /** Developer animation panel: live behavior readout + on-canvas debug overlay. */
+  animDebug: boolean;
+  /** Actions: let the pet switch to a random idle action on its own */
+  actionAutoIdle: boolean;
+  /** Actions: draw the anchor + accessory debug overlay on the pet */
+  actionDebug: boolean;
   /** Affinity with the pet (0 ~ 100, grows when you interact: click / drag / chat) */
   affinity: number;
   /** Focus mode: periodically remind the user to stand up and stretch (default on) */
@@ -268,9 +372,21 @@ interface AppConfig {
   updateAutoRetry: number;
 }
 
+/** Space between the pet's visible box and the sides / bottom of the work area. */
+interface WindowEdgeGaps {
+  /** Physical px from the visible box's left edge to the work area's left edge. */
+  left: number;
+  /** Physical px from the visible box's right edge to the work area's right edge. */
+  right: number;
+  /** Physical px from the visible box's bottom to the work area's bottom. */
+  bottom: number;
+  /** Work-area size in physical px (diagnostics). */
+  workWidth: number;
+  workHeight: number;
+}
+
 /** Weather reported by the main process (free APIs: ipwho.is for location + Open-Meteo) */
-interface WeatherResult {
-  ok: boolean;
+interface WeatherResult {  ok: boolean;
   /** City / region name (localized by the API) */
   city?: string;
   /** Temperature in °C */
@@ -285,16 +401,29 @@ interface WeatherResult {
 
 /** API exposed to the renderer by the preload script via contextBridge */
 interface PetApi {
+  /** React to files dropped on the native pet window. */
+  onFileDrop(cb: (drop: PetFileDrop) => void): () => void;
+  /** Play an action chosen from the pet's context menu. */
+  onPetAction(cb: (action: string) => void): () => void;
+  listPets(): Promise<PetDefinition[]>;
+  importPet(folder: boolean, replace: boolean): Promise<PetDefinition | null>;
+  removePet(id: string): Promise<void>;
+  savePet(id: string, manifest: PetDefinition): Promise<PetDefinition>;
+  exportPet(id: string): Promise<string | null>;
+  onPetsChanged(cb: () => void): () => void;
+  petAssetUrl(path: string): string | undefined;
   /** Move the pet window by a delta (dx/dy) */
   moveWindow(dx: number, dy: number): void;
   /** Move the pet window to absolute screen coordinates (clamped to the display work area) */
-  moveWindowTo(x: number, y: number): void;
+  moveWindowTo(x: number, y: number): Promise<void> | void;
+  /** Target native window position that puts the visible pet at the work-area center. */
+  getWindowCenterTarget(visualBounds?: PetBox): Promise<[number, number]>;
   /** Begin a drag: main captures the window position + cursor offset (anchor) synchronously. */
-  dragBegin(): void;
+  dragBegin(visualBounds?: PetBox): void;
   /** Continue a drag; main targets the window at its own live cursor minus the anchor offset. */
   dragMove(): void;
   /** End a drag and release the main-process cursor/window anchor. */
-  dragEnd(): void;
+  dragEnd(visualBounds?: PetBox): void;
   /** Get the pet window's current position [x, y] */
   getWindowPosition(): Promise<number[]>;
   /** Reset to the center of the screen */
@@ -306,11 +435,17 @@ interface PetApi {
   /** Partially update the configuration and return the latest one */
   setConfig(patch: Partial<AppConfig>): Promise<AppConfig>;
   /** Open the settings panel window */
-  openSettings(): void;
+  openSettings(section?: string): void;
+  /** Close the native settings window */
+  closeSettings(): void;
   /** Quit the app */
   quitApp(): void;
   /** Show the context menu */
   showContextMenu(): void;
+  /** Run an entry of the right-click menu ('settings' | 'reset' | 'quit' | 'action:<name>') */
+  petMenuAction(action: string): void;
+  /** Dismiss the right-click menu window */
+  closePetMenu(): void;
   /** Call AI chat (the network request is made in the main process to avoid CORS) */
   aiChat(messages: ChatMessage[]): Promise<string>;
   /** Query the auto-launch status */
@@ -355,6 +490,7 @@ interface PetApi {
   onChatsChanged(cb: (state: ChatState) => void): () => void;
   /** Subscribe to "an AI reply just completed" (pet adds affinity / stats via this) */
   onChatReward(cb: () => void): () => void;
+  onAiAction(cb: (action: { emotion?: string; action?: string }) => void): () => void;
   /** Subscribe to main-process notices shown as a pet speech bubble (e.g. "new update") */
   onPetNotice(cb: (text: string) => void): () => void;
   /** Subscribe to update-state changes (settings progress bar / status / buttons) */
@@ -363,8 +499,31 @@ interface PetApi {
   getCustomImage(): Promise<CustomImageResult>;
   /** Open a file picker, copy the selected image into the app data directory and return it */
   pickCustomImage(): Promise<CustomImageResult>;
+  /** Stage an image for preview without replacing the active pet. */
+  previewCustomImage(): Promise<CustomImageResult>;
+  /** Use the staged image after the user confirms its preview. */
+  commitCustomImage(removeBackground: boolean): Promise<CustomImageResult>;
+  discardCustomImage(): Promise<void>;
   /** Delete the custom image in the app data directory */
   clearCustomImage(): Promise<boolean>;
+  /**
+   * List the user-imported accessories (one folder per item under
+   * %APPCONFIG%/accessories). Broken entries are skipped or flagged by the
+   * backend, never thrown.
+   */
+  listAccessories(): Promise<UserAccessoryDefinition[]>;
+  /** Pick a picture, copy it in and create its metadata in one step. */
+  importAccessory(meta: AccessoryImportRequest): Promise<AccessoryImportResult>;
+  /** Update an installed accessory's name / placement (the Placement editor). */
+  updateAccessory(id: string, patch: AccessoryUpdateRequest): Promise<AccessoryMutationResult>;
+  /** Delete an installed accessory folder; equipped references are pruned. */
+  deleteAccessory(id: string): Promise<AccessoryMutationResult>;
+  /**
+   * Subscribe to "the installed accessory set changed" (an import, a placement
+   * edit or a delete made from the settings window). The pet window reloads its
+   * registry so the change shows on the pet without a restart.
+   */
+  onAccessoriesChanged(cb: () => void): () => void;
   /** Get the active locale + dictionary for the renderer's i18n */
   getI18n(): Promise<I18nPayload>;
   /** Get today's weather (main process fetches from free APIs to avoid CORS; cached ~30 min) */
@@ -373,14 +532,32 @@ interface PetApi {
   autoMoveStart(dir: number, speed: number): void;
   /** Stop the autonomous window glide */
   autoMoveStop(): void;
+  /**
+   * How much room the pet's *visible* box has before it touches the side of the
+   * work area, in physical pixels. The animation system uses it to stop a walk at
+   * the screen edge and to drive `nearScreenEdge` behavior conditions without
+   * guessing at DPI scaling.
+   */
+  windowEdgeGaps(visualBounds: PetBox | null): Promise<WindowEdgeGaps>;
   /** Hop the pet window vertically (a parabolic jump of `height` px over `duration` ms) */
   autoJump(height: number, duration: number): void;
   /** Center the pet window on the display it currently sits on */
   centerHere(): void;
+  /** Ask the pet window to play an action by id (fire and forget) */
+  playPetAction(id: string): void;
+  /** Subscribe to "play this action" requests from the tray menu / settings panel */
+  onPetAction(cb: (id: string) => void): () => void;
+  /**
+   * Ask the pet window to preview a single animation *clip*, bypassing behaviors.
+   * Used by the developer animation browser to inspect one animation in isolation.
+   */
+  playPetClip(id: string): void;
+  /** Subscribe to clip preview requests from the developer panel. */
+  onPetClip(cb: (id: string) => void): () => void;
 }
 
 interface Window {
   api: PetApi;
-  /** i18n handle provided by src/renderer/i18n.ts (loaded before app.js / settings.js) */
+  /** Legacy global from the pre-lite renderer; lite pages call liteT() instead. */
   PetricI18n: PetricI18n;
 }

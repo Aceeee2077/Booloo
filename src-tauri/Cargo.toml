@@ -1,6 +1,6 @@
 [package]
 name = "prismoo"
-version = "0.5.1"
+version = "0.6.5"
 description = "Prismoo · cross-platform desktop pet"
 authors = ["Prismoo Contributors"]
 edition = "2021"
@@ -18,13 +18,11 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 tauri = { version = "2", features = ["tray-icon", "image-png", "protocol-asset"] }
 tauri-plugin-dialog = "2"
-tauri-plugin-opener = "2"
 tauri-plugin-autostart = "2"
 tauri-plugin-single-instance = "2"
-tauri-plugin-updater = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-reqwest = { version = "0.12", features = ["json"] }
+base64 = "0.22"
 
 [profile.release]
 codegen-units = 1
@@ -32,3 +30,19 @@ lto = true
 opt-level = "s"
 panic = "abort"
 strip = true
+
+# `target/` reached 18.7 GB in debug alone. Two default settings caused nearly all
+# of it, and neither is needed to run the app:
+#
+#   debug = 2              full variable metadata + .pdb (this is the 8.5 GB `deps`)
+#   incremental = true     the 6.1 GB `incremental` cache
+#
+# `line-tables-only` keeps file/line info so panic backtraces stay readable, while
+# dropping the variable metadata that dominates the size. Disable it temporarily
+# (debug = 2 + incremental = true) only while step-debugging Rust code.
+#
+# After changing this, run `cargo clean --manifest-path src-tauri/Cargo.toml` once:
+# the old artifacts were built with the previous profile and stay on disk otherwise.
+[profile.dev]
+debug = "line-tables-only"
+incremental = false

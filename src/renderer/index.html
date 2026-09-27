@@ -1,32 +1,20 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <meta
-    http-equiv="Content-Security-Policy"
-    content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: asset: http://asset.localhost; script-src 'self'; connect-src 'self' data: asset: http://asset.localhost; worker-src 'self' blob:"
-  />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: asset: http://asset.localhost; script-src 'self'; connect-src 'self' ipc: http://ipc.localhost" />
   <title>Prismoo</title>
-  <link rel="stylesheet" href="./styles.css" />
+  <link rel="stylesheet" href="./lite.css" />
 </head>
 <body>
-  <!-- 300x300 transparent 2D canvas: sprite animation + eye tracking + Zzz / shadow -->
-  <canvas id="pet-canvas" width="300" height="300"></canvas>
-
-  <!-- Speech bubble (the little tail pointing at the pet is drawn with CSS ::after) -->
-  <div id="bubble"></div>
-
-  <!-- Affinity hearts badge (top-right; purely visual, pointer-events: none) -->
-  <div id="affinity-badge"></div>
-
-  <!-- One-click update badge (top-right): shows only when there is an update to act on -->
-  <button id="update-badge" type="button" data-state="idle" hidden>
-    <span class="ring"></span>
-    <span class="glyph">⬆</span>
-  </button>
-
-  <script src="./tauri-api.js"></script>
-  <script src="./i18n.js"></script>
-  <script src="./app.js"></script>
+  <canvas id="pet-canvas" width="300" height="300" data-i18n-label="lite.pet.canvas" aria-label="桌宠"></canvas>
+  <div id="pet-hearts" aria-hidden="true" hidden>♥ ♥</div>
+  <div id="pet-dream" aria-hidden="true" hidden></div>
+  <div id="pet-speech" role="status" aria-live="polite" hidden></div>
+  <script src="./lite-i18n.js"></script>
+  <script src="./lite-api.js"></script>
+  <script src="./lite-image.js"></script>
+  <script src="./lite-file-reaction.js"></script>
+  <script src="./lite-app.js"></script>
 </body>
 </html>

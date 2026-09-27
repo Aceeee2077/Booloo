@@ -13,5 +13,12 @@
     "resolveJsonModule": true,
     "sourceMap": false
   },
-  "include": ["src/**/*.ts"]
+  "include": [
+    "src/renderer/lite-*.ts",
+    "src/renderer/anim-types.ts",
+    "src/shared/types.ts",
+    "src/shared/accessory-types.ts",
+    "src/shared/petpack-types.ts",
+    "src/shared/i18n.ts"
+  ]
 }

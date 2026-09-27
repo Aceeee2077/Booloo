@@ -1,346 +1,86 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <meta
-    http-equiv="Content-Security-Policy"
-    content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: asset: http://asset.localhost; script-src 'self'; connect-src 'self' asset: http://asset.localhost"
-  />
-  <title data-i18n="settings.windowTitle">Prismoo 设置</title>
-  <link rel="stylesheet" href="./settings.css" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: asset: http://asset.localhost; script-src 'self'; connect-src 'self' ipc: http://ipc.localhost" />
+  <title>Prismoo</title>
+  <link rel="stylesheet" href="./lite-settings.css" />
 </head>
 <body>
-  <div class="panel">
-    <!-- Drag region (-webkit-app-region: drag) -->
-    <header class="drag">
-      <div class="head-left">
-        <div class="title" data-i18n="settings.title">🐾 Prismoo 设置</div>
-        <span id="app-version" class="header-version"></span>
-      </div>
-      <div class="head-right">
-        <button id="header-update" class="no-drag" type="button" hidden>
-          <span class="dot"></span>
-          <span id="header-update-text"></span>
-        </button>
-        <button id="btn-close" class="no-drag" title="关闭" data-i18n-title="settings.close">✕</button>
-      </div>
+  <main class="panel">
+    <header data-tauri-drag-region>
+      <div data-tauri-drag-region><strong>🐾 Prismoo</strong><span data-i18n="lite.settings.subtitle">轻量桌宠</span></div>
+      <button id="close" type="button" data-i18n-label="settings.close" aria-label="关闭设置">✕</button>
     </header>
 
-    <div class="body">
-      <div class="col">
-      <!-- UI language + theme -->
-      <section>
-        <h2 data-i18n="settings.language">界面语言</h2>
-        <div class="row">
-          <label data-i18n="settings.language">界面语言</label>
-          <div class="seg" id="locale-seg">
-            <button data-locale="zh" class="active">中文</button>
-            <button data-locale="en">English</button>
-          </div>
-        </div>
-        <div class="row">
-          <label data-i18n="settings.theme">主题</label>
-          <div class="seg" id="theme-seg">
-            <button data-theme="light" class="active" data-i18n="settings.themeLight">☀️ 浅色</button>
-            <button data-theme="dark" data-i18n="settings.themeDark">🌙 深色</button>
-          </div>
-        </div>
-      </section>
+    <section>
+      <h2 data-i18n="lite.settings.general">界面</h2>
+      <label class="setting" for="language">
+        <span data-i18n="settings.language">界面语言</span>
+        <select id="language">
+          <option value="zh" data-i18n="settings.zh">中文</option>
+          <option value="en" data-i18n="settings.en">English</option>
+        </select>
+      </label>
+    </section>
 
-      <section>
-        <h2 data-i18n="settings.petSection">宠物</h2>
-        <div class="row">
-          <label data-i18n="settings.skin">宠物类型</label>
-          <div class="seg" id="skin-seg">
-            <button data-skin="cat" data-i18n="settings.skinCat">🐱 猫</button>
-            <button data-skin="dog" data-i18n="settings.skinDog">🦊 狐狸</button>
-            <button data-skin="default" data-i18n="settings.skinDango">🐰 兔子</button>
-            <button data-skin="bulu" data-i18n="settings.skinBulu">🐈 布噜</button>
-            <button data-skin="robot" data-i18n="settings.skinRobot">🤖 机器人</button>
-            <button data-skin="custom" data-i18n="settings.skinCustom">🖼️ 自定义</button>
-          </div>
-        </div>
-        <!-- Affinity with the pet (grows when you click / drag / chat) -->
-        <div class="row">
-          <label data-i18n="affinity.title">好感度</label>
-          <span id="affinity-display" class="val"></span>
-        </div>
-        <!-- Procedural pixel accessory (the generated robot sheet only) -->
-        <div class="row" id="accessory-row">
-          <label data-i18n="settings.accessory">配饰</label>
-          <div class="seg" id="accessory-seg">
-            <button data-accessory="none" class="active" data-i18n="settings.accessoryNone">无</button>
-            <button data-accessory="hat" data-i18n="settings.accessoryHat">🎩 帽子</button>
-            <button data-accessory="scarf" data-i18n="settings.accessoryScarf">🧣 围巾</button>
-            <button data-accessory="glasses" data-i18n="settings.accessoryGlasses">👓 眼镜</button>
-          </div>
-        </div>
-        <!-- Custom appearance controls (only shown when "Custom" is selected) -->
-        <div class="row custom-row" hidden>
-          <label data-i18n="settings.customLabel">自定义外观</label>
-          <button id="btn-pick-image" class="ghost" data-i18n="settings.pickFile">🖼️ 选择文件…</button>
-          <span id="custom-status" class="status"></span>
-        </div>
-        <div class="row custom-row" hidden>
-          <label data-i18n="settings.customType">类型</label>
-          <div class="seg" id="custom-mode-seg">
-            <button data-mode="single" class="active" data-i18n="settings.modeSingle">单张图片</button>
-            <button data-mode="sheet" data-i18n="settings.modeSheet">精灵表</button>
-          </div>
-        </div>
-        <div class="row custom-row" hidden>
-          <label data-i18n="settings.cutout">自动抠图</label>
-          <label class="switch"><input type="checkbox" id="cutout" /><span></span></label>
-        </div>
-        <div class="row custom-row" hidden>
-          <label><span data-i18n="settings.cutoutTolerance">抠图强度</span> <span id="cutout-tol-val" class="val">25</span></label>
-          <input type="range" id="cutout-tol" min="8" max="60" step="1" value="25" />
-        </div>
-        <p class="hint custom-row" hidden data-i18n-html="settings.cutoutHint"></p>
-        <!-- Photo-pet eye tracking: mark the two eye positions on the (cutout) photo -->
-        <div class="row custom-row" id="mark-eyes-row" hidden>
-          <label data-i18n="settings.markEyes">👀 眼睛跟随</label>
-          <button id="btn-mark-eyes" class="ghost" data-i18n="settings.markEyesBtn">标记眼睛…</button>
-          <button id="btn-clear-eyes" class="ghost" hidden data-i18n="settings.eyesClear">🗑️ 清除标记</button>
-          <span id="eyes-status" class="status"></span>
-        </div>
-        <div class="row custom-row" id="eyes-preview-row" hidden>
-          <label></label>
-          <canvas id="eyes-preview-canvas" class="eyes-preview" width="300" height="260"></canvas>
-        </div>
-        <div class="row custom-row" hidden>
-          <label></label>
-          <button id="btn-clear-custom" class="ghost" data-i18n="settings.clearCustom">🗑️ 清除自定义外观</button>
-        </div>
-        <p class="hint custom-row" hidden data-i18n-html="settings.customHint"></p>
-        <div class="row">
-          <label><span data-i18n="settings.animSpeed">动画速度</span> <span id="anim-speed-val" class="val">1.0x</span></label>
-          <input type="range" id="anim-speed" min="0.5" max="2" step="0.1" value="1" />
-        </div>
-        <div class="row">
-          <label><span data-i18n="settings.opacity">透明度</span> <span id="opacity-val" class="val">100%</span></label>
-          <input type="range" id="opacity" min="0.5" max="1" step="0.05" value="1" />
-        </div>
-        <div class="row">
-          <label><span data-i18n="settings.petScale">宠物大小</span> <span id="pet-scale-val" class="val">100%</span></label>
-          <input type="range" id="pet-scale" min="0.75" max="1.5" step="0.05" value="1" />
-        </div>
-        <div class="row">
-          <label data-i18n="settings.sound">点击音效</label>
-          <label class="switch"><input type="checkbox" id="sound" /><span></span></label>
-        </div>
-        <div class="row">
-          <label data-i18n="settings.autolaunch">开机自启</label>
-          <label class="switch"><input type="checkbox" id="autolaunch" /><span></span></label>
-        </div>
-        <div class="row">
-          <label data-i18n="settings.autoMove">自主走动</label>
-          <label class="switch"><input type="checkbox" id="auto-move" /><span></span></label>
-        </div>
-        <p class="hint" data-i18n-html="settings.autoMoveHint"></p>
-        <div class="row">
-          <button id="btn-reset" class="ghost" data-i18n="settings.resetPos">🎯 重置位置</button>
-        </div>
-      </section>
-
-      <!-- Behavior: sleep timing, wandering pace, screen edges and multi-monitor rules -->
-      <section>
-        <h2 data-i18n="settings.behaviorSection">行为</h2>
-        <div class="row">
-          <label><span data-i18n="settings.sleepTimeout">睡眠等待</span> <span id="sleep-timeout-val" class="val">30s</span></label>
-          <input type="range" id="sleep-timeout" min="10" max="300" step="10" value="30" />
-        </div>
-        <div class="row">
-          <label><span data-i18n="settings.wanderSpeed">走动速度</span> <span id="wander-speed-val" class="val">1.0x</span></label>
-          <input type="range" id="wander-speed" min="0.5" max="2" step="0.1" value="1" />
-        </div>
-        <div class="row">
-          <label><span data-i18n="settings.activityFrequency">活跃频率</span> <span id="activity-rate-val" class="val">1.0x</span></label>
-          <input type="range" id="activity-rate" min="0.5" max="2" step="0.1" value="1" />
-        </div>
-        <div class="row">
-          <label data-i18n="settings.snapToEdge">贴边吸附</label>
-          <label class="switch"><input type="checkbox" id="snap-to-edge" /><span></span></label>
-        </div>
-        <div class="row">
-          <label data-i18n="settings.stayOnOneDisplay">只在单屏活动</label>
-          <label class="switch"><input type="checkbox" id="stay-on-one" /><span></span></label>
-        </div>
-        <p class="hint" data-i18n-html="settings.behaviorHint"></p>
-      </section>
+    <section>
+      <h1 data-i18n="lite.settings.pets">选择桌宠</h1>
+      <div id="skins" class="skins">
+        <button type="button" data-skin="cat">🐱<small data-i18n="lite.skin.cat">猫</small></button>
+        <button type="button" data-skin="dog">🦊<small data-i18n="lite.skin.fox">狐狸</small></button>
+        <button type="button" data-skin="default">🐰<small data-i18n="lite.skin.rabbit">兔子</small></button>
+        <button type="button" data-skin="bulu">🐈<small data-i18n="lite.skin.bulu">布噜</small></button>
+        <button type="button" data-skin="robot">🤖<small data-i18n="lite.skin.robot">机器人</small></button>
+        <button type="button" data-skin="custom">🖼️<small data-i18n="lite.skin.custom">我的图片</small></button>
       </div>
+      <button id="choose-image" class="primary" type="button" data-i18n="lite.settings.importImage">导入我的图片…</button>
+      <p id="image-status" class="status" role="status"></p>
+    </section>
 
-      <div class="col">
-      <!-- Focus mode: periodic break reminders (default: every 40 minutes) -->
-      <section>
-        <h2 data-i18n="settings.focusSection">专注模式</h2>
-        <div class="row">
-          <label data-i18n="settings.focusMode">站立提醒</label>
-          <label class="switch"><input type="checkbox" id="focus-mode" /><span></span></label>
-        </div>
-        <div class="row">
-          <label data-i18n="settings.focusInterval">提醒间隔</label>
-          <div class="seg" id="focus-interval-seg">
-            <button data-min="20">20</button>
-            <button data-min="30">30</button>
-            <button data-min="40" class="active">40</button>
-            <button data-min="60">60</button>
-            <button data-min="90">90</button>
-          </div>
-        </div>
-        <p class="hint" data-i18n-html="settings.focusHint"></p>
-      </section>
-
-      <!-- Life assistant: proactive chat / weather / hourly chime -->
-      <section>
-        <h2 data-i18n="settings.assistantSection">生活助手</h2>
-        <div class="row">
-          <label data-i18n="settings.greetEnabled">主动搭话</label>
-          <label class="switch"><input type="checkbox" id="greet-enabled" /><span></span></label>
-        </div>
-        <div class="row">
-          <label data-i18n="settings.weatherEnabled">天气播报</label>
-          <label class="switch"><input type="checkbox" id="weather-enabled" /><span></span></label>
-        </div>
-        <div class="row">
-          <label data-i18n="settings.hourlyChime">整点报时</label>
-          <label class="switch"><input type="checkbox" id="hourly-chime" /><span></span></label>
-        </div>
-      </section>
-
-      <!-- Interaction stats: companion days, click / chat counts, affinity growth curve -->
-      <section>
-        <h2 data-i18n="settings.statsSection">互动统计</h2>
-        <div class="row">
-          <label data-i18n="settings.statsDays">陪伴天数</label>
-          <span id="stats-days" class="val">0</span>
-        </div>
-        <div class="row">
-          <label data-i18n="settings.statsFirstSeen">首次陪伴</label>
-          <span id="stats-first-seen" class="val">—</span>
-        </div>
-        <div class="row">
-          <label data-i18n="settings.statsClicks">点击次数</label>
-          <span id="stats-clicks" class="val">0</span>
-        </div>
-        <div class="row">
-          <label data-i18n="settings.statsChats">聊天次数</label>
-          <span id="stats-chats" class="val">0</span>
-        </div>
-        <p class="hint" data-i18n="settings.statsAffinityChart">好感度成长曲线</p>
-        <canvas id="affinity-chart" class="affinity-chart" width="400" height="110"></canvas>
-      </section>
-
-      <section>
-        <h2><span data-i18n="settings.aiSection">AI 对话</span> <span class="tag" data-i18n="settings.optional">可选</span></h2>
-        <div class="row">
-          <label data-i18n="settings.aiEnabled">启用 AI 对话</label>
-          <label class="switch"><input type="checkbox" id="ai-enabled" /><span></span></label>
-        </div>
-        <div class="row">
-          <label data-i18n="settings.provider">供应商</label>
-          <select id="ai-provider"></select>
-        </div>
-        <div class="row">
-          <label></label>
-          <button id="btn-provider-new" class="ghost" data-i18n="settings.providerNew">＋ 新建</button>
-          <button id="btn-provider-delete" class="ghost" data-i18n="settings.providerDelete">🗑️ 删除</button>
-        </div>
-        <div class="row">
-          <label data-i18n="settings.providerName">名称</label>
-          <input type="text" id="provider-name" spellcheck="false" />
-        </div>
-        <div class="row">
-          <label data-i18n="settings.apiBase">API Base URL</label>
-          <input type="text" id="api-base" placeholder="https://api.openai.com/v1" spellcheck="false" />
-        </div>
-        <div class="row">
-          <label data-i18n="settings.apiKey">API Key</label>
-          <input type="password" id="api-key" placeholder="sk-..." spellcheck="false" />
-        </div>
-        <div class="row">
-          <label data-i18n="settings.model">模型</label>
-          <input type="text" id="model" placeholder="gpt-4o-mini / deepseek-chat" spellcheck="false" />
-        </div>
-        <div class="row">
-          <label><span data-i18n="settings.chatMaxTokens">回复长度上限</span> <span id="max-tokens-val" class="val">120</span></label>
-          <input type="range" id="chat-max-tokens" min="40" max="500" step="10" value="120" />
-        </div>
-        <div class="row">
-          <label><span data-i18n="settings.chatTemperature">发散程度</span> <span id="temperature-val" class="val">0.8</span></label>
-          <input type="range" id="chat-temperature" min="0" max="1.5" step="0.1" value="0.8" />
-        </div>
-        <div class="row">
-          <label data-i18n="settings.chatVerbosity">话多话少</label>
-          <div class="seg" id="verbosity-seg">
-            <button data-verbosity="brief" data-i18n="settings.verbosityBrief">简短</button>
-            <button data-verbosity="normal" class="active" data-i18n="settings.verbosityNormal">正常</button>
-            <button data-verbosity="chatty" data-i18n="settings.verbosityChatty">话痨</button>
-          </div>
-        </div>
-        <div class="row">
-          <label data-i18n="settings.chatEmoji">允许 emoji</label>
-          <label class="switch"><input type="checkbox" id="chat-emoji" /><span></span></label>
-        </div>
-        <div class="row">
-          <label data-i18n="settings.chatUsage">今日用量</label>
-          <span id="chat-usage" class="val">—</span>
-        </div>
-        <div class="row">
-          <button id="btn-test-ai" class="ghost" data-i18n="settings.testAi">🧪 测试对话</button>
-          <span id="ai-status" class="status"></span>
-        </div>
-        <p class="hint" data-i18n-html="settings.aiHint"></p>
-      </section>
-
-      <!-- Software updates: startup check policy, channels, live progress, release notes -->
-      <section>
-        <h2 data-i18n="settings.updateSection">🔄 更新</h2>
-        <div class="row">
-          <label data-i18n="settings.updateAutoCheck">启动时检查更新</label>
-          <label class="switch"><input type="checkbox" id="update-auto-check" /><span></span></label>
-        </div>
-        <div class="row">
-          <label data-i18n="settings.updateAutoDownload">自动下载新版本</label>
-          <label class="switch"><input type="checkbox" id="update-auto-download" /><span></span></label>
-        </div>
-        <div class="row">
-          <label data-i18n="settings.updateChannel">更新渠道</label>
-          <div class="seg" id="update-channel-seg">
-            <button data-channel="stable" class="active" data-i18n="settings.updateChannelStable">稳定版</button>
-            <button data-channel="prerelease" data-i18n="settings.updateChannelPrerelease">预览版</button>
-          </div>
-        </div>
-        <div class="row">
-          <label data-i18n="settings.updateVersion">当前版本</label>
-          <span id="update-version" class="val">—</span>
-        </div>
-        <div class="row">
-          <label data-i18n="settings.updateStatus">状态</label>
-          <span id="update-status" class="status"></span>
-        </div>
-        <div class="row" id="update-progress-row" hidden>
-          <label data-i18n="settings.updateProgress">下载进度</label>
-          <div class="progress"><div id="update-progress-bar" class="progress-fill"></div></div>
-          <span id="update-progress-text" class="val">0%</span>
-        </div>
-        <div class="row update-actions">
-          <button id="btn-check-update" class="ghost" data-i18n="settings.checkUpdate">🔍 立即检查更新</button>
-          <button id="btn-download-update" class="ghost" hidden data-i18n="settings.downloadUpdate">⬇️ 下载更新</button>
-          <button id="btn-install-update" class="ghost" hidden data-i18n="settings.restartUpdate">🔄 立即重启更新</button>
-          <button id="btn-open-update" class="ghost" hidden data-i18n="settings.openRelease">↗️ 打开下载页</button>
-        </div>
-        <details id="update-notes-box" hidden>
-          <summary data-i18n="settings.updateNotes">更新日志</summary>
-          <pre id="update-notes"></pre>
-        </details>
-      </section>
+    <section id="import-preview" hidden>
+      <h2 data-i18n="lite.settings.confirmTitle">确认图片</h2>
+      <div class="preview-row">
+        <div><canvas id="original-preview" width="180" height="180"></canvas><small data-i18n="lite.settings.original">原图</small></div>
+        <div><canvas id="result-preview" width="180" height="180"></canvas><small data-i18n="lite.settings.result">桌宠效果</small></div>
       </div>
-    </div>
-  </div>
+      <label class="check"><input id="remove-background" type="checkbox" /><span data-i18n="lite.settings.removeBackground">去掉纯色背景</span></label>
+      <p id="preview-note" class="note"></p>
+      <div class="actions">
+        <button id="confirm-image" class="primary" type="button" data-i18n="lite.settings.useImage">使用这张图片</button>
+        <button id="cancel-image" type="button" data-i18n="lite.settings.cancel">取消</button>
+      </div>
+    </section>
 
-  <script src="./tauri-api.js"></script>
-  <script src="./i18n.js"></script>
-  <script src="./settings.js"></script>
+    <section>
+      <h2 data-i18n="lite.settings.daily">日常设置</h2>
+      <label class="setting" for="pet-size"><span><span data-i18n="lite.settings.petSize">宠物大小</span> <output id="size-value"></output></span><input id="pet-size" type="range" min="0.75" max="1.5" step="0.05" /></label>
+      <label class="setting" for="opacity"><span><span data-i18n="lite.settings.opacity">透明度</span> <output id="opacity-value"></output></span><input id="opacity" type="range" min="0.5" max="1" step="0.05" /></label>
+      <label class="check"><input id="auto-move" type="checkbox" /><span data-i18n="lite.settings.autoMove">自主走动</span></label>
+      <label class="check"><input id="file-drop-reactions" type="checkbox" /><span data-i18n="lite.settings.fileDrop">拖文件给桌宠时显示互动气泡</span></label>
+      <label class="check"><input id="stand-reminder" type="checkbox" /><span data-i18n="lite.settings.standReminder">站立提醒</span></label>
+      <div class="reminder-controls">
+        <label for="stand-interval" data-i18n="lite.settings.interval">提醒间隔</label>
+        <select id="stand-interval">
+          <option value="5" data-i18n="lite.settings.minutes5">5 分钟</option>
+          <option value="10" data-i18n="lite.settings.minutes10">10 分钟</option>
+          <option value="20" data-i18n="lite.settings.minutes20">20 分钟</option>
+          <option value="30" data-i18n="lite.settings.minutes30">30 分钟</option>
+          <option value="custom" data-i18n="lite.settings.custom">自定义</option>
+        </select>
+        <label id="stand-custom-label" for="stand-custom" hidden><span data-i18n="lite.settings.customMinutes">分钟数</span>
+          <input id="stand-custom" type="number" min="1" max="240" step="1" value="5" />
+        </label>
+      </div>
+      <p id="stand-status" class="note" role="status"></p>
+      <label class="check"><input id="hourly-chime" type="checkbox" /><span data-i18n="lite.settings.hourlyChime">整点轻报时</span></label>
+      <label class="check"><input id="auto-launch" type="checkbox" /><span data-i18n="lite.settings.autoLaunch">开机启动</span></label>
+      <button id="reset-position" type="button" data-i18n="lite.settings.resetPosition">重置桌宠位置</button>
+    </section>
+  </main>
+  <script src="./lite-i18n.js"></script>
+  <script src="./lite-api.js"></script>
+  <script src="./lite-image.js"></script>
+  <script src="./lite-settings.js"></script>
 </body>
 </html>

@@ -1,0 +1,40 @@
+:root { font-family: "Segoe UI", "Microsoft YaHei", sans-serif; color: #513a2c; background: #fff8f2; }
+* { box-sizing: border-box; }
+body { margin: 0; }
+.panel { max-width: 650px; margin: auto; padding: 0 24px 24px; }
+header { position: sticky; top: 0; z-index: 10; height: 56px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #efdacb; background: #fff8f2; user-select: none; }
+header div { display: flex; gap: 12px; align-items: baseline; }
+header strong { font-size: 17px; }
+header span { color: #9a7660; font-size: 12px; }
+section { padding: 18px 0; border-bottom: 1px solid #efdacb; }
+h1, h2 { margin: 0 0 15px; font-size: 16px; }
+button { font: inherit; color: inherit; background: white; border: 1px solid #e9cbb6; border-radius: 10px; padding: 8px 12px; cursor: pointer; }
+button:hover { background: #ffecdc; }
+button:disabled { opacity: .5; cursor: default; }
+button.primary { color: white; background: #ea773b; border-color: #ea773b; }
+button.primary:hover { background: #d7642c; }
+header button { border: 0; background: transparent; }
+.skins { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; margin-bottom: 16px; }
+.skins button { min-height: 67px; font-size: 24px; }
+.skins small { display: block; margin-top: 3px; font-size: 11px; }
+.skins button.active { border: 2px solid #ea773b; background: #ffead9; }
+.status { min-height: 18px; margin: 8px 0 0; color: #886c5b; font-size: 12px; }
+.status.error { color: #ba3e2e; }
+.preview-row { display: flex; gap: 16px; }
+.preview-row > div { flex: 1; text-align: center; }
+.preview-row canvas { display: block; width: 180px; max-width: 100%; height: 180px; margin: auto; border: 1px solid #e9cbb6; border-radius: 12px; background: repeating-conic-gradient(#eee 0 25%, white 0 50%) 50% / 20px 20px; }
+.preview-row small { display: block; margin: 6px 0; }
+.note { margin: 8px 0; min-height: 18px; color: #a65a37; font-size: 12px; }
+.actions { display: flex; gap: 8px; }
+.setting { display: block; margin: 12px 0; }
+.setting span { display: flex; justify-content: space-between; margin-bottom: 6px; }
+.setting input { display: block; width: 100%; accent-color: #ea773b; }
+.setting select { display: block; width: 100%; font: inherit; color: inherit; padding: 5px 8px; border: 1px solid #e9cbb6; border-radius: 8px; background: white; }
+.check { display: flex; align-items: center; gap: 8px; margin: 14px 0; }
+.check input { accent-color: #ea773b; width: 17px; height: 17px; }
+.reminder-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 0 0 2px 25px; font-size: 13px; }
+.reminder-controls select, .reminder-controls input { font: inherit; color: inherit; padding: 5px 8px; border: 1px solid #e9cbb6; border-radius: 8px; background: white; }
+.reminder-controls input { width: 72px; margin-left: 6px; }
+.reminder-controls [hidden] { display: none; }
+[hidden] { display: none !important; }
+@media (max-width: 560px) { .skins { grid-template-columns: repeat(3, 1fr); } .panel { padding: 0 16px 20px; } }

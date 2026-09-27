@@ -21,6 +21,7 @@ pub struct ConfigState {
 pub fn defaults() -> Value {
     json!({
         "skin": "cat",
+        "currentPetId": "cat",
         "animSpeed": 1,
         "opacity": 1,
         "autoLaunch": false,
@@ -40,11 +41,23 @@ pub fn defaults() -> Value {
         "soundEnabled": true,
         "customImageMode": "single",
         "customImagePath": "",
+        "customImageRevision": 0,
         "autoCutout": true,
         "cutoutTolerance": 25,
         "locale": "zh",
         "theme": "light",
-        "accessory": "none",
+        // The wardrobe's saved equipment: slot -> accessory id (see
+        // src/shared/accessory-types.ts). Older config files simply do not have
+        // it; `fill_missing` adds the empty object and the manager reads that as
+        // "nothing equipped".
+        "equippedAccessories": {},
+        "accessoryDebug": false,
+        // Pet needs (0..100) read by behavior conditions. Older config files do
+        // not have this key; the defaults below are a content pet.
+        "petStats": { "mood": 70, "energy": 80, "hunger": 20 },
+        "animDebug": false,
+        "actionAutoIdle": true,
+        "actionDebug": false,
         "affinity": 0,
         "focusMode": true,
         "focusInterval": 40,
@@ -58,6 +71,9 @@ pub fn defaults() -> Value {
         "hourlyChime": true,
         "photoEyes": null,
         "autoMove": true,
+        "fileDropReactions": true,
+        "standReminderEnabled": true,
+        "standReminderMinutes": 5,
         "petScale": 1,
         "stayOnOneDisplay": true,
         "snapToEdge": false,
@@ -74,11 +90,24 @@ pub fn defaults() -> Value {
     })
 }
 
+/// Keys a patch must REPLACE rather than deep-merge.
+///
+/// `equippedAccessories` is a slot → accessory-id map. Taking a hat off removes
+/// the `head` key, and a recursive merge would simply keep the old id — the hat
+/// would come back on the next launch, and a config naming a deleted accessory
+/// could never be cleaned up from the UI. Everything else keeps the documented
+/// merge semantics (a patch touching one AI field must not wipe the rest).
+const REPLACE_ON_PATCH: [&str; 1] = ["equippedAccessories"];
+
 /// Recursively merge `patch` into `base` (objects merge, everything else replaces).
 fn deep_merge(base: &mut Value, patch: &Value) {
     match (base, patch) {
         (Value::Object(base_map), Value::Object(patch_map)) => {
             for (key, patch_value) in patch_map {
+                if REPLACE_ON_PATCH.contains(&key.as_str()) {
+                    base_map.insert(key.clone(), patch_value.clone());
+                    continue;
+                }
                 deep_merge(base_map.entry(key.clone()).or_insert(Value::Null), patch_value);
             }
         }
@@ -118,6 +147,12 @@ pub fn init(app: &AppHandle) -> ConfigState {
         .ok()
         .and_then(|raw| serde_json::from_str::<Value>(&raw).ok())
         .unwrap_or_else(|| Value::Object(Map::new()));
+    // Existing users chose a skin before PetPack existed; preserve that selection.
+    if value.get("currentPetId").is_none() {
+        if let Some(skin) = value.get("skin").and_then(Value::as_str).map(str::to_string) {
+            value["currentPetId"] = Value::String(skin);
+        }
+    }
     // Fill in anything the persisted file is missing (new keys, first run).
     fill_missing(&mut value, &defaults());
     seed_provider_from_legacy(&mut value);
@@ -254,5 +289,31 @@ mod tests {
         deep_merge(&mut stored, &json!({ "skin": "cat" }));
         assert_eq!(stored.get("skin").and_then(|v| v.as_str()), Some("cat"));
         assert_eq!(stored.get("focusInterval").and_then(|v| v.as_i64()), Some(40));
+    }
+
+    /// Regression: removing a key from the equipment map has to stick, or an
+    /// unequipped hat reappears on the next launch.
+    #[test]
+    fn deep_merge_replaces_the_equipment_map() {
+        let mut stored = json!({ "equippedAccessories": { "head": "cowboy_hat", "neck": "red_scarf" } });
+        deep_merge(&mut stored, &json!({ "equippedAccessories": { "neck": "red_scarf" } }));
+        let gear = stored.get("equippedAccessories").unwrap();
+        assert!(gear.get("head").is_none(), "unequipping must remove the slot key");
+        assert_eq!(gear.get("neck").and_then(|v| v.as_str()), Some("red_scarf"));
+
+        deep_merge(&mut stored, &json!({ "equippedAccessories": {} }));
+        assert_eq!(
+            stored.get("equippedAccessories").unwrap().as_object().unwrap().len(),
+            0
+        );
+    }
+
+    /// Everything else still merges, so a one-field patch cannot wipe a section.
+    #[test]
+    fn deep_merge_still_merges_nested_objects() {
+        let mut stored = json!({ "update": { "a": 1, "b": 2 } });
+        deep_merge(&mut stored, &json!({ "update": { "a": 9 } }));
+        assert_eq!(stored["update"]["a"], 9);
+        assert_eq!(stored["update"]["b"], 2);
     }
 }

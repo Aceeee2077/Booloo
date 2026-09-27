@@ -12,7 +12,7 @@
 //
 // All assets are procedurally generated, original resources of this project
 // with no copyright issues. To add a new pet: duplicate the kind branch in
-// PALETTES + drawPet, then register the skin in the app.ts skin list.
+// PALETTES + drawPet, then register the skin in src/renderer/lite-app.ts.
 // ============================================================================
 
 import { deflateSync } from 'node:zlib';

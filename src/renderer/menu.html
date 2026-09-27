@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; script-src 'self'; connect-src 'self' ipc: http://ipc.localhost" />
+  <title>Prismoo</title>
+  <link rel="stylesheet" href="./lite-menu.css" />
+</head>
+<body>
+  <main class="menu" role="menu" aria-label="Prismoo">
+    <button type="button" role="menuitem" data-action="settings"><span aria-hidden="true">⚙</span><span data-i18n="lite.menu.settings">打开设置</span></button>
+    <div class="menu-title" data-i18n="lite.menu.actions">动作</div>
+    <button type="button" role="menuitem" data-action="action:wave"><span aria-hidden="true">🐾</span><span data-i18n="lite.menu.wave">挥爪</span></button>
+    <button type="button" role="menuitem" data-action="action:groom"><span aria-hidden="true">🐱</span><span data-i18n="lite.menu.groom">舔爪</span></button>
+    <button type="button" role="menuitem" data-action="action:stretch"><span aria-hidden="true">↗</span><span data-i18n="lite.menu.stretch">伸懒腰</span></button>
+    <button type="button" role="menuitem" data-action="action:yawn"><span aria-hidden="true">◡</span><span data-i18n="lite.menu.yawn">打哈欠</span></button>
+    <button type="button" role="menuitem" data-action="reset"><span aria-hidden="true">◎</span><span data-i18n="lite.menu.reset">重置位置</span></button>
+    <button class="quit" type="button" role="menuitem" data-action="quit"><span aria-hidden="true">◉</span><span data-i18n="lite.menu.quit">退出</span></button>
+  </main>
+  <script src="./lite-i18n.js"></script>
+  <script src="./lite-api.js"></script>
+  <script src="./lite-menu.js"></script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+html, body { width: 300px; height: 300px; margin: 0; overflow: hidden; background: transparent; }
+body { position: relative; }
+canvas { display: block; width: 300px; height: 300px; cursor: grab; }
+#pet-speech { position: absolute; bottom: 148px; left: 50%; transform: translateX(-50%); max-width: 252px; width: max-content; padding: 8px 12px; border-radius: 14px; border: 1px solid #f1c394; background: #fffaf0; color: #653e24; box-shadow: 0 3px 10px #75411630; font: 13px/1.4 "Microsoft YaHei", "Segoe UI", sans-serif; text-align: center; pointer-events: none; }
+#pet-speech[hidden] { display: none; }
+#pet-hearts { position: absolute; color: #ff7d9d; font: bold 22px "Segoe UI", sans-serif; text-shadow: 0 2px 4px #7e294655; pointer-events: none; animation: heart-float 1.25s ease-out forwards; }
+#pet-hearts[hidden] { display: none; }
+#pet-dream { position: absolute; min-width: 27px; height: 27px; padding: 3px 5px; border: 1px solid #f1c394; border-radius: 50%; background: #fffaf0e8; color: #653e24; box-shadow: 0 3px 10px #75411630; font: 18px/27px "Segoe UI Emoji", "Microsoft YaHei", sans-serif; text-align: center; pointer-events: none; animation: dream-float 1.7s ease-in-out infinite; }
+#pet-dream[hidden] { display: none; }
+@keyframes heart-float { from { opacity: 0; transform: translateY(10px) scale(.7); } 20% { opacity: 1; } to { opacity: 0; transform: translateY(-30px) scale(1.2); } }
+@keyframes dream-float { 0%, 100% { transform: translateY(2px); opacity: .72; } 50% { transform: translateY(-5px); opacity: 1; } }

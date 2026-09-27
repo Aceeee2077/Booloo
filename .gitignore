@@ -1,10 +1,67 @@
-# Dependencies and generated application files
+# ============================================================================
+# Size guard
+#
+# This repo used to balloon to ~22 GB. Almost all of it was regenerable build
+# output (src-tauri/target), so the rules below are grouped by *why* something is
+# ignored rather than alphabetically:
+#
+#   1. never commit generated build output
+#   2. never commit caches or virtualenvs
+#   3. never commit model weights or downloaded assets
+#   4. never commit generated pet packages / frames / installers
+#
+# "How big should this repo be?" -> if a directory is listed here, deleting it
+# must never lose anything that is not reproducible from source.
+# ============================================================================
+
+# ---------- 1. Dependencies and generated application files ----------
 node_modules/
 dist/
 
-# Rust / Tauri build output and bundled installers.
-# Release binaries belong in GitHub Releases, not Git.
+# ---------- 2. Rust / Tauri build output ----------
+# `cargo build` / `tauri build` recreate all of this; it can reach tens of GB
+# (debug .rlib + .o + .pdb alone exceeded 18 GB here).
 src-tauri/target/
+# Tauri's generated capability/permission code.
+src-tauri/gen/
+# Cargo's per-project config cache.
+src-tauri/.cargo/
+
+# ---------- 3. Caches and virtualenvs ----------
+.npm-cache/
+coverage/
+*.log
+*.tmp
+
+# Python: virtualenvs and bytecode. The photo pipeline is called through a
+# user-provided interpreter, so its venv must never live in the repo.
+.venv/
+venv/
+env/
+ENV/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ---------- 4. Model weights and downloaded assets ----------
+# Weights belong in a user cache directory (or are fetched on demand), never in
+# the repository: several of these formats are hundreds of MB each.
+*.onnx
+*.pth
+*.pt
+*.safetensors
+*.ckpt
+*.tflite
+*.h5
+*.npz
+models/
+cache/
+.cache/
+
+# ---------- 5. Bundled installers and release metadata ----------
+# Release binaries belong in GitHub Releases, not Git.
 release/
 *.exe
 *.msi
@@ -13,16 +70,12 @@ release/
 *.deb
 *.blockmap
 latest*.yml
+latest.json
+*.sig
 builder-debug.yml
 builder-effective-config.yaml
 
-# Package-manager caches and test output
-.npm-cache/
-coverage/
-*.log
-*.tmp
-
-# Local secrets and signing certificates
+# ---------- 6. Local secrets and signing certificates ----------
 .env
 .env.*
 !.env.example
@@ -33,13 +86,101 @@ coverage/
 # Stray signing-key folder generated when `~` was not expanded by the shell.
 /~
 
+# ---------- 7. Generated pet packages, frames and user assets ----------
+# pet-from-photo output: cutouts, animation frames, accessory art, ZIPs.
+pet_output/
+# Custom pet art imported at runtime by scripts/set-custom.mjs (a user asset).
+src/assets/sprites/custom.*
 # Local Petric data and private release notes
 .petric-data/
 userData/
 release.md
 
-# OS and editor files
+# ---------- 8. OS and editor files ----------
 .DS_Store
 Thumbs.db
 .vscode/
 .idea/
+
+# ---------- 9. Lightweight edition: local reference and legacy material ----------
+# The rules below describe the *lightweight* repo: only the renderer, Rust
+# modules and scripts that the lite pages actually load are pushed. Everything
+# that is left is either a local authoring source or an experiment from the
+# earlier full-featured build.
+#
+# A path only disappears from a push if it is untracked too — ignoring a file
+# that is already in the index does nothing. When adding a rule here for
+# something that was committed earlier, drop it from the index in the same
+# change:
+#
+#   git rm --cached -- <path>
+#
+# The shipped Bulu animation is src/assets/animated-pets/bulu-actions.webp.
+# Its large, one-off source images (20 MB of AI renders) are kept locally for
+# re-authoring only.
+/docs/pet-sources/
+/docs/prismoo-brand.png
+/docs/screenshots/pet-cat*.png
+/docs/screenshots/settings-panel*.png
+/docs/screenshots/demo.gif
+/docs/PETPACK.md
+/docs/accessory-system.md
+/docs/animation-system.md
+/legacy/
+/examples/
+/actions.json
+
+# Previous full-feature experiments are not compiled or loaded by the lite app.
+/src/assets/accessories/
+/src/assets/anchors/
+/src/assets/animations/
+/src/assets/sprite-sources/
+/src/renderer/accessory-*.ts
+/src/renderer/anchor-*.ts
+/src/renderer/anim-debug.ts
+/src/renderer/anim-player.ts
+/src/renderer/anim-registry.ts
+/src/renderer/behavior-*.ts
+/src/renderer/interaction-controller.ts
+/src/renderer/movement-controller.ts
+/src/renderer/pet-*.ts
+/src/renderer/petpack-*.ts
+/src/renderer/wardrobe.ts
+/src/renderer/app.ts
+/src/renderer/chat.*
+/src/renderer/i18n.ts
+/src/renderer/settings.css
+/src/renderer/settings.ts
+/src/renderer/styles.css
+/src/renderer/tauri-api.ts
+/src-tauri/src/accessory.rs
+/src-tauri/src/ai.rs
+/src-tauri/src/chat.rs
+/src-tauri/src/petpack.rs
+/src-tauri/src/updater.rs
+/src-tauri/src/weather.rs
+/scripts/build-action-boards.mjs
+/scripts/build-bulu-actions.mjs
+/scripts/generate-accessories.mjs
+/scripts/generate-accessory-anchors.mjs
+/scripts/import-legacy-actions.mjs
+/scripts/prepare-animated-pet.mjs
+/scripts/prepare-single-pet.mjs
+/scripts/preview-accessory.mjs
+/scripts/set-custom.mjs
+/scripts/test-accessories.mjs
+/scripts/test-animations.mjs
+/scripts/test-petpack.mjs
+
+# npm run sprites / npm run brand-icons reproduce these from the tracked SVG
+# source (src/assets/brand/prismoo-icon.svg) and the procedural generator, so
+# they are build output that happens to live next to the source.
+#
+# src/assets/tray.png is deliberately NOT ignored: src-tauri/src/tray.rs embeds
+# it with include_bytes!, so a bare `cargo build` on a fresh clone must find it
+# on disk even though `npm run build` would regenerate it.
+/src/assets/icon-*.png
+/src/assets/icon.png
+/src/assets/icon.ico
+/src/assets/icon.icns
+/src/assets/sprites/
