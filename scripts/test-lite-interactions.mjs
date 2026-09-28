@@ -18,6 +18,8 @@ let lastDraw;
 const intervals = [];
 const moves = [];
 const canvasEvents = new Map();
+/** Every pixel the pet window looked up while hit-testing, in backing-store px. */
+const hitSamples = [];
 let speechCount = 0;
 const speech = { hidden: true, style: {}, get textContent() { return this.line || ''; }, set textContent(value) { this.line = value; speechCount++; } };
 const hearts = { hidden: true, style: {}, offsetWidth: 20 };
@@ -28,7 +30,7 @@ class FakeDate extends Date {
 }
 const drawing = {
   clearRect() {}, save() {}, restore() {}, drawImage(...args) { lastDraw = args; }, translate() {}, scale() {},
-  getImageData: () => ({ data: [0, 0, 0, 255] }),
+  getImageData: (x, y) => { hitSamples.push([x, y]); return { data: [0, 0, 0, 255] }; },
 };
 const canvas = {
   style: {}, getContext: () => drawing,
@@ -54,7 +56,10 @@ const api = {
   onUpdateState: callback => { updateState = callback; },
 };
 const browser = {
-  api, devicePixelRatio: 1,
+  // A non-1 ratio on purpose: the canvas backing store is 300*dpr while every
+  // hit test is fed CSS coordinates, and mixing the two broke dragging and the
+  // right-click menu on any scaled display.
+  api, devicePixelRatio: 2,
   setInterval: callback => { intervals.push(callback); return intervals.length; },
   setTimeout: (callback, delay) => {
     if (delay === 32) { clock += 125; queueMicrotask(callback); }
@@ -69,7 +74,8 @@ const context = {
     querySelectorAll: () => [],
     getElementById: id => ({ 'pet-canvas': canvas, 'pet-speech': speech, 'pet-hearts': hearts, 'pet-dream': dream })[id],
   },
-  Image: class { complete = true; naturalWidth = 512; set src(url) { if (url.includes('bulu-actions')) this.naturalWidth = 1024; } },
+  // The atlas is 16 frames wide at 192 px per frame (see scripts/build-bulu-actions.mjs).
+  Image: class { complete = true; naturalWidth = 512; set src(url) { if (url.includes('bulu-actions')) this.naturalWidth = 16 * 192; } },
   performance: { now: () => clock }, Date: FakeDate,
   requestAnimationFrame(callback) { frame = callback; }, queueMicrotask, Math, Number, Promise, console,
 };
@@ -84,6 +90,14 @@ for (const x of [110, 135, 115, 140]) {
 }
 assert.equal(speech.textContent, '好舒服呀～');
 assert.equal(hearts.hidden, false);
+
+// Regression: the pet is click-through unless the hit test finds its pixels. The
+// backing store is 300*dpr while the hit test receives CSS coordinates, so the
+// lookup has to be scaled — otherwise dragging and the right-click menu die on
+// every display that is not at 100%.
+assert.ok(hitSamples.length > 0, 'moving the pointer should hit-test the pet');
+assert.ok(hitSamples.some(([x, y]) => x === 140 * 2 && y === 175 * 2),
+  `hit test must read device pixels, got ${JSON.stringify(hitSamples.slice(0, 4))}`);
 
 // Switching config.locale must swap the dictionary the pet speaks from.
 clock += 3300; // clear the petting cooldown
@@ -160,15 +174,20 @@ configChanged({ skin: 'bulu', petScale: 1, opacity: 1, autoMove: false,
   standReminderEnabled: false, standReminderMinutes: 5, hourlyChime: false });
 actionReceived('wave');
 frame(clock += 100);
-assert.equal(lastDraw[3], 256, 'Bulu action should use the dedicated 256px action frames');
+assert.equal(lastDraw[3], 192, 'Bulu actions should use the dedicated action cell size');
 frame(clock += 600);
-assert.equal(lastDraw[1], 256, 'wave should advance to its raised-paw frame');
+// 700 ms into a 2100 ms clip lands on frame 5 of the 16-frame animation.
+assert.equal(lastDraw[1], 5 * 192, 'wave should advance through its frames');
 actionReceived('groom');
 frame(clock += 1100);
-assert.equal(lastDraw[2], 256, 'groom should use its own action row');
+assert.equal(lastDraw[2], 1 * 192, 'groom should use its own action row');
+// The fifth action (scratch) lives on the last row of the atlas.
+actionReceived('scratch');
+frame(clock += 1100);
+assert.equal(lastDraw[2], 4 * 192, 'scratch should use the fifth pose row');
 actionReceived('unknown');
-assert.equal(browser.__prismooLiteState().action, 'groom', 'unknown actions should be ignored');
-frame(clock += 2500);
+assert.equal(browser.__prismooLiteState().action, 'scratch', 'unknown actions should be ignored');
+frame(clock += 2600);
 assert.equal(browser.__prismooLiteState().action, null, 'action should return to normal playback');
 
 canvasEvents.get('mousedown')({ button: 0, offsetX: 120, offsetY: 175, screenX: 100, screenY: 100 });

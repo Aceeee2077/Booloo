@@ -8,7 +8,20 @@ const binary = join(root, 'src-tauri', 'target', 'debug', 'prismoo.exe');
 const appVersion = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version;
 if (!existsSync(binary)) throw new Error(`Build the app first: ${binary}`);
 
-const child = spawn(binary, [], { env: { ...process.env, PRISMOO_SELFCHECK: '1' }, stdio: ['ignore', 'pipe', 'pipe'] });
+// Force a non-1 device scale factor: the pet canvas is 300*dpr backing pixels
+// while the hit test is fed CSS coordinates, and getting that wrong silently
+// disables dragging and the right-click menu on every scaled display (it is the
+// bug that shipped once). At 100% the two coordinate spaces are identical, so a
+// self-check that only runs at 100% cannot see it.
+const child = spawn(binary, [], {
+  env: {
+    ...process.env,
+    PRISMOO_SELFCHECK: '1',
+    WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS:
+      process.env.WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS ?? '--force-device-scale-factor=1.5',
+  },
+  stdio: ['ignore', 'pipe', 'pipe'],
+});
 let output = '', errors = '';
 child.stdout.on('data', chunk => { output += chunk; });
 child.stderr.on('data', chunk => { errors += chunk; });
@@ -25,9 +38,13 @@ child.on('exit', code => {
   const mask = reports.find(report => report.window === 'mask');
   const petOk = pet?.hasApi && pet?.hasCanvas && pet?.drawnPixels > 0 &&
     pet?.hitTestCorner === false &&
+    // Click-through is only released where the pet's pixels are: if this is false
+    // the user cannot drag the pet or open its right-click menu.
+    Array.isArray(pet?.hitTestPet) && pet.hitTestPet.some(hit => hit === true) &&
     pet?.i18nReady === true &&
     (pet?.state?.skin !== 'custom' || pet?.state?.customReady === true);
-  const settingsOk = settings?.hasApi && settings?.skinChoices === 6 &&
+  // Two choices now: Bulu and "my image".
+  const settingsOk = settings?.hasApi && settings?.skinChoices === 2 &&
     settings?.importButton && settings?.confirmButton && settings?.hasExtraPanels === false &&
     settings?.hasLanguage === true &&
     ['zh', 'en'].includes(settings?.languageValue) &&

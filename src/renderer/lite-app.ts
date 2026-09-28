@@ -26,19 +26,20 @@
     ctx.scale(next, next);
   }
 
-  const sources: Record<string, string> = {
-    cat: '../assets/animated-pets/cat.png', dog: '../assets/animated-pets/fox.png',
-    default: '../assets/animated-pets/rabbit.png', bulu: '../assets/animated-pets/bulu.png',
-    robot: '../assets/sprites/robot.png',
-  };
+  // Bulu is the only built-in character; anything else on screen is the user's
+  // own imported picture (see `loadCustom`).
+  const sources: Record<string, string> = { bulu: '../assets/animated-pets/bulu.png' };
   const sheets: Record<string, HTMLImageElement> = {};
   for (const [skin, url] of Object.entries(sources)) {
     const image = new Image(); image.src = url; sheets[skin] = image;
   }
   const buluActions = new Image();
   buluActions.src = '../assets/animated-pets/bulu-actions.webp';
-  type PetAction = 'wave' | 'groom' | 'stretch' | 'yawn';
-  const actionRows: Record<PetAction, number> = { wave: 0, groom: 1, stretch: 2, yawn: 3 };
+// Row order must match ACTIONS in scripts/build-bulu-actions.mjs.
+type PetAction = 'wave' | 'groom' | 'stretch' | 'yawn' | 'scratch';
+const actionRows: Record<PetAction, number> = { wave: 0, groom: 1, stretch: 2, yawn: 3, scratch: 4 };
+/** Each atlas row is one action's whole sheet: 4x4 source frames in a row. */
+const ACTION_FRAMES = 16;
   let activeAction: { kind: PetAction; started: number; duration: number } | null = null;
   let config: AppConfig | null = null;
   let custom: LitePreparedImage | null = null;
@@ -348,13 +349,16 @@
     const action = activeAction && now < activeAction.started + activeAction.duration ? activeAction : null;
     const sizeScale = Math.max(0.65, Math.min(1.6, Number(config?.petScale) || 1));
     const bob = action ? 0 : state === 'idle' ? Math.sin(now / 430) * 1.4 : state === 'walk' ? Math.sin(now / 100) * 2.5 : state === 'click' ? -Math.abs(Math.sin(now / 90)) * 3 : 0;
-    const target = config?.skin === 'custom' && custom ? 'custom' : config?.skin && sheets[config.skin] ? config.skin : 'cat';
+    // An unknown skin (an install from before the line-up was trimmed) rides the
+    // Bulu art rather than leaving the window blank.
+    const target = config?.skin === 'custom' && custom ? 'custom' : config?.skin && sheets[config.skin] ? config.skin : 'bulu';
 
     ctx.save();
     ctx.globalAlpha = state === 'sleep' ? 0.78 : 1;
     if (target === 'bulu' && action && buluActions.complete && buluActions.naturalWidth) {
-      const cell = buluActions.naturalWidth / 4;
-      const column = Math.min(3, Math.floor((now - action.started) / action.duration * 4));
+      const cell = buluActions.naturalWidth / ACTION_FRAMES;
+      const progress = (now - action.started) / action.duration;
+      const column = Math.min(ACTION_FRAMES - 1, Math.max(0, Math.floor(progress * ACTION_FRAMES)));
       const size = 132 * sizeScale;
       const x = 150 - size / 2, y = 293 - size;
       ctx.imageSmoothingEnabled = true;
@@ -379,10 +383,12 @@
         const frame = Math.floor(now / (state === 'walk' ? 125 : 220)) % 4;
         const column = target === 'bulu' && state === 'idle' && frame === 3 ? 1 : frame;
         const row = action ? action.kind === 'yawn' ? 2 : 3 : state === 'walk' ? 1 : state === 'sleep' ? 2 : state === 'click' ? 3 : 0;
-        const size = (target === 'robot' ? 106 : 132) * sizeScale;
+        const size = 132 * sizeScale;
         const x = 150 - size / 2, y = 293 - size + bob;
-        ctx.imageSmoothingEnabled = false;
-        if (facing < 0 && target !== 'bulu' || facing > 0 && target === 'bulu') {
+        // Bulu is a drawn illustration, not pixel art: nearest-neighbour would
+        // alias the 64 px sprite up to 132 px.
+        ctx.imageSmoothingEnabled = true;
+        if (facing > 0) {
           ctx.translate(300, 0); ctx.scale(-1, 1);
         }
         ctx.drawImage(image, column * cell, row * cell, cell, cell, x, y, size, size);
@@ -415,7 +421,12 @@
   function hit(x: number, y: number) {
     const px = Math.floor(x), py = Math.floor(y);
     if (px < 0 || py < 0 || px >= 300 || py >= 300) return false;
-    try { return ctx.getImageData(px, py, 1, 1).data[3] > 24; }
+    // `getImageData` reads backing-store pixels and ignores the context transform,
+    // while every caller here passes CSS (0-300) coordinates — so the lookup has
+    // to move with the pixel ratio. Reading CSS pixels straight was what made the
+    // pet stay click-through on any scaled display: no dragging, no right-click
+    // menu, because both are gated on this test.
+    try { return ctx.getImageData(Math.round(px * dpr), Math.round(py * dpr), 1, 1).data[3] > 24; }
     catch { return px >= visibleRect.x && px <= visibleRect.x + visibleRect.w && py >= visibleRect.y && py <= visibleRect.y + visibleRect.h; }
   }
   (window as unknown as { __prismooHitTest: (x: number, y: number) => boolean }).__prismooHitTest = hit;

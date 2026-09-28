@@ -75,6 +75,15 @@ const LITE_CHECK_JS: &str = r#"
     out.hitTestCorner = window.__prismooHitTest?.(5, 5) ?? null;
     out.i18nReady = typeof window.liteT === 'function' && window.liteT('lite.pet.petting') !== 'lite.pet.petting';
     out.petError = window.__petError ?? null;
+    // The pet is click-through until this hit test says the cursor is over it, so
+    // a broken hit test means "cannot drag, right-click does nothing" — and it
+    // only breaks on displays with a device pixel ratio other than 1, which is
+    // why the self-check is also run with a forced scale factor.
+    const bounds = window.__prismooVisualBounds?.();
+    out.devicePixelRatio = window.devicePixelRatio;
+    out.hitTestPet = bounds
+      ? [0.5, 0.6, 0.7].map(part => window.__prismooHitTest?.(bounds.x + bounds.w / 2, bounds.y + bounds.h * part) ?? null)
+      : null;
   } catch (error) { out.error = String(error); }
   await window.__TAURI__.core.invoke('probe_report', { payload: JSON.stringify(out) });
 })();

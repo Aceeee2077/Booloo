@@ -8,7 +8,12 @@
 // ============================================================================
 
 /** Pet skin (legacy IDs dog/default now display the built-in fox/rabbit art). */
-type PetSkin = 'cat' | 'dog' | 'default' | 'bulu' | 'robot' | 'custom';
+/**
+ * Bulu is the only built-in character; everything else is an imported picture.
+ * Older installs may still have 'cat' / 'dog' / 'default' / 'robot' persisted —
+ * src-tauri/src/config.rs migrates those to 'bulu' on load.
+ */
+type PetSkin = 'bulu' | 'custom';
 
 /** UI language */
 type Locale = 'zh' | 'en';

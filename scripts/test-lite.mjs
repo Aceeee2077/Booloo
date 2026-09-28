@@ -208,20 +208,31 @@ for (const [readme, expected] of [
 
 const actionAtlas = join(process.cwd(), 'dist', 'assets', 'animated-pets', 'bulu-actions.webp');
 const actionMeta = await sharp(actionAtlas).metadata();
-assert.equal(actionMeta.width, 1024);
-assert.equal(actionMeta.height, 1024);
+// One 192 px row per action and 16 frames per row: each source sheet is a 4x4
+// grid of animation frames, flattened into the row in reading order.
+const actionCell = 192;
+const actionFrames = 16;
+assert.equal(actionMeta.width, actionCell * actionFrames);
+assert.equal(actionMeta.height, actionCell * 5);
 assert.equal(actionMeta.hasAlpha, true);
-for (let row = 0; row < 4; row++) {
+// The atlas and the right-click menu must agree on how many actions exist —
+// adding a button without a pose row (or the other way round) fails here.
+const menuHtml = readFileSync(join(renderer, 'menu.html'), 'utf8');
+const menuActions = [...menuHtml.matchAll(/data-action="action:([a-z]+)"/g)].map(match => match[1]);
+assert.equal(actionMeta.height / actionCell, menuActions.length,
+  `the atlas has ${actionMeta.height / actionCell} pose rows but the menu offers ${menuActions.length} actions`);
+for (let row = 0; row < actionMeta.height / actionCell; row++) {
   const frames = [];
-  for (let col = 0; col < 4; col++) {
-    const frame = await sharp(actionAtlas).extract({ left: col * 256, top: row * 256, width: 256, height: 256 })
+  for (let col = 0; col < actionFrames; col++) {
+    const frame = await sharp(actionAtlas)
+      .extract({ left: col * actionCell, top: row * actionCell, width: actionCell, height: actionCell })
       .ensureAlpha().raw().toBuffer();
     let opaque = 0;
     for (let pixel = 3; pixel < frame.length; pixel += 4) if (frame[pixel] > 16) opaque++;
     assert.ok(opaque > 1000, `Bulu action row ${row}, frame ${col} is empty`);
     frames.push(frame);
   }
-  assert.notDeepEqual(frames[0], frames[1], `Bulu action row ${row} does not move`);
+  assert.notDeepEqual(frames[0], frames[8], `Bulu action row ${row} does not move`);
 }
 
 // Both dictionaries are handed to the renderer as one JSON payload, so a key

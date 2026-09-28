@@ -14,7 +14,7 @@ button:disabled { opacity: .5; cursor: default; }
 button.primary { color: white; background: #ea773b; border-color: #ea773b; }
 button.primary:hover { background: #d7642c; }
 header button { border: 0; background: transparent; }
-.skins { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; margin-bottom: 16px; }
+.skins { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 16px; }
 .skins button { min-height: 67px; font-size: 24px; }
 .skins small { display: block; margin-top: 3px; font-size: 11px; }
 .skins button.active { border: 2px solid #ea773b; background: #ffead9; }
@@ -48,4 +48,4 @@ header button { border: 0; background: transparent; }
 #update-notes-box pre { margin: 0; max-height: 140px; overflow: auto; padding: 8px 10px; border: 1px solid #f3e4d8; border-radius: 10px; background: #fffdfb; color: #6b5346; font-size: 12px; white-space: pre-wrap; word-break: break-word; }
 #update-manual { user-select: text; }
 [hidden] { display: none !important; }
-@media (max-width: 560px) { .skins { grid-template-columns: repeat(3, 1fr); } .panel { padding: 0 16px 20px; } }
+@media (max-width: 560px) { .skins { grid-template-columns: repeat(2, 1fr); } .panel { padding: 0 16px 20px; } }

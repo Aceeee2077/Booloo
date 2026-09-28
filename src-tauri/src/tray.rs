@@ -111,7 +111,7 @@ fn show_menu_at(app: &AppHandle, pointer: PhysicalPosition<f64>) -> Result<(), S
     } else {
         WebviewWindowBuilder::new(app, "pet-menu", WebviewUrl::App("renderer/menu.html".into()))
             .title("Prismoo menu")
-            .inner_size(188.0, 284.0)
+            .inner_size(188.0, 318.0)
             .decorations(false)
             .resizable(false)
             .transparent(true)
@@ -163,7 +163,7 @@ pub fn close_pet_menu(app: AppHandle) -> Result<(), String> {
 pub async fn pet_menu_action(app: AppHandle, action: String) -> Result<(), String> {
     let _ = close_pet_menu(app.clone());
     if let Some(name) = action.strip_prefix("action:") {
-        if matches!(name, "wave" | "groom" | "stretch" | "yawn") {
+        if matches!(name, "wave" | "groom" | "stretch" | "yawn" | "scratch") {
             return app.emit_to("pet", "pet-action", name).map_err(|e| e.to_string());
         }
     }

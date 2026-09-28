@@ -20,8 +20,8 @@ pub struct ConfigState {
 /// Mirrors DEFAULT_CONFIG in src/shared/config.ts.
 pub fn defaults() -> Value {
     json!({
-        "skin": "cat",
-        "currentPetId": "cat",
+        "skin": "bulu",
+        "currentPetId": "bulu",
         "animSpeed": 1,
         "opacity": 1,
         "autoLaunch": false,
@@ -153,6 +153,7 @@ pub fn init(app: &AppHandle) -> ConfigState {
             value["currentPetId"] = Value::String(skin);
         }
     }
+    migrate_retired_skin(&mut value);
     // Fill in anything the persisted file is missing (new keys, first run).
     fill_missing(&mut value, &defaults());
     seed_provider_from_legacy(&mut value);
@@ -160,6 +161,21 @@ pub fn init(app: &AppHandle) -> ConfigState {
     ConfigState {
         path,
         value: Mutex::new(value),
+    }
+}
+
+/// Map a skin from an older install onto the character that still ships.
+///
+/// Bulu is the only built-in pet now, so a config that still says `cat` / `dog` /
+/// `default` / `robot` would point the pet window at art that is no longer in the
+/// bundle. Imported pictures (`custom`) and Bulu itself are left alone.
+fn migrate_retired_skin(value: &mut Value) {
+    if matches!(
+        value.get("skin").and_then(Value::as_str),
+        Some("cat" | "dog" | "default" | "robot")
+    ) {
+        value["skin"] = Value::String("bulu".to_string());
+        value["currentPetId"] = Value::String("bulu".to_string());
     }
 }
 
@@ -315,5 +331,24 @@ mod tests {
         deep_merge(&mut stored, &json!({ "update": { "a": 9 } }));
         assert_eq!(stored["update"]["a"], 9);
         assert_eq!(stored["update"]["b"], 2);
+    }
+
+    /// An install from before the line-up was trimmed has to come back as Bulu —
+    /// otherwise the pet window asks for art that is no longer in the bundle.
+    #[test]
+    fn retired_skins_migrate_to_bulu() {
+        for retired in ["cat", "dog", "default", "robot"] {
+            let mut stored = json!({ "skin": retired, "currentPetId": retired });
+            migrate_retired_skin(&mut stored);
+            assert_eq!(stored["skin"], "bulu", "{retired} should migrate");
+            assert_eq!(stored["currentPetId"], "bulu", "{retired} should migrate");
+        }
+        // The two skins that still exist are left exactly as they are.
+        for kept in ["bulu", "custom"] {
+            let mut stored = json!({ "skin": kept, "currentPetId": kept });
+            migrate_retired_skin(&mut stored);
+            assert_eq!(stored["skin"], kept);
+            assert_eq!(stored["currentPetId"], kept);
+        }
     }
 }

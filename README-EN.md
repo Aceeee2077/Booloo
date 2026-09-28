@@ -27,7 +27,7 @@ Open Settings from the tray or the right-click menu to switch pets, import your 
 
 ## What it does
 
-- **Five built-in pets** — Cat, Fox, Rabbit, Bulu and Robot. Right-click for Wave, Groom, Stretch and Yawn; Bulu plays dedicated pose animation (`src/assets/animated-pets/bulu-actions.webp`), while the other pets reuse their existing interaction or sleep frames.
+- **Bulu, the built-in character** — Bulu is the only bundled look and the default one. Right-click for Wave, Groom, Stretch, Yawn and Scratch: each plays a real pose animation from a 4×5 atlas (`src/assets/animated-pets/bulu-actions.webp` — one action per row, four frames each), not a switched static frame.
 - **Bring your own picture** — Choose **Import my image** and the picture goes through a preview first. Background removal is intended for simple, solid backgrounds, and if it would erase the subject Prismoo keeps the original image.
 - **Automatic cutout + manual touch-up** — **Refine the cutout…** opens a separate editor window: Rust builds the first mask locally, then the erase / restore brushes fix the edges, with brush size and edge hardness. Undo / redo (Ctrl+Z / Ctrl+Y), wheel zoom, panning, a side-by-side original and a **Run it again** pass (strength and feather) are all there. The picture is never uploaded and the result is saved as a transparent PNG.
 - **Drop a file on the pet** — It answers with a short animated line based on the file type: image, document, archive, audio, video, or a general response. Prismoo checks only the extension and never reads or modifies the file. File reactions can be disabled in Settings.
@@ -38,12 +38,12 @@ Open Settings from the tray or the right-click menu to switch pets, import your 
 - **Auto-update** — An installed build checks for a new version a few seconds after start (can be turned off in Settings), downloads it in the background and lets the pet say so. The **🔄 Update** section in Settings checks manually, shows download progress and restarts into the new version. Packages come from this repository's GitHub Releases and are verified with a minisign signature.
 - **Daily settings** — Pet size, opacity, autonomous walking, launch at login, and reset position.
 
-A single image gets gentle breathing and click motion. It does not become a new set of walking or sleeping poses. Built-in pets use frame animation.
+A single image gets gentle breathing and click motion. It does not become a new set of walking or sleeping poses; Bulu uses frame animation and the pose atlas.
 
 ## Use
 
 1. Open Settings from the tray menu.
-2. Select a built-in pet or choose **Import my image**.
+2. Keep the default Bulu, or choose **Import my image** to use your own picture.
 3. Check the preview before selecting **Use this image**. Canceling leaves the current pet untouched.
 4. Background removal is intended for simple, solid backgrounds. If it would erase the subject, Prismoo keeps the original image. Transparent PNGs are not processed again.
 5. For cleaner edges choose **Refine the cutout…**: pick a brush on the left, drag on the canvas (right-drag or hold space to pan, wheel to zoom), compare the original and the cutout on the right, then press **Use this image**.

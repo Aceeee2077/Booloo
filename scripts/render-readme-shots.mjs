@@ -90,8 +90,8 @@ function settledDom(file) {
  */
 function stubSource(locale) {
   const config = {
-    skin: 'cat',
-    currentPetId: 'cat',
+    skin: 'bulu',
+    currentPetId: 'bulu',
     petScale: 1,
     opacity: 0.95,
     autoMove: true,
@@ -111,6 +111,12 @@ function stubSource(locale) {
     autolaunch_get: () => config.autoLaunch === true,
     autolaunch_set: ({ enabled }) => (config.autoLaunch = enabled),
     custom_get: () => ({ ok: false }),
+    // The settings panel paints the update row on load; without this the shot
+    // would show the panel's "could not load settings" error line.
+    update_get_state: () => ({
+      status: 'up-to-date', currentVersion: '0.6.5',
+      autoCheck: true, autoDownload: true, channel: 'stable',
+    }),
   };
   return {
     core: {
@@ -191,7 +197,7 @@ function desktopPage(locale) {
   return page;
 }
 
-copyFileSync(join(ROOT, 'src', 'assets', 'animated-pets', 'cat.png'), join(scratch, 'pet.png'));
+copyFileSync(join(ROOT, 'src', 'assets', 'animated-pets', 'bulu.png'), join(scratch, 'pet.png'));
 for (const asset of ['lite-i18n.js', 'lite-api.js', 'lite-image.js', 'lite-settings.js', 'lite-settings.css']) {
   copyFileSync(join(RENDERER, asset), join(scratch, asset));
 }

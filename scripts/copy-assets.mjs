@@ -31,12 +31,9 @@ for (const file of readdirSync(join(ROOT, 'dist', 'renderer'))) {
   if (file.endsWith('.js') && !runtimeScripts.has(file)) unlinkSync(join(ROOT, 'dist', 'renderer', file));
 }
 mkdirSync(join(ROOT, 'dist', 'assets', 'animated-pets'), { recursive: true });
-for (const file of ['cat.png', 'fox.png', 'rabbit.png', 'bulu.png']) {
+// Bulu is the only built-in character; every other look is an imported picture.
+for (const file of ['bulu.png', 'bulu-actions.webp']) {
   cpSync(join(ROOT, 'src', 'assets', 'animated-pets', file), join(ROOT, 'dist', 'assets', 'animated-pets', file));
 }
-cpSync(join(ROOT, 'src', 'assets', 'animated-pets', 'bulu-actions.webp'),
-  join(ROOT, 'dist', 'assets', 'animated-pets', 'bulu-actions.webp'));
-mkdirSync(join(ROOT, 'dist', 'assets', 'sprites'), { recursive: true });
-cpSync(join(ROOT, 'src', 'assets', 'sprites', 'robot.png'), join(ROOT, 'dist', 'assets', 'sprites', 'robot.png'));
 
 console.log('✓ 已拷贝渲染层页面与资源到 dist/');
