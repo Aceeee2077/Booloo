@@ -26,6 +26,7 @@ let pendingCheck = null;
 function makeElement(id) {
   return {
     id, value: '', checked: false, disabled: false, hidden: false, textContent: '', title: '', style: {},
+    focus() { this.focused = true; }, select() { this.selected = true; },
     classList: { err: false, toggle(name, on) { if (name === 'err') this.err = !!on; }, add(name) { if (name === 'err') this.err = true; }, remove() {}, contains: () => false },
     addEventListener(name, callback) { events.set(`${id}:${name}`, callback); },
     querySelectorAll: () => [],
@@ -44,7 +45,12 @@ const config = {
 const api = {
   getI18n: async () => ({ locale, dict: locale === 'en' ? enDict : zhDict }),
   getConfig: async () => config,
-  setConfig: async (patch) => { calls.patches.push(patch); return { ...config, ...patch }; },
+  setConfig: async (patch) => {
+    calls.patches.push(patch);
+    Object.assign(config, patch);
+    queueMicrotask(() => configChanged({ ...config }));
+    return { ...config };
+  },
   autoLaunchGet: async () => false,
   autoLaunchSet: async () => false,
   onConfigChanged: (callback) => { configChanged = callback; },
@@ -109,6 +115,24 @@ assert.equal(status.textContent, '尚未检查');
 assert.equal(downloadButton.hidden, true, 'no download button before a check');
 assert.equal(installButton.hidden, true);
 assert.equal(progressRow.hidden, true);
+
+// Choosing Custom must leave its number editor open. A premature save of the
+// old 5-minute value broadcasts a config repaint that hides the editor.
+const interval = element('stand-interval');
+const customMinutes = element('stand-custom');
+const customLabel = element('stand-custom-label');
+interval.value = 'custom';
+change('stand-interval');
+await settle();
+assert.equal(customLabel.hidden, false);
+assert.equal(customMinutes.focused, true);
+assert.equal(calls.patches.length, 0, 'selecting Custom must wait for a new value');
+customMinutes.value = '7';
+change('stand-custom');
+await settle();
+assert.equal(calls.patches.at(-1).standReminderMinutes, 7);
+assert.equal(interval.value, 'custom');
+calls.patches.length = 0;
 
 // Checking offers the new version, its release notes and a download button
 // (auto-download is off in this snapshot).

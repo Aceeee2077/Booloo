@@ -30,7 +30,7 @@ header button { border: 0; background: transparent; }
 .setting span { display: flex; justify-content: space-between; margin-bottom: 6px; }
 .setting input { display: block; width: 100%; accent-color: #ea773b; }
 .setting select { display: block; width: 100%; font: inherit; color: inherit; padding: 5px 8px; border: 1px solid #e9cbb6; border-radius: 8px; background: white; }
-.check { display: flex; align-items: center; gap: 8px; margin: 14px 0; }
+.check { display: flex; width: fit-content; max-width: 100%; align-items: center; gap: 8px; margin: 14px 0; }
 .check input { accent-color: #ea773b; width: 17px; height: 17px; }
 .reminder-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 0 0 2px 25px; font-size: 13px; }
 .reminder-controls select, .reminder-controls input { font: inherit; color: inherit; padding: 5px 8px; border: 1px solid #e9cbb6; border-radius: 8px; background: white; }

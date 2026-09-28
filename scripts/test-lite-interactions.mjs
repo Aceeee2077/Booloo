@@ -17,9 +17,11 @@ let frame;
 let lastDraw;
 /** Every drawImage the pet window issued, so a single frame can be asserted on. */
 const drawHistory = [];
+const transforms = [];
 const intervals = [];
 const moves = [];
 const canvasEvents = new Map();
+const windowEvents = new Map();
 /** Every pixel the pet window looked up while hit-testing, in backing-store px. */
 const hitSamples = [];
 let speechCount = 0;
@@ -31,7 +33,7 @@ class FakeDate extends Date {
   static now() { return wallClock; }
 }
 const drawing = {
-  clearRect() {}, save() {}, restore() {}, translate() {}, scale() {},
+  clearRect() {}, save() {}, restore() {}, translate() {}, scale(...args) { transforms.push(args); },
   drawImage(...args) { lastDraw = args; drawHistory.push(args); },
   getImageData: (x, y) => { hitSamples.push([x, y]); return { data: [0, 0, 0, 255] }; },
 };
@@ -68,7 +70,7 @@ const browser = {
     if (delay === 32) { clock += 125; queueMicrotask(callback); }
     return 1;
   },
-  clearTimeout() {}, addEventListener() {},
+  clearTimeout() {}, addEventListener: (name, callback) => windowEvents.set(name, callback),
 };
 const context = {
   window: browser, document: {
@@ -201,8 +203,20 @@ assert.equal(browser.__prismooLiteState().action, null, 'action should return to
 
 canvasEvents.get('mousedown')({ button: 0, offsetX: 120, offsetY: 175, screenX: 100, screenY: 100 });
 canvasEvents.get('mousemove')({ offsetX: 140, offsetY: 175, screenX: 126, screenY: 100, buttons: 1 });
+transforms.length = 0;
 frame(clock += 125);
 assert.equal(lastDraw[2], 128, 'dragging should use the walking sprite row');
+assert.equal(transforms.some(([x]) => x < 0), true, 'dragging right should mirror the left-facing walking art');
+canvasEvents.get('mousemove')({ offsetX: 110, offsetY: 175, screenX: 96, screenY: 100, buttons: 1 });
+transforms.length = 0;
+frame(clock += 125);
+assert.equal(transforms.some(([x]) => x < 0), false, 'dragging left should show the original walking art');
+windowEvents.get('mouseup')();
+canvasEvents.get('mousedown')({ button: 0, offsetX: 120, offsetY: 175, screenX: 100, screenY: 100 });
+canvasEvents.get('mousemove')({ offsetX: 140, offsetY: 175, screenX: 126, screenY: 100, buttons: 1 });
+transforms.length = 0;
+frame(clock += 125);
+assert.equal(transforms.some(([x]) => x < 0), true, 'the first rightward drag move must reset a previous left facing');
 
 // An update is announced once per status change; the per-chunk download progress
 // events must not re-trigger the bubble.

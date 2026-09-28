@@ -35,7 +35,7 @@
   }
   const buluActions = new Image();
   buluActions.src = '../assets/animated-pets/bulu-actions.webp';
-// Row order must match ACTIONS in scripts/build-bulu-actions.mjs.
+// Row order must match ACTIONS in scripts/build-bulu-art.mjs.
 type PetAction = 'wave' | 'groom' | 'stretch' | 'yawn' | 'scratch';
 const actionRows: Record<PetAction, number> = { wave: 0, groom: 1, stretch: 2, yawn: 3, scratch: 4 };
 /** Each atlas row is one action's whole sheet: 4x4 source frames in a row. */
@@ -387,9 +387,11 @@ const ACTION_FRAMES = 16;
         const row = action ? action.kind === 'yawn' ? 2 : 3 : state === 'walk' ? 1 : state === 'sleep' ? 2 : state === 'click' ? 3 : 0;
         const size = 132 * sizeScale;
         const x = 150 - size / 2, y = 293 - size + bob;
-        // Bulu is a drawn illustration, not pixel art: nearest-neighbour would
-        // alias the 64 px sprite up to 132 px.
+        // Bulu is a drawn illustration: smoothing preserves the fur details
+        // when the 192 px poses are scaled to the on-screen size.
         ctx.imageSmoothingEnabled = true;
+        // The original default sheet faces left in every row. Mirror it when
+        // the pet moves right, including its walking row.
         if (facing > 0) {
           ctx.translate(300, 0); ctx.scale(-1, 1);
         }
@@ -457,6 +459,8 @@ const ACTION_FRAMES = 16;
     if (event.buttons === 0) { release(); return; }
     if (!dragging && Math.hypot(event.screenX - pressAt.x, event.screenY - pressAt.y) > 5) {
       dragging = true; activity(); canvas.style.cursor = 'grabbing';
+      const initialDx = event.screenX - pressAt.x;
+      if (Math.abs(initialDx) >= 2) facing = initialDx < 0 ? -1 : 1;
       lastDragScreenX = event.screenX;
     }
     if (dragging) {

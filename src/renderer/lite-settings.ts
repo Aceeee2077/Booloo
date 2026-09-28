@@ -266,7 +266,17 @@
   autoMove.addEventListener('change', () => void window.api.setConfig({ autoMove: autoMove.checked }));
   fileDropReactions.addEventListener('change', () => void window.api.setConfig({ fileDropReactions: fileDropReactions.checked }));
   standReminder.addEventListener('change', saveStandReminder);
-  standInterval.addEventListener('change', saveStandReminder);
+  standInterval.addEventListener('change', () => {
+    if (standInterval.value === 'custom') {
+      // Selecting Custom only reveals the editor. Saving the old value here
+      // broadcasts a config update that paints the preset back over it.
+      standCustomLabel.hidden = false;
+      standCustom.focus();
+      standCustom.select();
+      return;
+    }
+    saveStandReminder();
+  });
   standCustom.addEventListener('change', saveStandReminder);
   hourlyChime.addEventListener('change', () => void window.api.setConfig({ hourlyChime: hourlyChime.checked }));
   checkUpdateButton.addEventListener('click', async () => {

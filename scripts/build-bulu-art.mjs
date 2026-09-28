@@ -2,20 +2,16 @@
 // ============================================================================
 // Bulu's atlas, rebuilt from the authoring renders in docs/pet-sources/:
 //
-//   bulu-actions.webp   16 frames x 6 rows, 192 px cells — the five right-click
-//                       actions (rows 0-4) and the idle animation (row 5), each
-//                       assembled from a 4x4 sheet of 16 frames in
+//   bulu-actions.webp   16 frames x 5 rows, 192 px cells — the five right-click
+//                       actions (rows 0-4), each assembled from a 4x4 sheet in
 //                       docs/pet-sources/bulu-actions/.
 //
 // Why 192: the pet is drawn at 132 CSS px (x devicePixelRatio, up to ~1.6x with
 // the size setting), so a 64 px frame would be stretched 2.6-4.1x and look soft.
 //
-// bulu.png (walk / sleep / click) is deliberately NOT rebuilt here: it is still the
-// original 256 px sheet — 64 px per frame — because the 4x4 board it was cut from
-// is gone and no surviving render matches those rows. Its idle row is superseded by
-// row 5 of the atlas; the other three states stay soft until their sources exist.
-// Drop a 4x4 board (or one 4x4 sheet per state) into docs/pet-sources/ and this
-// script can rebuild them at 192 px exactly the way it builds the atlas.
+// bulu.png uses the idle and walking poses from the original "默认状态" sheet.
+// Sleep and click still use the old 64 px source because their complete frame
+// sequences have not been recovered.
 //
 // src/renderer/lite-app.ts derives everything from the image: the sheet cell is
 // `naturalWidth / 4`, and an atlas row is `ACTION_FRAMES` wide.
@@ -38,10 +34,7 @@ const actionPreview = path.join(sourceDir, 'bulu-actions-preview.png');
 
 /**
  * Atlas rows, in the order the renderer indexes them. Keep in sync with
- * `actionRows` (rows 0-4) and `IDLE_ATLAS_ROW` (row 5) in src/renderer/lite-app.ts.
- *
- * The idle animation is appended *after* the five actions on purpose: it is not a
- * right-click action, and appending keeps the action row indices unchanged.
+ * `actionRows` (rows 0-4) in src/renderer/lite-app.ts.
  */
 const ACTIONS = [
   { id: 'wave', source: '挥爪子' },
@@ -61,8 +54,8 @@ const CELL = 192;
 const PAD = 10;
 /**
  * How much of a cell the idle art filled in the original 64 px sheet. The rebuild
- * matches it so the pet does not change size (and does not shrink next to the
- * carried-over walk row). Measured once; not read back from the sheet we replace.
+ * matches it so the pet does not change size. Measured once; not read back
+ * from the sheet we replace.
  */
 const IDLE_HEIGHT_RATIO = 0.906;
 const ACTION_ART_WIDTH = 176;
@@ -267,6 +260,70 @@ function keepLargestComponent(data, width, height) {
 }
 
 /**
+ * The five JPEG action sheets have a near-black outline baked into the art.
+ * Recolour only dark pixels next to the transparent silhouette, borrowing a
+ * nearby colour from inside the cat. Facial details and fur shading stay put.
+ */
+function softenActionOutline(data, width, height) {
+  const count = width * height;
+  const original = Buffer.from(data);
+  const depth = new Uint8Array(count);
+  const queue = new Int32Array(count);
+  let head = 0, tail = 0;
+  const opaque = (p) => data[p * 4 + 3] >= 24;
+  const brightness = (p) => {
+    const i = p * 4;
+    return (original[i] * 3 + original[i + 1] * 6 + original[i + 2]) / 10;
+  };
+  for (let p = 0; p < count; p++) {
+    if (!opaque(p)) continue;
+    const x = p % width, y = (p - x) / width;
+    if (x === 0 || y === 0 || x === width - 1 || y === height - 1 ||
+        !opaque(p - 1) || !opaque(p + 1) || !opaque(p - width) || !opaque(p + width)) {
+      depth[p] = 1;
+      queue[tail++] = p;
+    }
+  }
+  while (head < tail) {
+    const p = queue[head++];
+    if (depth[p] >= 18) continue;
+    const x = p % width, y = (p - x) / width;
+    const visit = (n) => {
+      if (opaque(n) && depth[n] === 0) {
+        depth[n] = depth[p] + 1;
+        queue[tail++] = n;
+      }
+    };
+    if (x > 0) visit(p - 1);
+    if (x + 1 < width) visit(p + 1);
+    if (y > 0) visit(p - width);
+    if (y + 1 < height) visit(p + width);
+  }
+  for (let p = 0; p < count; p++) {
+    if (!depth[p] || depth[p] > 15 || brightness(p) >= 95) continue;
+    const x = p % width, y = (p - x) / width;
+    let best = -1, bestDistance = Infinity;
+    for (let dy = -20; dy <= 20; dy++) {
+      const sy = y + dy;
+      if (sy < 0 || sy >= height) continue;
+      for (let dx = -20; dx <= 20; dx++) {
+        const sx = x + dx;
+        if (sx < 0 || sx >= width) continue;
+        const q = sy * width + sx;
+        if (!opaque(q) || (depth[q] && depth[q] <= depth[p]) || brightness(q) < 115) continue;
+        const distance = dx * dx + dy * dy;
+        if (distance < bestDistance) { best = q; bestDistance = distance; }
+      }
+    }
+    if (best < 0) continue;
+    const from = best * 4, to = p * 4;
+    data[to] = original[from];
+    data[to + 1] = original[from + 1];
+    data[to + 2] = original[from + 2];
+  }
+}
+
+/**
  * A checkerboard plus row labels, for eyeballing a build. `labels` is indexed by
  * grid row; entries that are empty strings print nothing.
  */
@@ -290,13 +347,12 @@ function contactSheet({ height, rows, cols, labels, thumb, labelWidth }) {
 // ---------- 1. the base sheet (idle / walk / sleep / click) ----------
 
 async function buildSheet() {
-  // Rows 1-3 (walk / sleep / click) are carried over from the 64 px sheet — their
-  // sources are gone, so a 3x lanczos resample into the bigger cells is as far as
-  // this can go. Row 0 (idle) is rebuilt from the static default pose.
+  // Sleep / click have no matching animation sources yet, so only those two
+  // rows are carried over. Idle and walking use the original default sheet.
   const previous = await sharp(sheetOutput).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
   const previousCell = Math.round(previous.info.width / COLS);
   const composites = [];
-  for (let row = 1; row < ROWS; row++) {
+  for (let row = 2; row < ROWS; row++) {
     for (let col = 0; col < COLS; col++) {
       const cell = await sharp(previous.data, { raw: previous.info })
         .extract({ left: col * previousCell, top: row * previousCell, width: previousCell, height: previousCell })
@@ -314,7 +370,18 @@ async function buildSheet() {
   // or dragging — plays an animation.
   const idleSheet = await sharp(resolveActionSource(IDLE_SHEET)).ensureAlpha()
     .raw().toBuffer({ resolveWithObject: true });
-  const first = gridCells(idleSheet.info.width, idleSheet.info.height, COLS, ROWS)[0];
+  const cells = gridCells(idleSheet.info.width, idleSheet.info.height, COLS, ROWS);
+  for (let col = 0; col < COLS; col++) {
+    const { data, info } = await sharp(idleSheet.data, { raw: idleSheet.info })
+      .extract(cells[COLS + col]).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    keepLargestComponent(data, info.width, info.height);
+    composites.push({
+      input: await sharp(data, { raw: info }).resize(CELL, CELL, { kernel: sharp.kernel.lanczos3 }).png().toBuffer(),
+      left: col * CELL,
+      top: CELL,
+    });
+  }
+  const first = cells[0];
   const { data, info: frameInfo } = await sharp(idleSheet.data, { raw: idleSheet.info })
     .extract(first).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
   keepLargestComponent(data, frameInfo.width, frameInfo.height);
@@ -379,6 +446,7 @@ async function actionFrames(file, label) {
     // The model's own 4x4 layout drifts a little, so a cell can carry a piece of
     // the neighbouring pose; keep only the subject.
     keepLargestComponent(data, cellInfo.width, cellInfo.height);
+    if (keyed) softenActionOutline(data, cellInfo.width, cellInfo.height);
     const visible = visibleBounds(data, cellInfo.width, cellInfo.height);
     if (visible.empty) { frames.push({ buffer: null, empty: true }); continue; }
     const right = visible.left + visible.width - 1;
