@@ -108,6 +108,12 @@ Thumbs.db
 # that is left is either a local authoring source or an experiment from the
 # earlier full-featured build.
 #
+# 2026-09-28: the leftover full-version sources were moved *out* of the working
+# tree to D:\Github\Prismoo-backup\full-version-src\ (same layout), because the
+# editor's TypeScript / rust-analyzer services kept flagging them even though
+# nothing here compiles them. The rules below are kept as a safety net: restoring
+# a file to one of these paths must not silently start tracking it.
+#
 # A path only disappears from a push if it is untracked too — ignoring a file
 # that is already in the index does nothing. When adding a rule here for
 # something that was committed earlier, drop it from the index in the same
@@ -183,3 +189,9 @@ Thumbs.db
 /src/assets/icon.ico
 /src/assets/icon.icns
 /src/assets/sprites/
+
+# ---------- 10. The legacy backup itself ----------
+# The backup lives outside this checkout (D:\Github\Prismoo-backup\full-version-src),
+# so git never sees it. These two rules only matter if it is ever copied back in.
+/Prismoo-backup/
+/full-version-src/
