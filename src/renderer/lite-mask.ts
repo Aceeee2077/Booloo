@@ -37,6 +37,7 @@
   const undoButton = el<HTMLButtonElement>('undo');
   const redoButton = el<HTMLButtonElement>('redo');
   const rerunButton = el<HTMLButtonElement>('rerun');
+  const startOverButton = el<HTMLButtonElement>('start-over');
   const eraseButton = el<HTMLButtonElement>('tool-erase');
   const restoreButton = el<HTMLButtonElement>('tool-restore');
   const sizeInput = el<HTMLInputElement>('brush-size');
@@ -108,6 +109,7 @@
     undoButton.disabled = history.length === 0;
     redoButton.disabled = redoStack.length === 0;
     applyButton.disabled = loading || !mask;
+    startOverButton.disabled = loading || !mask;
   }
 
   // ---------- view transform ----------
@@ -272,6 +274,24 @@
     history.push(entry);
     updateButtons();
     maskChanged();
+  }
+
+  /** Restore the entire original photo so manual erasing can begin from zero. */
+  function startOver() {
+    if (!maskCtx || loading) return;
+    const rect = { x: 0, y: 0, width, height };
+    const before = maskCtx.getImageData(0, 0, width, height);
+    maskCtx.globalCompositeOperation = 'source-over';
+    maskCtx.clearRect(0, 0, width, height);
+    maskCtx.fillStyle = '#fff';
+    maskCtx.fillRect(0, 0, width, height);
+    maskChanged();
+    pushEntry({ rect, before, after: maskCtx.getImageData(0, 0, width, height) });
+    originalInput.checked = false;
+    noteState = { key: 'lite.mask.manual' };
+    updateNote();
+    setTool('erase');
+    setStatus('');
   }
 
   // ---------- rendering ----------
@@ -448,6 +468,7 @@
     if (loading) return;
     loading = true;
     rerunButton.disabled = true;
+    startOverButton.disabled = true;
     applyButton.disabled = true;
     setStatus(liteT(reset ? 'lite.mask.loading' : 'lite.mask.rerunning'));
     try {
@@ -532,6 +553,7 @@
   undoButton.addEventListener('click', undo);
   redoButton.addEventListener('click', redo);
   rerunButton.addEventListener('click', () => void refresh(false));
+  startOverButton.addEventListener('click', startOver);
   el<HTMLButtonElement>('fit').addEventListener('click', fitToStage);
   el<HTMLButtonElement>('zoom-in').addEventListener('click', () => setZoom(zoom * 1.25));
   el<HTMLButtonElement>('zoom-out').addEventListener('click', () => setZoom(zoom / 1.25));

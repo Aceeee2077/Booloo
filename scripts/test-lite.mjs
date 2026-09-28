@@ -103,7 +103,7 @@ const maskPage = readFileSync(join(renderer, 'mask.html'), 'utf8');
 assert.match(maskPage, /lite-mask\.js/);
 assert.match(maskPage, /lite-api\.js/);
 for (const id of ['stage', 'mask-view', 'tool-erase', 'tool-restore', 'brush-size', 'brush-hardness',
-  'cutout-strength', 'cutout-feather', 'rerun', 'undo', 'redo', 'fit', 'show-original',
+  'cutout-strength', 'cutout-feather', 'rerun', 'start-over', 'undo', 'redo', 'fit', 'show-original',
   'before-preview', 'after-preview', 'apply']) {
   assert.match(maskPage, new RegExp(`id="${id}"`), `mask.html is missing #${id}`);
 }

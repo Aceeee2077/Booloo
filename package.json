@@ -1,6 +1,6 @@
 {
   "name": "prismoo",
-  "version": "0.6.9",
+  "version": "0.6.10",
   "description": "Prismoo · 跨平台透明桌面宠物 / Cross-platform desktop pet (Tauri 2 + Rust + TypeScript + Canvas)",
   "author": "Prismoo Contributors",
   "license": "MIT",

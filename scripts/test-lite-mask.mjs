@@ -36,7 +36,7 @@ function makeContext(canvas) {
     drawImage(...args) {
       this.ops.push({ op: 'draw', composite: this.globalCompositeOperation, args });
     },
-    fillRect() {},
+    fillRect(...args) { this.ops.push({ op: 'fill', composite: this.globalCompositeOperation, color: this.fillStyle, args }); },
     strokeRect() {},
     beginPath() {},
     arc() {},
@@ -75,7 +75,7 @@ function makeElement(id) {
 
 const ranges = { 'brush-size': [4, 240, 48], 'brush-hardness': [0, 100, 65], 'cutout-strength': [8, 60, 25], 'cutout-feather': [0, 4, 1] };
 const ids = ['stage', 'mask-view', 'mask-status', 'mask-note', 'before-preview', 'after-preview', 'apply', 'undo', 'redo',
-  'rerun', 'tool-erase', 'tool-restore', 'brush-size', 'size-value', 'brush-hardness', 'hardness-value', 'cutout-strength',
+  'rerun', 'start-over', 'tool-erase', 'tool-restore', 'brush-size', 'size-value', 'brush-hardness', 'hardness-value', 'cutout-strength',
   'strength-value', 'cutout-feather', 'feather-value', 'show-original', 'close', 'cancel', 'fit', 'zoom-in', 'zoom-out'];
 for (const id of ids) elements.set(id, ['mask-view', 'before-preview', 'after-preview'].includes(id) ? makeCanvas(id) : makeElement(id));
 for (const [id, [min, max, value]] of Object.entries(ranges)) {
@@ -200,6 +200,18 @@ await settle();
 assert.equal(calls.mask.length, reruns + 1, 'the re-run button asks the backend again');
 assert.deepEqual(calls.mask.at(-1), { tolerance: 40, feather: 3 }, 'the sliders drive the second pass');
 assert.ok(maskCtx.ops.some(o => o.op === 'put'), 'a re-run is undoable like a stroke');
+
+// Starting from the original discards the automatic holes but keeps the reset
+// undoable, so a difficult photo can be cut out entirely by hand.
+elements.get('show-original').checked = true;
+maskCtx.ops.length = 0;
+dispatch('start-over', 'click');
+assert.ok(maskCtx.ops.some(o => o.op === 'fill' && o.color === '#fff'),
+  'start from original must fill the whole keep-mask');
+assert.equal(elements.get('show-original').checked, false, 'the editor must show the restored result');
+assert.equal(erase.classList.active, true, 'manual cutout should select the erase brush');
+assert.match(elements.get('mask-note').textContent, /已恢复完整原图/);
+assert.equal(undo.disabled, false, 'the reset must be undoable');
 
 // Another import while the editor is open reloads the picture.
 maskReload();
