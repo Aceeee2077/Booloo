@@ -144,6 +144,31 @@ for (const [file, pattern] of [
   assert.match(readFileSync(join(process.cwd(), file), 'utf8'), pattern, `${file} lost its updater wiring`);
 }
 
+// macOS support. Every one of these is invisible on Windows: transparency needs
+// the private API in two places (config flag + cargo feature), the bundler needs
+// a real multi-size .icns, and the menu bar needs its monochrome template icon.
+// They would only blow up on a Mac, which is exactly why they are asserted here.
+const tauriConfig = JSON.parse(readFileSync(join(process.cwd(), 'src-tauri', 'tauri.conf.json'), 'utf8'));
+assert.equal(tauriConfig.app.macOSPrivateApi, true, 'macOS transparency needs app.macOSPrivateApi');
+assert.match(readFileSync(join(process.cwd(), 'src-tauri', 'Cargo.toml'), 'utf8'), /"macos-private-api"/,
+  'the config flag also needs the tauri cargo feature');
+assert.ok(tauriConfig.bundle.icon.includes('icons/icon.icns'), 'the macOS bundler needs icons/icon.icns');
+const icns = readFileSync(join(process.cwd(), 'src-tauri', 'icons', 'icon.icns'));
+assert.equal(icns.toString('ascii', 0, 4), 'icns', 'icon.icns must be a real icns file');
+assert.equal(icns.readUInt32BE(4), icns.length, 'the icns length field must match the file size');
+for (const [file, pattern] of [
+  ['src-tauri/src/tray.rs', /tray-mac\.png/],
+  ['src-tauri/src/tray.rs', /icon_as_template\(true\)/],
+  ['src-tauri/src/lib.rs', /ActivationPolicy::Accessory/],
+  ['.github/workflows/release.yml', /aarch64-apple-darwin/],
+  ['.github/workflows/release.yml', /x86_64-apple-darwin/],
+]) {
+  assert.match(readFileSync(join(process.cwd(), file), 'utf8'), pattern, `${file} lost its macOS wiring`);
+}
+assert.ok(existsSync(join(process.cwd(), 'src', 'assets', 'tray-mac.png')), 'the macOS tray template is missing');
+assert.ok(existsSync(join(process.cwd(), '.github', 'workflows', 'build-check.yml')),
+  'the release-free build check workflow is missing');
+
 // A typo in a key renders as the key itself, so both sides of the lookup are checked.
 for (const page of ['index.html', 'settings.html', 'mask.html', 'menu.html']) {
   const html = readFileSync(join(renderer, page), 'utf8');

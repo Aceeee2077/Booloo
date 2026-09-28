@@ -9,6 +9,7 @@
   },
   "app": {
     "withGlobalTauri": true,
+    "macOSPrivateApi": true,
     "windows": [
       {
         "label": "pet",
@@ -39,8 +40,11 @@
     "active": true,
     "publisher": "Prismoo",
     "targets": ["nsis"],
-    "icon": ["icons/icon.ico", "icons/icon.png"],
-    "createUpdaterArtifacts": true
+    "icon": ["icons/icon.icns", "icons/icon.ico", "icons/icon.png"],
+    "createUpdaterArtifacts": true,
+    "macOS": {
+      "minimumSystemVersion": "10.15"
+    }
   },
   "plugins": {
     "updater": {

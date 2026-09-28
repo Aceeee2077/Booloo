@@ -7,7 +7,7 @@
 一只常驻桌面的透明小宠物：会走动、会打瞌睡，也会因为你拖来一张照片而开心。
 
 [![Release](https://img.shields.io/github/v/release/Aceeee2077/Prismoo?label=release&color=ff8fb0)](https://github.com/Aceeee2077/Prismoo/releases)
-![Platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-4c8bf5)
+![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS-4c8bf5)
 ![Tauri](https://img.shields.io/badge/Tauri-2-24c8db)
 ![Rust](https://img.shields.io/badge/Rust-1.77.2%2B-dea584)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-3178c6)
@@ -55,6 +55,17 @@
 - **版本号** — `package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json` 三处必须一致，且新 tag 要大于已安装版本，否则客户端会认为已是最新。
 - **本地打包** — 因为开了 `createUpdaterArtifacts`，`npm run dist:win` 需要 `TAURI_SIGNING_PRIVATE_KEY` / `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`（与 CI secret 相同），否则会在签名一步失败；只想本地验证功能用 `npm run tauri:check`，不需要密钥。
 
+## macOS
+
+同一套代码，没有单独的 macOS 分支：平台差异只体现在 `tauri.conf.json` 和几处 `#[cfg(target_os = "macos")]`。
+
+- **构建** — 在 Mac 上 `npm install && npm run dist:mac`（即 `tauri build --bundles dmg,app`）。想一次产出同时支持 Intel 与 Apple Silicon 的单包：`npx tauri build --target universal-apple-darwin --bundles app,dmg`。
+- **透明窗口** — macOS 必须打开 `app.macOSPrivateApi`，并在 `tauri` 依赖上启用 `macos-private-api` feature（都已配好）。代价是这个构建不能上架 Mac App Store。
+- **Dock / 菜单栏** — 桌宠以 Accessory 策略运行，不占 Dock 与 ⌘-Tab 位置；入口只有菜单栏图标，用的是单色模板图（`src/assets/tray-mac.png`，22pt @2x），会随浅色 / 深色菜单栏自动反色。
+- **未签名** — 默认构建的 `.dmg` 没有 Apple 证书：第一次打开要「右键 → 打开」，或执行 `xattr -dr com.apple.quarantine Prismoo.app`。**macOS 的自动更新同样需要签名**（更新时要替换 `.app`）；拿到 Apple 开发者证书后，把 `APPLE_CERTIFICATE` / `APPLE_CERTIFICATE_PASSWORD` / `APPLE_SIGNING_IDENTITY` / `APPLE_ID` / `APPLE_PASSWORD` / `APPLE_TEAM_ID` 加进仓库 secrets，并取消 `.github/workflows/release.yml` 里的那段注释即可。
+- **发布** — 推 `v*` 标签会同时构建 Windows x64、macOS Apple Silicon、macOS Intel，挂到同一个 Release；`latest.json` 里会同时出现 `windows-x86_64` / `darwin-aarch64` / `darwin-x86_64`，各平台各取所需。
+- **只想验证不想发版** — 手动触发 `.github/workflows/build-check.yml`：它在两个平台各构建一次（关闭更新器产物、不需要签名密钥）、把产物作为 artifact 上传，**不会**创建 Release。
+
 ## 技术栈
 
 | 层次 | 选型 | 在这一版里负责什么 |
@@ -65,8 +76,8 @@
 | 国际化 | **中英双字典 + `config.locale`** | 词条集中在 `src/shared/i18n.ts`，编译进 Rust 侧后用 `i18n_get` 交给页面；切换语言只需一次 `config_set`，托盘、气泡、菜单一起跟随 |
 | 渲染 | **Canvas 2D** | 逐帧播放精灵表与姿势图集、图片导入预览、抠图蒙版编辑（`destination-out` 擦除 + 羽化笔刷），并按像素透明度做命中检测 |
 | 资源生成 | **Node.js 脚本 + sharp** | 程序化生成像素精灵表与品牌图标（PNG / ICO / ICNS），并把 `src/shared/i18n.ts` 导出成 Rust 侧读取的 JSON |
-| 打包 | **Tauri CLI + NSIS** | `npm run dist:win` 直接产出 Windows 安装包 |
-| 持续集成 | **GitHub Actions** | 推送 `v*` 标签后自动构建、校验签名密钥，并发布安装包与自动更新用的 `latest.json` / `.sig` |
+| 打包 | **Tauri CLI** | `npm run dist:win` 产出 Windows NSIS 安装包，`npm run dist:mac` 产出 macOS 的 `.app` / `.dmg`；图标由同一份矢量源生成 PNG / ICO / ICNS |
+| 持续集成 | **GitHub Actions** | 推送 `v*` 标签后并行构建 Windows x64 与 macOS（Apple Silicon + Intel），校验签名密钥，并发布安装包与自动更新用的 `latest.json` / `.sig` |
 
 ## 开发
 
@@ -77,9 +88,10 @@ npm test           # 轻量页面行为测试（Node）+ Rust 单元测试
 npm run screenshots # 重新生成 README 配图（中英各一套，需要本机有 Chrome / Edge）
 npm run tauri:dev  # 开发模式启动
 npm run dist:win   # 打 Windows 安装包
+npm run dist:mac   # 在 Mac 上打 .app / .dmg（真正签名还需要 Apple 证书，见下）
 ```
 
-环境要求：Windows 10/11 + WebView2 运行时；Node.js 20+；Rust 1.77.2+（仅从源码构建时需要）。
+环境要求：Windows 10/11 + WebView2 运行时，或 macOS 10.15+（用系统 WebView，无需额外运行时）；Node.js 20+；Rust 1.77.2+（仅从源码构建时需要）。
 `npm run tauri:check` 会构建并启动真实窗口做自检，需要一个可用的 Windows WebView2 图形会话。
 
 ## 目录结构

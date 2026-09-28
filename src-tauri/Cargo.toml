@@ -16,7 +16,10 @@ crate-type = ["rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = ["tray-icon", "image-png", "protocol-asset"] }
+# `macos-private-api` backs app.macOSPrivateApi in tauri.conf.json: macOS needs it
+# for the transparent pet window (it is a no-op on Windows/Linux). Enabling it
+# rules out a Mac App Store release, which this build does not target.
+tauri = { version = "2", features = ["tray-icon", "image-png", "protocol-asset", "macos-private-api"] }
 tauri-plugin-dialog = "2"
 tauri-plugin-autostart = "2"
 tauri-plugin-single-instance = "2"

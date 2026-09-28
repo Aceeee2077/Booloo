@@ -6,6 +6,26 @@
   const dream = document.getElementById('pet-dream') as HTMLDivElement;
   const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
 
+  // Every Mac is Retina and Windows machines frequently sit at 125–150%, while the
+  // pet is pixel art: the backing store has to match the device pixels or the
+  // compositor stretches it into a blur. All drawing stays in 300x300 CSS units;
+  // only the bitmap and the base transform scale.
+  let dpr = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
+  canvas.width = Math.round(300 * dpr);
+  canvas.height = Math.round(300 * dpr);
+  ctx.scale(dpr, dpr);
+
+  /** Dragging the pet onto a display with another scale changes the ratio live. */
+  function syncPixelRatio() {
+    const next = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
+    if (next === dpr) return;
+    dpr = next;
+    // Assigning the bitmap size resets the context, so the transform is reapplied.
+    canvas.width = Math.round(300 * next);
+    canvas.height = Math.round(300 * next);
+    ctx.scale(next, next);
+  }
+
   const sources: Record<string, string> = {
     cat: '../assets/animated-pets/cat.png', dog: '../assets/animated-pets/fox.png',
     default: '../assets/animated-pets/rabbit.png', bulu: '../assets/animated-pets/bulu.png',
@@ -322,6 +342,7 @@
   }
 
   function draw(now: number) {
+    syncPixelRatio();
     ctx.clearRect(0, 0, 300, 300);
     const state = dragging ? 'walk' : currentState(now);
     const action = activeAction && now < activeAction.started + activeAction.duration ? activeAction : null;

@@ -227,6 +227,11 @@ pub fn run() {
         // `plugins.updater`, and updater.rs exposes the renderer's commands.
         .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
+            // macOS: a desktop pet must not claim a Dock / ⌘-Tab slot — the tray
+            // icon is the only way in. Set before the first window is shown, or the
+            // icon flashes in the Dock on launch.
+            #[cfg(target_os = "macos")]
+            app.set_activation_policy(tauri::ActivationPolicy::Accessory);
             let config = config::init(app.handle());
             app.manage(config);
             app.manage(window::DragState::default());

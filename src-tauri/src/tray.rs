@@ -50,9 +50,17 @@ pub fn build(app: &AppHandle) -> tauri::Result<()> {
     let locale = current_locale(app);
     #[cfg(target_os = "linux")]
     let menu = build_menu(app)?;
+    // macOS menu-bar icons are "template images": the system reads only the alpha
+    // channel and recolours the silhouette for a light or dark menu bar. Handing
+    // it the colourful mark would neither invert nor fit the 22 pt slot.
+    #[cfg(target_os = "macos")]
+    let icon = Image::from_bytes(include_bytes!("../../src/assets/tray-mac.png"))?;
+    #[cfg(not(target_os = "macos"))]
     let icon = Image::from_bytes(include_bytes!("../../src/assets/tray.png"))?;
 
     let builder = TrayIconBuilder::with_id(TRAY_ID).icon(icon);
+    #[cfg(target_os = "macos")]
+    let builder = builder.icon_as_template(true);
     // Linux does not emit tray click events; keep its native menu there.
     #[cfg(target_os = "linux")]
     let builder = builder.menu(&menu);

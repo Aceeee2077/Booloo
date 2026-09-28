@@ -1,0 +1,18 @@
+<!-- Monochrome tray mark for macOS.
+
+     macOS menu-bar icons are "template images": the system reads only the alpha
+     channel and recolours the shape to match a light or dark menu bar, so this
+     file is drawn as a flat silhouette with the eyes punched out. The colourful
+     prismoo-icon.svg stays the app/dock/README mark. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <mask id="eyes">
+    <rect width="512" height="512" fill="#ffffff"/>
+    <circle cx="214" cy="296" r="27" fill="#000000"/>
+    <circle cx="298" cy="296" r="27" fill="#000000"/>
+  </mask>
+  <g fill="#000000" mask="url(#eyes)">
+    <path d="M126 292 C124 224 140 172 154 130 C186 108 232 114 254 162 C216 212 168 252 126 292 Z"/>
+    <path d="M386 292 C388 224 372 172 358 130 C326 108 280 114 258 162 C296 212 344 252 386 292 Z"/>
+    <ellipse cx="256" cy="306" rx="158" ry="140"/>
+  </g>
+</svg>

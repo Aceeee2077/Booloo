@@ -7,7 +7,7 @@
 A small, transparent pet that lives on your desktop — it walks, naps, and cheers when you drop a photo on it.
 
 [![Release](https://img.shields.io/github/v/release/Aceeee2077/Prismoo?label=release&color=ff8fb0)](https://github.com/Aceeee2077/Prismoo/releases)
-![Platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-4c8bf5)
+![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS-4c8bf5)
 ![Tauri](https://img.shields.io/badge/Tauri-2-24c8db)
 ![Rust](https://img.shields.io/badge/Rust-1.77.2%2B-dea584)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-3178c6)
@@ -55,6 +55,17 @@ A single image gets gentle breathing and click motion. It does not become a new 
 - **Versions** — `package.json`, `src-tauri/Cargo.toml` and `src-tauri/tauri.conf.json` must agree, and a new tag has to be greater than the installed version or the client considers itself up to date.
 - **Local packaging** — With `createUpdaterArtifacts` enabled, `npm run dist:win` needs `TAURI_SIGNING_PRIVATE_KEY` / `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` (the same secrets CI uses) or the bundler fails at the signing step. To verify the app locally use `npm run tauri:check`, which needs no key.
 
+## macOS
+
+One codebase, no separate branch: the platform differences live in `tauri.conf.json` and a few `#[cfg(target_os = "macos")]` blocks.
+
+- **Build** — On a Mac: `npm install && npm run dist:mac` (that is `tauri build --bundles dmg,app`). For one binary that runs on both Intel and Apple Silicon: `npx tauri build --target universal-apple-darwin --bundles app,dmg`.
+- **Transparent window** — macOS requires `app.macOSPrivateApi` plus the `macos-private-api` cargo feature on `tauri` (both configured). The trade-off: this build cannot ship on the Mac App Store.
+- **Dock / menu bar** — The pet runs with the Accessory activation policy, so it takes no Dock or ⌘-Tab slot; the menu-bar icon is a monochrome template image (`src/assets/tray-mac.png`, 22 pt @2x) that inverts itself for light and dark menu bars.
+- **Unsigned by default** — The `.dmg` has no Apple certificate, so the first launch needs right-click → Open (or `xattr -dr com.apple.quarantine Prismoo.app`). **macOS auto-update needs a signature too** (it replaces the `.app`); once you have an Apple Developer certificate, add `APPLE_CERTIFICATE` / `APPLE_CERTIFICATE_PASSWORD` / `APPLE_SIGNING_IDENTITY` / `APPLE_ID` / `APPLE_PASSWORD` / `APPLE_TEAM_ID` as repository secrets and uncomment the block in `.github/workflows/release.yml`.
+- **Releasing** — A `v*` tag builds Windows x64 and macOS (Apple Silicon and Intel) together and attaches them to one Release; `latest.json` then carries `windows-x86_64`, `darwin-aarch64` and `darwin-x86_64` entries.
+- **Verify without releasing** — Run `.github/workflows/build-check.yml` manually: it builds both platforms (updater artifacts off, so no signing key needed), uploads the bundles as artifacts and creates no Release.
+
 ## Tech stack
 
 | Layer | Choice | What it does in this build |
@@ -65,8 +76,8 @@ A single image gets gentle breathing and click motion. It does not become a new 
 | i18n | **zh / en dictionaries + `config.locale`** | Strings live in `src/shared/i18n.ts`, are compiled into the Rust side and handed to the pages through the `i18n_get` command — switching the language is one `config_set`, and the tray, bubbles and menus follow |
 | Rendering | **Canvas 2D** | Frame-by-frame sprite sheets and pose atlases, the import preview, the mask editor (`destination-out` erase plus a feathered brush), and hit-testing by pixel alpha |
 | Asset generation | **Node.js scripts + sharp** | Procedurally generates the pixel sprite sheets and brand icons (PNG / ICO / ICNS), and exports `src/shared/i18n.ts` into the JSON the Rust side reads |
-| Packaging | **Tauri CLI + NSIS** | `npm run dist:win` produces the Windows installer |
-| CI | **GitHub Actions** | A `v*` tag builds, verifies the signing key, and publishes the installer together with the `latest.json` / `.sig` files the updater reads |
+| Packaging | **Tauri CLI** | `npm run dist:win` produces the Windows NSIS installer, `npm run dist:mac` the macOS `.app` / `.dmg`; every icon is generated from one vector source into PNG / ICO / ICNS |
+| CI | **GitHub Actions** | A `v*` tag builds Windows x64 and macOS (Apple Silicon + Intel) in parallel, verifies the signing key, and publishes the installers together with the `latest.json` / `.sig` files the updater reads |
 
 ## Development
 
@@ -77,9 +88,10 @@ npm test           # lightweight-page behaviour tests (Node) + Rust unit tests
 npm run screenshots # regenerate the README images (one set per language; needs Chrome or Edge)
 npm run tauri:dev  # run in development mode
 npm run dist:win   # build the Windows installer
+npm run dist:mac   # build the .app / .dmg on a Mac (a real signature needs an Apple certificate)
 ```
 
-Requirements: Windows 10/11 with the WebView2 runtime, Node.js 20+, and Rust 1.77.2+ (only needed to build the Rust side from source).
+Requirements: Windows 10/11 with the WebView2 runtime, or macOS 10.15+ (it uses the system WebView); Node.js 20+; Rust 1.77.2+ (only needed to build the Rust side from source).
 `npm run tauri:check` builds and launches the real windows for a self-check, so it needs a working Windows WebView2 graphical session.
 
 ## Layout

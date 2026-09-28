@@ -11,8 +11,27 @@ permissions:
 
 jobs:
   publish:
-    name: Build, sign & publish (Windows)
-    runs-on: windows-latest
+    name: Build, sign & publish (${{ matrix.label }})
+    strategy:
+      # One platform failing must not cancel the others: a broken macOS build
+      # should still leave the Windows installer published.
+      fail-fast: false
+      matrix:
+        include:
+          - label: Windows x64
+            os: windows-latest
+            args: '--bundles nsis'
+          # Two macOS jobs (one per architecture) is the layout tauri-action
+          # documents: each one publishes its own darwin-aarch64 / darwin-x86_64
+          # entry into the same latest.json. Replace both with a single
+          # `--target universal-apple-darwin` job if you prefer one fat binary.
+          - label: macOS Apple Silicon
+            os: macos-latest
+            args: '--target aarch64-apple-darwin --bundles app,dmg'
+          - label: macOS Intel
+            os: macos-latest
+            args: '--target x86_64-apple-darwin --bundles app,dmg'
+    runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -25,6 +44,9 @@ jobs:
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          # Only the macOS jobs need the extra Apple targets.
+          targets: ${{ startsWith(matrix.os, 'macos') && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
 
       - name: Cache the Rust build
         uses: swatinem/rust-cache@v2
@@ -75,9 +97,25 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # macOS code signing / notarisation is optional. Once an Apple Developer
+          # certificate exists, add these repository secrets and uncomment the
+          # block below — without them the .dmg is unsigned, so Gatekeeper makes
+          # the user right-click → Open the first time, and the macOS updater
+          # cannot replace the bundle.
+          #
+          # APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          # APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          # APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          # APPLE_ID: ${{ secrets.APPLE_ID }}
+          # APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          # APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         with:
           tagName: v__VERSION__
           releaseName: 'Prismoo v__VERSION__'
-          releaseBody: 'Windows installer. Auto-update is available from v0.5.1 onwards.'
+          releaseBody: |
+            Windows: `Prismoo_x.y.z_x64-setup.exe`
+            macOS: `Prismoo_x.y.z_aarch64.dmg` (Apple Silicon) / `Prismoo_x.y.z_x64.dmg` (Intel) — unsigned builds need right-click → Open the first time.
+            Auto-update is available from v0.5.1 onwards.
           releaseDraft: false
           prerelease: false
+          args: ${{ matrix.args }}
