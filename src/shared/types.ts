@@ -56,7 +56,11 @@ interface UpdateState {
   notes?: string;
   /** Localized error message (status === 'error') */
   error?: string;
-  /** Manual GitHub release page (macOS unsigned / dev fallback) */
+  /**
+   * Manual GitHub release page, offered when this build cannot update itself.
+   * The lite edition has no URL-opener plugin, so Settings renders it as
+   * selectable text instead of launching a browser from the renderer.
+   */
   manualUrl?: string;
   autoCheck: boolean;
   autoDownload: boolean;
@@ -235,6 +239,32 @@ interface CustomImageResult {  ok: boolean;
   /** Frame-sequence manifest (`custom/frames/manifest.json`) when present. Actions
    *  that declare `frames` play those PNGs instead of the single still image. */
   frames?: unknown;
+}
+
+/**
+ * Payload for the cutout mask editor: the staged picture plus the keep-mask the
+ * Rust pass generated for it. Both are data URLs at the editor's working
+ * resolution, so the canvas stays untainted and brush strokes can be read back.
+ */
+interface MaskPreviewResult {
+  ok: boolean;
+  /** Working resolution of `original` / `mask` (never larger than 1600 px on the long edge). */
+  width?: number;
+  height?: number;
+  /** The staged picture, as picked. */
+  original?: string;
+  /** White RGBA PNG whose alpha channel is the keep factor (0 = removed). */
+  mask?: string;
+  /** Kept pixels / total, 0..1 */
+  subject?: number;
+  /** The automatic pass removed a usable amount of background. */
+  applied?: boolean;
+  /** The pass would have eaten the subject, so the whole picture was kept. */
+  rejected?: boolean;
+  /** Strength / feather actually used (falls back to the stored settings). */
+  tolerance?: number;
+  feather?: number;
+  error?: string;
 }
 
 /** App configuration (persisted to userData/config.json) */
@@ -462,8 +492,6 @@ interface PetApi {
   updateInstall(): Promise<void>;
   /** One-click update: download if needed, then restart & install automatically when ready */
   updateInstallWhenReady(): Promise<UpdateState>;
-  /** Open the GitHub Releases page in the default browser */
-  updateOpenPage(): Promise<void>;
   /** Subscribe to config changes, returns an unsubscribe function */
   onConfigChanged(cb: (cfg: AppConfig) => void): () => void;
   /** Open (or focus) the standalone ChatGPT-style chat window */
@@ -501,9 +529,22 @@ interface PetApi {
   pickCustomImage(): Promise<CustomImageResult>;
   /** Stage an image for preview without replacing the active pet. */
   previewCustomImage(): Promise<CustomImageResult>;
-  /** Use the staged image after the user confirms its preview. */
-  commitCustomImage(removeBackground: boolean): Promise<CustomImageResult>;
+  /**
+   * Use the staged image after the user confirms its preview. `png` is the
+   * composited result of the mask editor (a `data:image/png` URL); without it the
+   * staged file is moved into place untouched.
+   */
+  commitCustomImage(removeBackground: boolean, png?: string): Promise<CustomImageResult>;
   discardCustomImage(): Promise<void>;
+  /** Cutout editor: the staged picture + the initial keep-mask from the Rust pass. */
+  maskPreview(tolerance?: number, feather?: number): Promise<MaskPreviewResult>;
+  /** Cutout editor: open / close the standalone mask window. */
+  openMaskEditor(): void;
+  closeMaskEditor(): void;
+  /** Fired when the mask window is asked to reload (a second import while it is open). */
+  onMaskReload(cb: () => void): () => void;
+  /** Fired after any confirmed custom-image change, from either window. */
+  onCustomImageChanged(cb: () => void): () => void;
   /** Delete the custom image in the app data directory */
   clearCustomImage(): Promise<boolean>;
   /**

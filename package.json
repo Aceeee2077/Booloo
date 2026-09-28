@@ -18,7 +18,7 @@
     "tauri:check": "npm run tauri:build && node scripts/run-tauri-check.mjs",
     "typecheck": "tsc --noEmit",
     "test": "npm run test:lite && npm run test:rust",
-    "test:lite": "node scripts/test-lite.mjs && node scripts/test-lite-interactions.mjs",
+    "test:lite": "node scripts/test-lite.mjs && node scripts/test-lite-interactions.mjs && node scripts/test-lite-mask.mjs && node scripts/test-lite-update.mjs",
     "test:rust": "cargo test --manifest-path src-tauri/Cargo.toml --lib",
     "verify-comments": "node scripts/verify-comments.mjs",
     "dist": "tauri build",

@@ -70,11 +70,23 @@
       const result = await call<CustomImageResult>('custom_pick_preview');
       return { ...result, url: result.url ?? urlOf(result.path) };
     },
-    commitCustomImage: async (removeBackground: boolean) => {
-      const result = await call<CustomImageResult>('custom_commit', { removeBackground });
+    commitCustomImage: async (removeBackground: boolean, png?: string) => {
+      const result = await call<CustomImageResult>('custom_commit', { removeBackground, png });
       return { ...result, url: result.url ?? urlOf(result.path) };
     },
     discardCustomImage: () => call<void>('custom_discard'),
+    maskPreview: (tolerance?: number, feather?: number) =>
+      call<MaskPreviewResult>('custom_mask_preview', { tolerance, feather }),
+    openMaskEditor: () => send('open_mask_editor'),
+    closeMaskEditor: () => send('close_mask_editor'),
+    onMaskReload: (callback: () => void) => subscribe<void>('mask-reload', callback),
+    onCustomImageChanged: (callback: () => void) => subscribe<void>('custom-image-changed', callback),
+    updateGetState: () => call<UpdateState>('update_get_state'),
+    updateCheck: () => call<UpdateState>('update_check'),
+    updateDownload: () => call<UpdateState>('update_download'),
+    updateInstall: () => call<void>('update_install'),
+    updateInstallWhenReady: () => call<UpdateState>('update_install_when_ready'),
+    onUpdateState: (callback: (state: UpdateState) => void) => subscribe<UpdateState>('update-state', callback),
     dragBegin: (visualBounds?: PetBox) => send('drag_begin', { visualBounds: visualBounds ?? bounds() }),
     dragMove: () => send('drag_move'),
     dragEnd: (visualBounds?: PetBox) => send('drag_end', { visualBounds: visualBounds ?? bounds() }),

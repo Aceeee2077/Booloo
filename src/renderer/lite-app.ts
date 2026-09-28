@@ -83,6 +83,39 @@
     speechTimer = window.setTimeout(() => { speech.hidden = true; speechTimer = null; }, duration);
   }
 
+  // ---------- software updates ----------
+  // The pet is the messenger; the check itself and the buttons live in
+  // src-tauri/src/updater.rs and the settings panel. Only status *changes* are
+  // announced — a download emits a progress event per chunk.
+  let announcedUpdate: UpdateState['status'] | null = null;
+
+  function announceUpdate(state: UpdateState) {
+    if (state.status === announcedUpdate) return;
+    announcedUpdate = state.status;
+    const version = state.version ?? '';
+    if (state.status === 'available' && version) {
+      const key = state.autoDownload ? 'update.available' : 'update.availableManual';
+      say(liteT(key, { v: version }), 5200);
+    } else if (state.status === 'downloaded' && version) {
+      say(liteT('update.downloadedNotice', { v: version }), 5200);
+    }
+  }
+
+  async function checkForUpdates() {
+    try {
+      const state = await window.api.updateCheck();
+      announceUpdate(state);
+      // Auto-download follows the check, so the pet can hand over the "ready"
+      // notice instead of making the user press a second button.
+      if (state.status === 'available' && state.autoDownload) {
+        announceUpdate(await window.api.updateDownload());
+      }
+    } catch (error) {
+      // Offline or rate-limited: stay quiet, the settings panel can retry.
+      console.error('[lite-app] update check:', error);
+    }
+  }
+
   function playAction(name: string) {
     if (!config || pressed || dragging || reminderRunning || !(name in actionRows)) return;
     const kind = name as PetAction;
@@ -422,6 +455,12 @@
   void window.api.getConfig().then((cfg) => {
     applyConfig(cfg);
     window.api.onConfigChanged(applyConfig);
+    window.api.onUpdateState(announceUpdate);
+    // Let the pet settle on screen before it talks to the network.
+    window.setTimeout(() => {
+      if (config?.updateAutoCheck === false) return;
+      void checkForUpdates();
+    }, 9000);
     requestAnimationFrame(frame);
   }).catch((error) => {
     (window as unknown as Record<string, unknown>).__petError = `config: ${String(error)}`;

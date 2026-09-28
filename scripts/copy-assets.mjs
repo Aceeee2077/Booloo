@@ -14,9 +14,11 @@ mkdirSync(join(ROOT, 'dist', 'renderer'), { recursive: true });
 const files = [
   'index.html',
   'settings.html',
+  'mask.html',
   'menu.html',
   'lite.css',
   'lite-settings.css',
+  'lite-mask.css',
   'lite-menu.css',
 ];
 for (const f of files) {
@@ -24,7 +26,7 @@ for (const f of files) {
 }
 // Compile the legacy modules for source compatibility, but ship only the scripts
 // loaded by the lightweight pages.
-const runtimeScripts = new Set(['lite-i18n.js', 'lite-api.js', 'lite-image.js', 'lite-file-reaction.js', 'lite-app.js', 'lite-settings.js', 'lite-menu.js']);
+const runtimeScripts = new Set(['lite-i18n.js', 'lite-api.js', 'lite-image.js', 'lite-file-reaction.js', 'lite-app.js', 'lite-settings.js', 'lite-mask.js', 'lite-menu.js']);
 for (const file of readdirSync(join(ROOT, 'dist', 'renderer'))) {
   if (file.endsWith('.js') && !runtimeScripts.has(file)) unlinkSync(join(ROOT, 'dist', 'renderer', file));
 }

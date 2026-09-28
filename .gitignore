@@ -157,7 +157,6 @@ Thumbs.db
 /src-tauri/src/ai.rs
 /src-tauri/src/chat.rs
 /src-tauri/src/petpack.rs
-/src-tauri/src/updater.rs
 /src-tauri/src/weather.rs
 /scripts/build-action-boards.mjs
 /scripts/build-bulu-actions.mjs

@@ -72,7 +72,7 @@ context.liteT = makeTranslate(zhDict);
 const renderer = join(process.cwd(), 'dist', 'renderer');
 const shippedScripts = readdirSync(renderer).filter(name => name.endsWith('.js')).sort();
 assert.deepEqual(shippedScripts, ['lite-api.js', 'lite-app.js', 'lite-file-reaction.js', 'lite-i18n.js',
-  'lite-image.js', 'lite-menu.js', 'lite-settings.js']);
+  'lite-image.js', 'lite-mask.js', 'lite-menu.js', 'lite-settings.js']);
 const fileReaction = { liteT: makeTranslate(zhDict) };
 vm.createContext(fileReaction);
 vm.runInContext(readFileSync(join(renderer, 'lite-file-reaction.js'), 'utf8'), fileReaction);
@@ -88,7 +88,7 @@ assert.match(fileReaction.liteFileReaction(['/tmp/cat.png']), /photo/);
 assert.match(fileReaction.liteFileReaction(['/tmp/movie.mp4']), /Movie night/);
 assert.match(fileReaction.liteFileReaction(['/tmp/a.txt', '/tmp/b.txt']), /2 paychecks/);
 
-for (const page of ['index.html', 'settings.html']) {
+for (const page of ['index.html', 'settings.html', 'mask.html']) {
   const html = readFileSync(join(renderer, page), 'utf8');
   assert.match(html, /lite-api\.js/);
   assert.match(html, /lite-i18n\.js/);
@@ -97,8 +97,55 @@ for (const page of ['index.html', 'settings.html']) {
 assert.match(readFileSync(join(renderer, 'menu.html'), 'utf8'), /lite-menu\.js/);
 assert.match(readFileSync(join(renderer, 'menu.html'), 'utf8'), /lite-i18n\.js/);
 
+// The cutout mask editor is a third page: it must ship its own script and the
+// controls the brush logic binds to, and the settings panel has to offer a way in.
+const maskPage = readFileSync(join(renderer, 'mask.html'), 'utf8');
+assert.match(maskPage, /lite-mask\.js/);
+assert.match(maskPage, /lite-api\.js/);
+for (const id of ['stage', 'mask-view', 'tool-erase', 'tool-restore', 'brush-size', 'brush-hardness',
+  'cutout-strength', 'cutout-feather', 'rerun', 'undo', 'redo', 'fit', 'show-original',
+  'before-preview', 'after-preview', 'apply']) {
+  assert.match(maskPage, new RegExp(`id="${id}"`), `mask.html is missing #${id}`);
+}
+assert.match(readFileSync(join(renderer, 'lite-mask.js'), 'utf8'), /destination-out/,
+  'the erase brush has to cut through the mask alpha');
+assert.match(readFileSync(join(renderer, 'lite-mask.css'), 'utf8'), /repeating-conic-gradient/,
+  'the stage needs a checkerboard so erased pixels are visible');
+assert.match(readFileSync(join(renderer, 'settings.html'), 'utf8'), /id="refine-image"/,
+  'Settings needs the "refine the cutout" entry point');
+
+// Software updates: the panel that drives src-tauri/src/updater.rs.
+const settingsHtml = readFileSync(join(renderer, 'settings.html'), 'utf8');
+for (const id of ['update-panel', 'update-version', 'update-status', 'update-progress-row', 'update-progress-bar',
+  'update-progress-text', 'btn-check-update', 'btn-download-update', 'btn-install-update',
+  'update-auto-check', 'update-auto-download', 'update-notes-box', 'update-notes', 'update-manual']) {
+  assert.match(settingsHtml, new RegExp(`id="${id}"`), `settings.html is missing #${id}`);
+}
+const liteApi = readFileSync(join(renderer, 'lite-api.js'), 'utf8');
+for (const command of ['update_get_state', 'update_check', 'update_download', 'update_install']) {
+  assert.match(liteApi, new RegExp(command), `lite-api is missing the ${command} bridge`);
+}
+
+// The auto-updater chain was silently dropped once: `updater.rs` stayed on disk
+// but was gitignored and no longer compiled, while the workflow kept publishing
+// releases. Every link is asserted here so that cannot happen quietly again.
+assert.doesNotMatch(readFileSync(join(process.cwd(), '.gitignore'), 'utf8'),
+  /^\/src-tauri\/src\/updater\.rs$/m, 'updater.rs must not be gitignored');
+for (const [file, pattern] of [
+  ['src-tauri/src/lib.rs', /mod updater;/],
+  ['src-tauri/src/lib.rs', /tauri_plugin_updater::Builder::new\(\)\.build\(\)/],
+  ['src-tauri/src/lib.rs', /updater::update_check/],
+  ['src-tauri/Cargo.toml', /tauri-plugin-updater/],
+  ['src-tauri/tauri.conf.json', /"createUpdaterArtifacts": true/],
+  ['src-tauri/tauri.conf.json', /"pubkey": "RWT\//],
+  ['src-tauri/tauri.conf.json', /Aceeee2077\/Prismoo\/releases\/latest\/download\/latest\.json/],
+  ['.github/workflows/release.yml', /tauri-apps\/tauri-action@v1/],
+]) {
+  assert.match(readFileSync(join(process.cwd(), file), 'utf8'), pattern, `${file} lost its updater wiring`);
+}
+
 // A typo in a key renders as the key itself, so both sides of the lookup are checked.
-for (const page of ['index.html', 'settings.html', 'menu.html']) {
+for (const page of ['index.html', 'settings.html', 'mask.html', 'menu.html']) {
   const html = readFileSync(join(renderer, page), 'utf8');
   const keys = [...html.matchAll(/data-i18n(?:-label|-title)?="([^"]+)"/g)].map(match => match[1]);
   assert.ok(keys.length > 0, `${page} should mark its static text for translation`);

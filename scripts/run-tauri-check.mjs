@@ -1,17 +1,18 @@
 import { spawn } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const binary = join(root, 'src-tauri', 'target', 'debug', 'prismoo.exe');
+const appVersion = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version;
 if (!existsSync(binary)) throw new Error(`Build the app first: ${binary}`);
 
 const child = spawn(binary, [], { env: { ...process.env, PRISMOO_SELFCHECK: '1' }, stdio: ['ignore', 'pipe', 'pipe'] });
 let output = '', errors = '';
 child.stdout.on('data', chunk => { output += chunk; });
 child.stderr.on('data', chunk => { errors += chunk; });
-const timeout = setTimeout(() => { child.kill(); console.error('Prismoo self-check timed out'); process.exitCode = 1; }, 45_000);
+const timeout = setTimeout(() => { child.kill(); console.error('Prismoo self-check timed out'); process.exitCode = 1; }, 60_000);
 
 child.on('exit', code => {
   clearTimeout(timeout);
@@ -21,6 +22,7 @@ child.on('exit', code => {
   const pet = reports.find(report => report.window === 'pet');
   const settings = reports.find(report => report.window === 'settings');
   const close = reports.find(report => report.window === 'settings_close');
+  const mask = reports.find(report => report.window === 'mask');
   const petOk = pet?.hasApi && pet?.hasCanvas && pet?.drawnPixels > 0 &&
     pet?.hitTestCorner === false &&
     pet?.i18nReady === true &&
@@ -30,8 +32,17 @@ child.on('exit', code => {
     settings?.hasLanguage === true &&
     ['zh', 'en'].includes(settings?.languageValue) &&
     ['退出', 'Quit'].includes(settings?.translatedQuit) &&
+    // The updater has to answer with the version this build was compiled as, and
+    // the panel has to have painted it.
+    settings?.hasUpdatePanel === true && settings?.updateVersion === appVersion &&
+    settings?.updateStatus === 'idle' && settings?.updatePanelVersion === `v${appVersion}` &&
     close?.closed === true;
-  if (!petOk || !settingsOk || code !== 0) {
+  // The mask editor is the third window: it proves the new capability entry works
+  // and that the cutout command answers the renderer.
+  const maskOk = mask?.hasApi === true && mask?.hasCanvas === true && mask?.hasStage === true &&
+    mask?.hasTools === true && Array.isArray(mask?.tools) && mask.tools.length === 6 &&
+    ['抠图微调', 'Refine cutout'].includes(mask?.translatedTitle) && mask?.preview !== undefined;
+  if (!petOk || !settingsOk || !maskOk || code !== 0) {
     console.error(errors.trim());
     console.error('Lightweight app self-check failed');
     process.exitCode = 1;

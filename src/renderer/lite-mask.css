@@ -1,0 +1,66 @@
+/* Cutout mask editor. Same warm palette as the settings panel, but the stage is a
+   neutral surface so leftover background and erased edges are easy to judge. */
+:root { font-family: "Segoe UI", "Microsoft YaHei", sans-serif; color: #513a2c; background: #fff8f2; }
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { margin: 0; overflow: hidden; }
+
+.editor { display: flex; flex-direction: column; height: 100vh; }
+header { flex: none; height: 54px; display: flex; align-items: center; justify-content: space-between; padding: 0 18px; border-bottom: 1px solid #efdacb; background: #fff8f2; user-select: none; }
+header div { display: flex; gap: 12px; align-items: baseline; }
+header strong { font-size: 16px; }
+header span { color: #9a7660; font-size: 12px; }
+header button { border: 0; background: transparent; font: inherit; color: inherit; padding: 6px 10px; cursor: pointer; border-radius: 8px; }
+header button:hover { background: #ffecdc; }
+
+.body { flex: 1; display: flex; min-height: 0; }
+.tools { flex: none; width: 236px; padding: 4px 16px 16px; overflow-y: auto; border-right: 1px solid #efdacb; }
+.tools section { padding: 14px 0; border-bottom: 1px solid #f3e4d8; }
+.tools section:last-child { border-bottom: 0; }
+.tools h2 { margin: 0 0 10px; font-size: 13px; letter-spacing: .04em; color: #9a7660; text-transform: uppercase; }
+
+button { font: inherit; color: inherit; background: white; border: 1px solid #e9cbb6; border-radius: 10px; padding: 7px 11px; cursor: pointer; }
+button:hover { background: #ffecdc; }
+button:disabled { opacity: .45; cursor: default; }
+button:disabled:hover { background: white; }
+button.primary { color: white; background: #ea773b; border-color: #ea773b; }
+button.primary:hover { background: #d7642c; }
+
+.segmented { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 12px; }
+.segmented button.active { border-color: #ea773b; background: #ffead9; font-weight: 600; }
+.row { display: flex; gap: 6px; }
+.row button { flex: 1; }
+
+.slider { display: block; margin: 10px 0; }
+.slider span { display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 13px; }
+.slider output { color: #a4806b; }
+.slider input { display: block; width: 100%; accent-color: #ea773b; }
+.check { display: flex; align-items: center; gap: 8px; margin: 12px 0 0; font-size: 13px; }
+.check input { accent-color: #ea773b; width: 16px; height: 16px; }
+
+.canvas-wrap { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.stage { position: relative; flex: 1; min-height: 0; overflow: hidden; background: #f1e4d9; }
+#mask-view {
+  display: block; width: 100%; height: 100%; touch-action: none; cursor: crosshair;
+  background: repeating-conic-gradient(#e6d8cc 0 25%, #fbf5ef 0 50%) 50% / 18px 18px;
+}
+.hint { flex: none; margin: 0; padding: 6px 14px; font-size: 12px; color: #9a7660; background: #fff8f2; border-top: 1px solid #f3e4d8; }
+
+.preview { flex: none; width: 216px; padding: 14px 14px 16px; overflow-y: auto; border-left: 1px solid #efdacb; }
+.preview h2 { margin: 0 0 10px; font-size: 13px; letter-spacing: .04em; color: #9a7660; text-transform: uppercase; }
+.thumb { margin-bottom: 14px; text-align: center; }
+.thumb canvas { display: block; width: 176px; height: 176px; margin: 0 auto; border: 1px solid #e9cbb6; border-radius: 12px; background: repeating-conic-gradient(#eee 0 25%, white 0 50%) 50% / 20px 20px; }
+.thumb small { display: block; margin-top: 5px; color: #886c5b; font-size: 12px; }
+
+.note { margin: 0; min-height: 18px; color: #a65a37; font-size: 12px; line-height: 1.5; }
+
+footer { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 12px; height: 60px; padding: 0 18px; border-top: 1px solid #efdacb; background: #fff8f2; }
+.status { margin: 0; min-height: 18px; color: #886c5b; font-size: 12px; }
+.status.error { color: #ba3e2e; }
+.actions { display: flex; gap: 8px; }
+
+@media (max-width: 900px) {
+  .preview { display: none; }
+  .tools { width: 200px; }
+}
+[hidden] { display: none !important; }

@@ -20,9 +20,14 @@ tauri = { version = "2", features = ["tray-icon", "image-png", "protocol-asset"]
 tauri-plugin-dialog = "2"
 tauri-plugin-autostart = "2"
 tauri-plugin-single-instance = "2"
+tauri-plugin-updater = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 base64 = "0.22"
+# Decoding the imported appearance + encoding the mask / composited result of the
+# cutout editor. `tauri` already pulls `image` in with the png feature for its
+# own icon handling, so the extra codecs only widen that build.
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "gif"] }
 
 [profile.release]
 codegen-units = 1

@@ -25,7 +25,7 @@ header button { border: 0; background: transparent; }
 .preview-row canvas { display: block; width: 180px; max-width: 100%; height: 180px; margin: auto; border: 1px solid #e9cbb6; border-radius: 12px; background: repeating-conic-gradient(#eee 0 25%, white 0 50%) 50% / 20px 20px; }
 .preview-row small { display: block; margin: 6px 0; }
 .note { margin: 8px 0; min-height: 18px; color: #a65a37; font-size: 12px; }
-.actions { display: flex; gap: 8px; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .setting { display: block; margin: 12px 0; }
 .setting span { display: flex; justify-content: space-between; margin-bottom: 6px; }
 .setting input { display: block; width: 100%; accent-color: #ea773b; }
@@ -36,5 +36,16 @@ header button { border: 0; background: transparent; }
 .reminder-controls select, .reminder-controls input { font: inherit; color: inherit; padding: 5px 8px; border: 1px solid #e9cbb6; border-radius: 8px; background: white; }
 .reminder-controls input { width: 72px; margin-left: 6px; }
 .reminder-controls [hidden] { display: none; }
+.update-grid { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; margin-bottom: 12px; font-size: 13px; }
+.update-grid .value { color: #886c5b; }
+.update-grid .value.err { color: #ba3e2e; }
+.update-progress { display: flex; align-items: center; gap: 10px; margin: 0 0 12px; }
+.update-progress .progress { flex: 1; height: 8px; border-radius: 4px; background: #f0dccd; overflow: hidden; }
+.update-progress .progress-fill { width: 0; height: 100%; border-radius: 4px; background: #ea773b; transition: width .2s ease; }
+.update-progress .val { min-width: 38px; color: #886c5b; font-size: 12px; text-align: right; }
+#update-notes-box { margin: 14px 0 0; }
+#update-notes-box h3 { margin: 0 0 6px; font-size: 13px; color: #9a7660; }
+#update-notes-box pre { margin: 0; max-height: 140px; overflow: auto; padding: 8px 10px; border: 1px solid #f3e4d8; border-radius: 10px; background: #fffdfb; color: #6b5346; font-size: 12px; white-space: pre-wrap; word-break: break-word; }
+#update-manual { user-select: text; }
 [hidden] { display: none !important; }
 @media (max-width: 560px) { .skins { grid-template-columns: repeat(3, 1fr); } .panel { padding: 0 16px 20px; } }

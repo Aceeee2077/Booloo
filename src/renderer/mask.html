@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: asset: http://asset.localhost; script-src 'self'; connect-src 'self' ipc: http://ipc.localhost" />
+  <title>Prismoo</title>
+  <link rel="stylesheet" href="./lite-mask.css" />
+</head>
+<body>
+  <main class="editor">
+    <header data-tauri-drag-region>
+      <div data-tauri-drag-region>
+        <strong>✂️ <span data-i18n="lite.mask.title">抠图微调</span></strong>
+        <span data-i18n="lite.mask.subtitle">自动抠图 + 手动微调</span>
+      </div>
+      <button id="close" type="button" data-i18n-label="settings.close" aria-label="关闭">✕</button>
+    </header>
+
+    <div class="body">
+      <aside class="tools">
+        <section>
+          <h2 data-i18n="lite.mask.tool">笔刷</h2>
+          <div class="segmented">
+            <button id="tool-erase" class="active" type="button" data-i18n="lite.mask.erase">擦除背景</button>
+            <button id="tool-restore" type="button" data-i18n="lite.mask.restore">恢复主体</button>
+          </div>
+          <label class="slider" for="brush-size">
+            <span><span data-i18n="lite.mask.size">笔刷大小</span> <output id="size-value"></output></span>
+            <input id="brush-size" type="range" min="4" max="240" step="2" value="48" />
+          </label>
+          <label class="slider" for="brush-hardness">
+            <span><span data-i18n="lite.mask.hardness">边缘硬度</span> <output id="hardness-value"></output></span>
+            <input id="brush-hardness" type="range" min="0" max="100" step="1" value="65" />
+          </label>
+        </section>
+
+        <section>
+          <h2 data-i18n="lite.mask.auto">自动抠图</h2>
+          <label class="slider" for="cutout-strength">
+            <span><span data-i18n="lite.mask.strength">抠图强度</span> <output id="strength-value"></output></span>
+            <input id="cutout-strength" type="range" min="8" max="60" step="1" value="25" />
+          </label>
+          <label class="slider" for="cutout-feather">
+            <span><span data-i18n="lite.mask.feather">边缘羽化</span> <output id="feather-value"></output></span>
+            <input id="cutout-feather" type="range" min="0" max="4" step="1" value="1" />
+          </label>
+          <button id="rerun" type="button" data-i18n="lite.mask.rerun">重新抠图</button>
+        </section>
+
+        <section>
+          <h2 data-i18n="lite.mask.history">历史</h2>
+          <div class="row">
+            <button id="undo" type="button" disabled data-i18n="lite.mask.undo">撤销</button>
+            <button id="redo" type="button" disabled data-i18n="lite.mask.redo">重做</button>
+          </div>
+        </section>
+
+        <section>
+          <h2 data-i18n="lite.mask.view">视图</h2>
+          <div class="row">
+            <button id="zoom-out" type="button" data-i18n-label="lite.mask.zoomOut" aria-label="缩小">−</button>
+            <button id="zoom-in" type="button" data-i18n-label="lite.mask.zoomIn" aria-label="放大">＋</button>
+            <button id="fit" type="button" data-i18n="lite.mask.fit">适应窗口</button>
+          </div>
+          <label class="check"><input id="show-original" type="checkbox" /><span data-i18n="lite.mask.showOriginal">对比原图</span></label>
+        </section>
+      </aside>
+
+      <div class="canvas-wrap">
+        <div id="stage" class="stage">
+          <canvas id="mask-view" aria-label="蒙版编辑区" data-i18n-label="lite.mask.canvas"></canvas>
+        </div>
+        <p class="hint" data-i18n="lite.mask.hint"></p>
+      </div>
+
+      <aside class="preview">
+        <h2 data-i18n="lite.mask.preview">效果预览</h2>
+        <div class="thumb">
+          <canvas id="before-preview" width="200" height="200"></canvas>
+          <small data-i18n="lite.mask.before">原图</small>
+        </div>
+        <div class="thumb">
+          <canvas id="after-preview" width="200" height="200"></canvas>
+          <small data-i18n="lite.mask.after">抠图后</small>
+        </div>
+        <p id="mask-note" class="note"></p>
+      </aside>
+    </div>
+
+    <footer>
+      <p id="mask-status" class="status" role="status"></p>
+      <div class="actions">
+        <button id="cancel" type="button" data-i18n="lite.mask.cancel">取消</button>
+        <button id="apply" class="primary" type="button" disabled data-i18n="lite.mask.apply">使用这张图片</button>
+      </div>
+    </footer>
+  </main>
+  <script src="./lite-i18n.js"></script>
+  <script src="./lite-api.js"></script>
+  <script src="./lite-image.js"></script>
+  <script src="./lite-mask.js"></script>
+</body>
+</html>

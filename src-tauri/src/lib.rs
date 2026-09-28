@@ -8,9 +8,11 @@
 #![recursion_limit = "512"]
 
 mod config;
+mod cutout;
 mod custom;
 mod i18n;
 mod tray;
+mod updater;
 mod window;
 
 use tauri::{AppHandle, Manager};
@@ -21,6 +23,7 @@ use std::time::{Duration, Instant};
 /// Reports collected by `probe_report` during a `PRISMOO_SELFCHECK` run.
 static PET_REPORT: Mutex<Option<String>> = Mutex::new(None);
 static SETTINGS_REPORT: Mutex<Option<String>> = Mutex::new(None);
+static MASK_REPORT: Mutex<Option<String>> = Mutex::new(None);
 
 /// Print a self-check line and flush immediately: when stdout is a pipe it is block
 /// buffered, and a crash would otherwise swallow the diagnostics.
@@ -53,6 +56,7 @@ fn probe_report(payload: String) {
         .unwrap_or_default();
     match source.as_str() {
         "settings" => *SETTINGS_REPORT.lock().unwrap() = Some(payload),
+        "mask" => *MASK_REPORT.lock().unwrap() = Some(payload),
         _ => *PET_REPORT.lock().unwrap() = Some(payload),
     }
 }
@@ -87,14 +91,50 @@ const LITE_SETTINGS_CHECK_JS: &str = r#"
     languageValue: document.getElementById('language')?.value ?? null,
     translatedQuit: typeof window.liteT === 'function' ? window.liteT('lite.menu.quit') : null,
     hasExtraPanels: !!document.getElementById('wardrobe-root') || !!document.getElementById('ai-enabled'),
+    hasUpdatePanel: !!document.getElementById('update-panel'),
   };
   try { out.configSkin = (await window.api.getConfig()).skin; }
   catch (error) { out.error = String(error); }
+  // Proves the updater command + plugin are wired: this reads the running
+  // version straight out of the Rust side.
+  try {
+    const update = await window.api.updateGetState();
+    out.updateStatus = update.status;
+    out.updateVersion = update.currentVersion;
+    out.updatePanelVersion = document.getElementById('update-version')?.textContent ?? null;
+  } catch (error) { out.updateError = String(error); }
   await window.__TAURI__.core.invoke('probe_report', { payload: JSON.stringify(out) });
 })();
 "#;
 
-/// Probe the two windows that ship with the lightweight app.
+const LITE_MASK_CHECK_JS: &str = r#"
+(async () => {
+  await new Promise(resolve => setTimeout(resolve, 900));
+  const ids = ['tool-erase', 'tool-restore', 'rerun', 'undo', 'redo', 'apply'];
+  const out = {
+    window: 'mask', hasApi: !!window.api,
+    hasCanvas: !!document.getElementById('mask-view'),
+    hasStage: !!document.getElementById('stage'),
+    tools: ids.filter(id => !!document.getElementById(id)),
+    hasTools: ids.every(id => !!document.getElementById(id)),
+    translatedTitle: typeof window.liteT === 'function' ? window.liteT('lite.mask.title') : null,
+    status: document.getElementById('mask-status')?.textContent ?? null,
+  };
+  // Only the shape of the answer is reported: the payload itself carries the
+  // user's picture as a data URL and has no business in a CI log.
+  try {
+    const preview = await window.api.maskPreview();
+    out.preview = {
+      ok: preview.ok, width: preview.width ?? null, height: preview.height ?? null,
+      applied: preview.applied ?? null, rejected: preview.rejected ?? null,
+      error: preview.error ?? null,
+    };
+  } catch (error) { out.previewError = String(error); }
+  await window.__TAURI__.core.invoke('probe_report', { payload: JSON.stringify(out) });
+})();
+"#;
+
+/// Probe the three windows that ship with the lightweight app.
 fn spawn_self_check(app: &AppHandle) {
     let handle = app.clone();
     std::thread::spawn(move || {
@@ -131,7 +171,31 @@ fn spawn_self_check(app: &AppHandle) {
             handle.get_webview_window("settings").is_none()
         ));
 
-        let ok = pet.is_some() && settings.is_some();
+        // Third window: the cutout editor proves the "mask" capability entry is in
+        // place — without it every IPC call from that page would be rejected.
+        // Windows dislikes creating a webview in the same instant another one is
+        // destroyed, so let the closed settings surface settle first.
+        std::thread::sleep(Duration::from_millis(700));
+        let mask_opener = handle.clone();
+        tauri::async_runtime::spawn(async move {
+            if let Err(error) = window::open_mask_editor(mask_opener).await {
+                eprintln!("[selfcheck] mask window failed: {error}");
+            }
+        });
+        std::thread::sleep(Duration::from_millis(2500));
+        match handle.get_webview_window("mask") {
+            Some(mask) => {
+                if let Err(error) = mask.eval(LITE_MASK_CHECK_JS) { eprintln!("[selfcheck] mask eval failed: {error}"); }
+            }
+            None => report(r#"{"window":"mask","error":"mask window was not created"}"#),
+        }
+        let mask = wait_for(&MASK_REPORT, Duration::from_secs(15));
+        report(&mask.clone().unwrap_or_else(|| r#"{"window":"mask","error":"timeout"}"#.into()));
+        if let Some(editor) = handle.get_webview_window("mask") {
+            let _ = editor.eval("window.api.closeMaskEditor()");
+        }
+
+        let ok = pet.is_some() && settings.is_some() && mask.is_some();
         handle.exit(if ok { 0 } else { 1 });
     });
 }
@@ -159,10 +223,14 @@ pub fn run() {
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             Some(vec!["--autostart"]),
         ))
+        // Updates: the endpoints + public key live in tauri.conf.json under
+        // `plugins.updater`, and updater.rs exposes the renderer's commands.
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             let config = config::init(app.handle());
             app.manage(config);
             app.manage(window::DragState::default());
+            app.manage(updater::DownloadedState::default());
             tray::build(app.handle())?;
             window::spawn_position_saver(app.handle());
 
@@ -206,8 +274,16 @@ pub fn run() {
             window::quit_app,
             window::open_settings,
             window::close_settings,
+            window::open_mask_editor,
+            window::close_mask_editor,
+            updater::update_get_state,
+            updater::update_check,
+            updater::update_download,
+            updater::update_install,
+            updater::update_install_when_ready,
             custom::custom_get,
             custom::custom_pick_preview,
+            custom::custom_mask_preview,
             custom::custom_commit,
             custom::custom_discard,
             custom::custom_clear,

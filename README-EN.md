@@ -29,11 +29,13 @@ Open Settings from the tray or the right-click menu to switch pets, import your 
 
 - **Five built-in pets** — Cat, Fox, Rabbit, Bulu and Robot. Right-click for Wave, Groom, Stretch and Yawn; Bulu plays dedicated pose animation (`src/assets/animated-pets/bulu-actions.webp`), while the other pets reuse their existing interaction or sleep frames.
 - **Bring your own picture** — Choose **Import my image** and the picture goes through a preview first. Background removal is intended for simple, solid backgrounds, and if it would erase the subject Prismoo keeps the original image.
+- **Automatic cutout + manual touch-up** — **Refine the cutout…** opens a separate editor window: Rust builds the first mask locally, then the erase / restore brushes fix the edges, with brush size and edge hardness. Undo / redo (Ctrl+Z / Ctrl+Y), wheel zoom, panning, a side-by-side original and a **Run it again** pass (strength and feather) are all there. The picture is never uploaded and the result is saved as a transparent PNG.
 - **Drop a file on the pet** — It answers with a short animated line based on the file type: image, document, archive, audio, video, or a general response. Prismoo checks only the extension and never reads or modifies the file. File reactions can be disabled in Settings.
 - **Pet the head** — Move the pointer gently back and forth over the pet's head to see hearts.
 - **Standing reminders** — On by default every 5 minutes, with 10, 20, 30, and custom 1–240 minute intervals. When due, the pet runs to the center of the current screen and asks you to stand up.
 - **Sleep and chimes** — While asleep the pet occasionally shows a brief dream bubble, and a quiet hourly speech bubble is on by default. Hours missed while the computer sleeps are not announced later.
 - **Chinese / English UI** — Switch the language under Daily settings; the pet's speech bubbles, the right-click menu, the settings panel and the tray tooltip all follow, and your choice is remembered.
+- **Auto-update** — An installed build checks for a new version a few seconds after start (can be turned off in Settings), downloads it in the background and lets the pet say so. The **🔄 Update** section in Settings checks manually, shows download progress and restarts into the new version. Packages come from this repository's GitHub Releases and are verified with a minisign signature.
 - **Daily settings** — Pet size, opacity, autonomous walking, launch at login, and reset position.
 
 A single image gets gentle breathing and click motion. It does not become a new set of walking or sleeping poses. Built-in pets use frame animation.
@@ -44,6 +46,14 @@ A single image gets gentle breathing and click motion. It does not become a new 
 2. Select a built-in pet or choose **Import my image**.
 3. Check the preview before selecting **Use this image**. Canceling leaves the current pet untouched.
 4. Background removal is intended for simple, solid backgrounds. If it would erase the subject, Prismoo keeps the original image. Transparent PNGs are not processed again.
+5. For cleaner edges choose **Refine the cutout…**: pick a brush on the left, drag on the canvas (right-drag or hold space to pan, wheel to zoom), compare the original and the cutout on the right, then press **Use this image**.
+
+## Auto-update
+
+- **Client** — `src-tauri/src/updater.rs` wraps `tauri-plugin-updater` into the `update_get_state / update_check / update_download / update_install / update_install_when_ready` commands. The **🔄 Update** section in Settings and the pet's update bubbles both call them. The feed URL and public key live in `src-tauri/tauri.conf.json` under `plugins.updater`.
+- **Release side** — `.github/workflows/release.yml` verifies the signing key on a `v*` tag (or a manual run), builds the NSIS installer with `tauri-action` and publishes the installer plus `latest.json` and `.sig` to Releases. The client's check reads that `latest.json`.
+- **Versions** — `package.json`, `src-tauri/Cargo.toml` and `src-tauri/tauri.conf.json` must agree, and a new tag has to be greater than the installed version or the client considers itself up to date.
+- **Local packaging** — With `createUpdaterArtifacts` enabled, `npm run dist:win` needs `TAURI_SIGNING_PRIVATE_KEY` / `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` (the same secrets CI uses) or the bundler fails at the signing step. To verify the app locally use `npm run tauri:check`, which needs no key.
 
 ## Tech stack
 
@@ -51,12 +61,12 @@ A single image gets gentle breathing and click motion. It does not become a new 
 | :--- | :--- | :--- |
 | Shell | **Tauri 2** | Transparent, borderless, always-on-top window that skips the taskbar; tray icon with a native right-click menu; single instance, launch at login, native file dialogs |
 | Backend | **Rust 2021** | Config read/write and migration, window dragging / positioning / multi-monitor edge snapping, click-through, tray, and `include_str!`-embedding the i18n dictionary into the binary |
-| Frontend | **TypeScript 5** (no framework) | Seven script files loaded straight from `<script>` tags: pet loop, settings panel, context menu, Tauri bridge, image cutout, file-type reactions, i18n runtime |
+| Frontend | **TypeScript 5** (no framework) | Eight script files loaded straight from `<script>` tags: pet loop, settings panel, cutout editor window, context menu, Tauri bridge, image import, file-type reactions, i18n runtime |
 | i18n | **zh / en dictionaries + `config.locale`** | Strings live in `src/shared/i18n.ts`, are compiled into the Rust side and handed to the pages through the `i18n_get` command — switching the language is one `config_set`, and the tray, bubbles and menus follow |
-| Rendering | **Canvas 2D** | Frame-by-frame sprite sheets and pose atlases, import preview, and hit-testing by pixel alpha |
+| Rendering | **Canvas 2D** | Frame-by-frame sprite sheets and pose atlases, the import preview, the mask editor (`destination-out` erase plus a feathered brush), and hit-testing by pixel alpha |
 | Asset generation | **Node.js scripts + sharp** | Procedurally generates the pixel sprite sheets and brand icons (PNG / ICO / ICNS), and exports `src/shared/i18n.ts` into the JSON the Rust side reads |
 | Packaging | **Tauri CLI + NSIS** | `npm run dist:win` produces the Windows installer |
-| CI | **GitHub Actions** | A `v*` tag builds, verifies the signing key, and publishes a Release |
+| CI | **GitHub Actions** | A `v*` tag builds, verifies the signing key, and publishes the installer together with the `latest.json` / `.sig` files the updater reads |
 
 ## Development
 
@@ -75,14 +85,15 @@ Requirements: Windows 10/11 with the WebView2 runtime, Node.js 20+, and Rust 1.7
 ## Layout
 
 ```text
-src/renderer/      pet page index.html, settings.html, context menu menu.html
+src/renderer/      pet page index.html, settings.html, cutout window mask.html, context menu menu.html
   lite-app.ts      pet loop: animation, dragging, sleep, standing reminders, hourly chime
-  lite-settings.ts settings panel  ·  lite-menu.ts context menu
+  lite-settings.ts settings panel  ·  lite-mask.ts cutout editor  ·  lite-menu.ts context menu
   lite-api.ts      Tauri bridge (window / config / drag / events)
   lite-image.ts    image import: solid-background cutout and preview
   lite-i18n.ts     language switching: dictionary, {placeholders}, data-i18n markup
 src/shared/        types and i18n strings shared by frontend and backend (i18n.ts is the source of truth)
 src-tauri/         Rust backend: window, tray, config, custom image, i18n
+  cutout.rs        automatic cutout: border colour + flood fill → the initial mask (swap `segment()` for a model)
 src/assets/        animation art and brand icons (sprite sheets and icons are generated by npm run build)
 scripts/           build, asset generation and test scripts
 docs/screenshots/  images used by the READMEs

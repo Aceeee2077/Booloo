@@ -546,6 +546,45 @@ pub fn close_settings(app: AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+/// Open (or focus) the cutout mask editor for the image staged by the settings
+/// panel. `async` for the same reason `open_settings` is: building a webview from
+/// a sync command runs on the main thread and deadlocks.
+#[tauri::command]
+pub async fn open_mask_editor(app: AppHandle) -> Result<(), String> {
+    if let Some(existing) = app.get_webview_window("mask") {
+        let _ = existing.show();
+        let _ = existing.set_focus();
+        // A second pick while the editor is already up reloads it in place.
+        let _ = existing.emit("mask-reload", ());
+        return Ok(());
+    }
+    let window = tauri::WebviewWindowBuilder::new(
+        &app,
+        "mask",
+        tauri::WebviewUrl::App("renderer/mask.html".into()),
+    )
+    .title("Prismoo")
+    .decorations(false)
+    .inner_size(1080.0, 720.0)
+    .min_inner_size(760.0, 520.0)
+    .center()
+    .build()
+    .map_err(|e| e.to_string())?;
+    let _ = window;
+    Ok(())
+}
+
+/// Close the cutout mask editor. Cancelling the edit is the renderer's job (the
+/// staged file simply stays in place); this only tears the window down.
+#[tauri::command]
+pub fn close_mask_editor(app: AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window("mask") {
+        window.hide().map_err(|e| e.to_string())?;
+        window.close().map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
 fn build_settings(app: &AppHandle, section: Option<String>) -> Result<(), String> {
     let window = tauri::WebviewWindowBuilder::new(
         app,

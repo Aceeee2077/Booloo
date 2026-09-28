@@ -12,6 +12,7 @@ let wallClock = 0;
 let locale = 'zh';
 let configChanged;
 let actionReceived;
+let updateState;
 let frame;
 let lastDraw;
 const intervals = [];
@@ -46,6 +47,11 @@ const api = {
   getWindowCenterTarget: async () => [810, 294],
   moveWindowTo: async (x, y) => { moves.push([x, y]); },
   windowEdgeGaps: async () => null,
+  updateCheck: async () => ({ status: 'available', currentVersion: '0.6.5', version: '0.6.6',
+    autoCheck: true, autoDownload: true, channel: 'stable' }),
+  updateDownload: async () => ({ status: 'downloaded', currentVersion: '0.6.5', version: '0.6.6',
+    autoCheck: true, autoDownload: true, channel: 'stable' }),
+  onUpdateState: callback => { updateState = callback; },
 };
 const browser = {
   api, devicePixelRatio: 1,
@@ -170,4 +176,17 @@ canvasEvents.get('mousemove')({ offsetX: 140, offsetY: 175, screenX: 126, screen
 frame(clock += 125);
 assert.equal(lastDraw[2], 128, 'dragging should use the walking sprite row');
 
-console.log('Petting, dreams, actions, hourly announcement, standing reminder, and language switch: passed');
+// An update is announced once per status change; the per-chunk download progress
+// events must not re-trigger the bubble.
+const update = (status, extra = {}) => updateState({ status, currentVersion: '0.6.5',
+  autoCheck: true, autoDownload: true, channel: 'stable', ...extra });
+update('available', { version: '0.9.0', autoDownload: false });
+assert.equal(speech.textContent, '✨ 发现新版本 v0.9.0，去设置里就能下载～');
+const announced = speechCount;
+update('downloading', { version: '0.9.0', progress: { percent: 12, transferred: 1, total: 10, bytesPerSecond: 0 } });
+update('downloading', { version: '0.9.0', progress: { percent: 64, transferred: 6, total: 10, bytesPerSecond: 0 } });
+assert.equal(speechCount, announced, 'download progress must not repeat the bubble');
+update('downloaded', { version: '0.9.0' });
+assert.equal(speech.textContent, '✅ v0.9.0 已下载完成，重启后生效');
+
+console.log('Petting, dreams, actions, reminders, language switch and update notice: passed');

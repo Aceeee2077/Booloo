@@ -39,6 +39,13 @@
     "active": true,
     "publisher": "Prismoo",
     "targets": ["nsis"],
-    "icon": ["icons/icon.ico", "icons/icon.png"]
+    "icon": ["icons/icon.ico", "icons/icon.png"],
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "RWT/YsdfZNqBA9Eq8QCWELWxQOvRJ267u5oFFmhcAaVVNBeNUfMefo7J",
+      "endpoints": ["https://github.com/Aceeee2077/Prismoo/releases/latest/download/latest.json"]
+    }
   }
 }

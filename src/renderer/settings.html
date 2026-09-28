@@ -47,9 +47,11 @@
       <label class="check"><input id="remove-background" type="checkbox" /><span data-i18n="lite.settings.removeBackground">去掉纯色背景</span></label>
       <p id="preview-note" class="note"></p>
       <div class="actions">
+        <button id="refine-image" type="button" data-i18n="lite.settings.refineCutout">手动微调抠图…</button>
         <button id="confirm-image" class="primary" type="button" data-i18n="lite.settings.useImage">使用这张图片</button>
         <button id="cancel-image" type="button" data-i18n="lite.settings.cancel">取消</button>
       </div>
+      <p class="note" data-i18n="lite.settings.refineHint"></p>
     </section>
 
     <section>
@@ -76,6 +78,30 @@
       <label class="check"><input id="hourly-chime" type="checkbox" /><span data-i18n="lite.settings.hourlyChime">整点轻报时</span></label>
       <label class="check"><input id="auto-launch" type="checkbox" /><span data-i18n="lite.settings.autoLaunch">开机启动</span></label>
       <button id="reset-position" type="button" data-i18n="lite.settings.resetPosition">重置桌宠位置</button>
+    </section>
+
+    <section id="update-panel">
+      <h2 data-i18n="settings.updateSection">🔄 更新</h2>
+      <div class="update-grid">
+        <span data-i18n="settings.updateVersion">当前版本</span><span id="update-version" class="value">—</span>
+        <span data-i18n="settings.updateStatus">状态</span><span id="update-status" class="value">—</span>
+      </div>
+      <div id="update-progress-row" class="update-progress" hidden>
+        <div class="progress"><div id="update-progress-bar" class="progress-fill"></div></div>
+        <span id="update-progress-text" class="val">0%</span>
+      </div>
+      <div class="actions">
+        <button id="btn-check-update" type="button" data-i18n="settings.checkUpdate">🔍 立即检查更新</button>
+        <button id="btn-download-update" type="button" hidden data-i18n="settings.downloadUpdate">⬇️ 下载更新</button>
+        <button id="btn-install-update" class="primary" type="button" hidden data-i18n="settings.restartUpdate">🔄 立即重启更新</button>
+      </div>
+      <label class="check"><input id="update-auto-check" type="checkbox" /><span data-i18n="settings.updateAutoCheck">启动时检查更新</span></label>
+      <label class="check"><input id="update-auto-download" type="checkbox" /><span data-i18n="settings.updateAutoDownload">自动下载新版本</span></label>
+      <div id="update-notes-box" hidden>
+        <h3 data-i18n="settings.updateNotes">更新日志</h3>
+        <pre id="update-notes"></pre>
+      </div>
+      <p id="update-manual" class="note" hidden></p>
     </section>
   </main>
   <script src="./lite-i18n.js"></script>
