@@ -1,4 +1,7 @@
-<svg width="512" height="512" viewBox="0 0 512 512">
+<!-- The xmlns declaration is required: this file is also referenced from the
+     READMEs and opened as a standalone image, and a strict XML parser (GitHub's
+     image proxy included) rejects an SVG without a namespace. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
   <rect x="18" y="18" width="476" height="476" rx="120" fill="#eaf6ff"/>
   <defs>
     <linearGradient id="chrome" x1="0" y1="0" x2="1" y2="1">

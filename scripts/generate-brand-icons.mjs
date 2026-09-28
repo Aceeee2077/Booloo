@@ -1,7 +1,7 @@
 // Prismoo brand icons: renders the candy-chrome cat once and writes all icon
 // sizes/formats the app needs. Run after `npm run sprites` so the deterministic
 // pixel-pet generator never overwrites the brand icon.
-import { readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
@@ -9,6 +9,14 @@ import sharp from 'sharp';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SVG = path.join(ROOT, 'src', 'assets', 'brand', 'prismoo-icon.svg');
 const ASSET_DIR = path.join(ROOT, 'src', 'assets');
+// The READMEs embed a PNG: repo images are served through GitHub's image proxy,
+// which sanitises SVG and renders a namespace-less file as a broken image.
+const README_PNG = path.join(ROOT, 'docs', 'brand', 'prismoo-icon.png');
+// The bundler reads the app / installer icons from src-tauri/icons (see
+// bundle.icon in tauri.conf.json). They are committed, so they have to be
+// regenerated here too — otherwise a redrawn brand mark would update the tray and
+// the README while the shipped installer kept the old artwork.
+const BUNDLE_DIR = path.join(ROOT, 'src-tauri', 'icons');
 
 // Windows shell (Start menu, taskbar, Explorer list/tiles) needs multiple icon
 // sizes. A single 256px entry makes the Start menu fall back to a blank/default
@@ -62,4 +70,20 @@ writeFileSync(path.join(ASSET_DIR, 'icon.png'), p512);
 writeFileSync(path.join(ASSET_DIR, 'icon.ico'), makeIco(icoEntries));
 writeFileSync(path.join(ASSET_DIR, 'icon.icns'), makeIcns(p512));
 writeFileSync(path.join(ASSET_DIR, 'tray.png'), p32);
-console.log('✓ Prismoo 品牌图标 icon.png / icon.ico / icon.icns / tray.png 已生成');
+
+// README logo: 256 px so it stays crisp on HiDPI screens at the 128 px display size.
+mkdirSync(path.dirname(README_PNG), { recursive: true });
+writeFileSync(README_PNG, await sharp(Buffer.from(svg)).resize(256, 256).png().toBuffer());
+
+// Keep the committed bundle icons in sync with the same source.
+writeFileSync(path.join(BUNDLE_DIR, 'icon.png'), p512);
+writeFileSync(path.join(BUNDLE_DIR, 'icon.ico'), makeIco(icoEntries));
+for (const size of [32, 128, 256]) {
+  writeFileSync(
+    path.join(BUNDLE_DIR, `${size}x${size}.png`),
+    await sharp(Buffer.from(svg)).resize(size, size).png().toBuffer(),
+  );
+}
+
+console.log('✓ Prismoo 品牌图标：src/assets/{icon.png,icon.ico,icon.icns,tray.png}、'
+  + 'docs/brand/prismoo-icon.png（README 用）、src-tauri/icons/* 已生成');

@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="src/assets/brand/prismoo-icon.svg" width="128" height="128" alt="Prismoo 桌宠图标" />
+<img src="docs/brand/prismoo-icon.png" width="128" height="128" alt="Prismoo 桌宠图标" />
 
 # Prismoo · 轻量桌宠
 

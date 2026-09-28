@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="src/assets/brand/prismoo-icon.svg" width="128" height="128" alt="Prismoo icon" />
+<img src="docs/brand/prismoo-icon.png" width="128" height="128" alt="Prismoo icon" />
 
 # Prismoo · Lightweight Desktop Pet
 
