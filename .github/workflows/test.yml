@@ -1,0 +1,66 @@
+name: Tests
+
+# The gate that keeps a push from landing broken code. Everything below runs
+# against the *platforms the app ships on*, because the interesting failures are
+# platform specific: `cargo test` compiles the `#[cfg(target_os = "macos")]` code
+# that Windows never sees (it already caught a missing cargo feature once), and
+# the Node harnesses read `dist/`, so a TypeScript regression fails here too.
+#
+# `main` is deliberately not listed: it is the archived Electron 0.4.0 snapshot
+# and does not have these scripts. Push here, or open a pull request.
+
+on:
+  push:
+    branches: [Tauri2.0-version]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  # A newer push makes the running job pointless; cancel it instead of queueing.
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: ${{ matrix.label }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: Windows
+            os: windows-latest
+          # Drop this entry if runner minutes matter more than catching macOS
+          # regressions before a release. macOS runners are the expensive ones.
+          - label: macOS
+            os: macos-latest
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache the Rust build
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      # The Node tests read the compiled pages out of dist/, so the build has to
+      # run first — `npm test` on a fresh checkout would otherwise fail on the
+      # missing dist/renderer/*.js.
+      - name: Build the renderer and assets
+        run: npm run build
+
+      - name: Run the test suites (Node + Rust)
+        run: npm test
