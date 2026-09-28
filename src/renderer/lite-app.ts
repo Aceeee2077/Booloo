@@ -348,7 +348,9 @@ const ACTION_FRAMES = 16;
     const state = dragging ? 'walk' : currentState(now);
     const action = activeAction && now < activeAction.started + activeAction.duration ? activeAction : null;
     const sizeScale = Math.max(0.65, Math.min(1.6, Number(config?.petScale) || 1));
-    const bob = action ? 0 : state === 'idle' ? Math.sin(now / 430) * 1.4 : state === 'walk' ? Math.sin(now / 100) * 2.5 : state === 'click' ? -Math.abs(Math.sin(now / 90)) * 3 : 0;
+    // The resting state is deliberately motionless: the pet only animates while it
+    // walks (auto-walk or dragging), clicks or sleeps.
+    const bob = action ? 0 : state === 'walk' ? Math.sin(now / 100) * 2.5 : state === 'click' ? -Math.abs(Math.sin(now / 90)) * 3 : 0;
     // An unknown skin (an install from before the line-up was trimmed) rides the
     // Bulu art rather than leaving the window blank.
     const target = config?.skin === 'custom' && custom ? 'custom' : config?.skin && sheets[config.skin] ? config.skin : 'bulu';

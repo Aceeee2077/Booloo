@@ -15,6 +15,8 @@ let actionReceived;
 let updateState;
 let frame;
 let lastDraw;
+/** Every drawImage the pet window issued, so a single frame can be asserted on. */
+const drawHistory = [];
 const intervals = [];
 const moves = [];
 const canvasEvents = new Map();
@@ -29,7 +31,8 @@ class FakeDate extends Date {
   static now() { return wallClock; }
 }
 const drawing = {
-  clearRect() {}, save() {}, restore() {}, drawImage(...args) { lastDraw = args; }, translate() {}, scale() {},
+  clearRect() {}, save() {}, restore() {}, translate() {}, scale() {},
+  drawImage(...args) { lastDraw = args; drawHistory.push(args); },
   getImageData: (x, y) => { hitSamples.push([x, y]); return { data: [0, 0, 0, 255] }; },
 };
 const canvas = {
@@ -83,6 +86,12 @@ vm.createContext(context);
 vm.runInContext(readFileSync(join(process.cwd(), 'dist/renderer/lite-i18n.js'), 'utf8'), context);
 vm.runInContext(readFileSync(join(process.cwd(), 'dist/renderer/lite-app.js'), 'utf8'), context);
 await new Promise(resolve => setImmediate(resolve));
+
+// The first drawn frame is the resting state: it comes from the base sheet's idle
+// row (cell 128 px in this harness, row 0) and is a still pose.
+frame(clock += 16);
+assert.ok(drawHistory.some(args => args[3] === 128 && args[2] === 0),
+  'the idle state should draw the base sheet idle row');
 
 for (const x of [110, 135, 115, 140]) {
   clock += 50;

@@ -208,8 +208,8 @@ for (const [readme, expected] of [
 
 const actionAtlas = join(process.cwd(), 'dist', 'assets', 'animated-pets', 'bulu-actions.webp');
 const actionMeta = await sharp(actionAtlas).metadata();
-// One 192 px row per action and 16 frames per row: each source sheet is a 4x4
-// grid of animation frames, flattened into the row in reading order.
+// One 192 px row per action and 16 frames per row: each source sheet is a 4x4 grid
+// of animation frames, flattened into the row in reading order.
 const actionCell = 192;
 const actionFrames = 16;
 assert.equal(actionMeta.width, actionCell * actionFrames);
@@ -233,6 +233,31 @@ for (let row = 0; row < actionMeta.height / actionCell; row++) {
     frames.push(frame);
   }
   assert.notDeepEqual(frames[0], frames[8], `Bulu action row ${row} does not move`);
+}
+
+// The base sheet: idle / walk / sleep / click, now at the atlas' 192 px cells so
+// the resting state is as crisp as an action. Idle is a *still* pose — the pet must
+// not move on its own, only walking (auto-walk or dragging) animates.
+const sheetPath = join(process.cwd(), 'dist', 'assets', 'animated-pets', 'bulu.png');
+const sheetMeta = await sharp(sheetPath).metadata();
+assert.equal(sheetMeta.width, actionCell * 4);
+assert.equal(sheetMeta.height, actionCell * 4);
+const sheetFrame = (row, col) => sharp(sheetPath)
+  .extract({ left: col * actionCell, top: row * actionCell, width: actionCell, height: actionCell })
+  .ensureAlpha().raw().toBuffer();
+const idleFrames = [await sheetFrame(0, 0), await sheetFrame(0, 1), await sheetFrame(0, 3)];
+assert.deepEqual(idleFrames[1], idleFrames[0], 'the idle state must not animate');
+assert.deepEqual(idleFrames[2], idleFrames[0], 'the idle state must not animate');
+const walkFrames = [await sheetFrame(1, 0), await sheetFrame(1, 1)];
+assert.notDeepEqual(walkFrames[1], walkFrames[0], 'the walk cycle still animates');
+// And no frame may carry a piece of its neighbour: every cell has to be one blob.
+for (let row = 0; row < 4; row++) {
+  for (let col = 0; col < 4; col++) {
+    const frame = await sheetFrame(row, col);
+    let opaque = 0;
+    for (let pixel = 3; pixel < frame.length; pixel += 4) if (frame[pixel] > 16) opaque++;
+    assert.ok(opaque > 1000, `base sheet row ${row} frame ${col} is empty`);
+  }
 }
 
 // Both dictionaries are handed to the renderer as one JSON payload, so a key

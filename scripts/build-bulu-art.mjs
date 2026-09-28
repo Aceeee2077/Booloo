@@ -1,21 +1,24 @@
 #!/usr/bin/env node
 // ============================================================================
-// Bulu's two art assets, rebuilt from the authoring renders in docs/pet-sources/.
+// Bulu's atlas, rebuilt from the authoring renders in docs/pet-sources/:
 //
-//   1. bulu.png            4x4 grid, 192 px cells — the base states, one per row:
-//                          idle / walk / sleep / click. Assembled from the pose
-//                          board docs/pet-sources/bulu-source.png (a 4x4 sheet,
-//                          ~300 px per cell, already transparent).
-//   2. bulu-actions.webp   16 frames x 5 actions, 192 px cells — the right-click
-//                          actions, one per row, assembled from the 4x4 sheets in
-//                          docs/pet-sources/bulu-actions/.
+//   bulu-actions.webp   16 frames x 6 rows, 192 px cells — the five right-click
+//                       actions (rows 0-4) and the idle animation (row 5), each
+//                       assembled from a 4x4 sheet of 16 frames in
+//                       docs/pet-sources/bulu-actions/.
 //
 // Why 192: the pet is drawn at 132 CSS px (x devicePixelRatio, up to ~1.6x with
-// the size setting). The previous 64 px cells were upscaled 2.6-4.1x and looked
-// soft; 192 px keeps the base states as crisp as the action frames.
+// the size setting), so a 64 px frame would be stretched 2.6-4.1x and look soft.
+//
+// bulu.png (walk / sleep / click) is deliberately NOT rebuilt here: it is still the
+// original 256 px sheet — 64 px per frame — because the 4x4 board it was cut from
+// is gone and no surviving render matches those rows. Its idle row is superseded by
+// row 5 of the atlas; the other three states stay soft until their sources exist.
+// Drop a 4x4 board (or one 4x4 sheet per state) into docs/pet-sources/ and this
+// script can rebuild them at 192 px exactly the way it builds the atlas.
 //
 // src/renderer/lite-app.ts derives everything from the image: the sheet cell is
-// `naturalWidth / 4`, and an action row is `ACTION_FRAMES` wide.
+// `naturalWidth / 4`, and an atlas row is `ACTION_FRAMES` wide.
 //
 //   npm run bulu-art
 //
@@ -29,10 +32,17 @@ import sharp from 'sharp';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const sourceDir = path.join(root, 'docs', 'pet-sources');
 const actionSourceDir = path.join(sourceDir, 'bulu-actions');
+const sheetOutput = path.join(root, 'src', 'assets', 'animated-pets', 'bulu.png');
 const actionOutput = path.join(root, 'src', 'assets', 'animated-pets', 'bulu-actions.webp');
 const actionPreview = path.join(sourceDir, 'bulu-actions-preview.png');
 
-/** Action rows: row index here is the atlas row the renderer reads. Keep in sync. */
+/**
+ * Atlas rows, in the order the renderer indexes them. Keep in sync with
+ * `actionRows` (rows 0-4) and `IDLE_ATLAS_ROW` (row 5) in src/renderer/lite-app.ts.
+ *
+ * The idle animation is appended *after* the five actions on purpose: it is not a
+ * right-click action, and appending keeps the action row indices unchanged.
+ */
 const ACTIONS = [
   { id: 'wave', source: '挥爪子' },
   { id: 'groom', source: '舔爪子' },
@@ -40,11 +50,21 @@ const ACTIONS = [
   { id: 'yawn', source: '打哈欠' },
   { id: 'scratch', source: '挠头' },
 ];
+/** The static default pose, taken from frame 0 of this 4x4 sheet. */
+const IDLE_SHEET = '默认状态';
 
 const COLS = 4;
 const ROWS = 4;
 const FRAMES = COLS * ROWS;
 const CELL = 192;
+/** Cell padding, proportional to the old 3 px on a 64 px cell. */
+const PAD = 10;
+/**
+ * How much of a cell the idle art filled in the original 64 px sheet. The rebuild
+ * matches it so the pet does not change size (and does not shrink next to the
+ * carried-over walk row). Measured once; not read back from the sheet we replace.
+ */
+const IDLE_HEIGHT_RATIO = 0.906;
 const ACTION_ART_WIDTH = 176;
 const ACTION_ART_HEIGHT = 178;
 /** Distance from the cell bottom the action art sits on, so poses do not jump. */
@@ -183,6 +203,70 @@ function gridCells(width, height, cols, rows) {
 }
 
 /**
+ * Drop everything but the subject blob.
+ *
+ * The sheets come from an image model that lays the frames out itself, so a cell
+ * regularly contains a sliver of the neighbouring pose (or a speck of dust). Any
+ * of those that is not connected to the subject is removed here; the surviving
+ * pixels keep their exact position, so the motion inside a loop is untouched.
+ */
+function keepLargestComponent(data, width, height) {
+  const seen = new Uint8Array(width * height);
+  const queue = new Int32Array(width * height);
+  let best = [];
+  for (let start = 0; start < width * height; start++) {
+    if (seen[start] || data[start * 4 + 3] < 24) continue;
+    let head = 0;
+    let tail = 0;
+    const component = [];
+    seen[start] = 1;
+    queue[tail++] = start;
+    while (head < tail) {
+      const p = queue[head++];
+      component.push(p);
+      const x = p % width;
+      const y = Math.floor(p / width);
+      const visit = (n) => {
+        if (!seen[n] && data[n * 4 + 3] >= 24) {
+          seen[n] = 1;
+          queue[tail++] = n;
+        }
+      };
+      if (x > 0) visit(p - 1);
+      if (x + 1 < width) visit(p + 1);
+      if (y > 0) visit(p - width);
+      if (y + 1 < height) visit(p + width);
+    }
+    if (component.length > best.length) best = component;
+  }
+  const keep = new Uint8Array(width * height);
+  for (const p of best) keep[p] = 1;
+  // Put two pixels of antialiased edge back around the solid component.
+  for (let pass = 0; pass < 2; pass++) {
+    const next = keep.slice();
+    for (let p = 0; p < width * height; p++) {
+      if (!keep[p]) continue;
+      const x = p % width;
+      const y = Math.floor(p / width);
+      if (x > 0) next[p - 1] = 1;
+      if (x + 1 < width) next[p + 1] = 1;
+      if (y > 0) next[p - width] = 1;
+      if (y + 1 < height) next[p + width] = 1;
+    }
+    keep.set(next);
+  }
+  for (let p = 0; p < width * height; p++) {
+    const i = p * 4;
+    if (!keep[p] || data[i + 3] === 0) {
+      data[i] = 0;
+      data[i + 1] = 0;
+      data[i + 2] = 0;
+      data[i + 3] = 0;
+    }
+  }
+}
+
+/**
  * A checkerboard plus row labels, for eyeballing a build. `labels` is indexed by
  * grid row; entries that are empty strings print nothing.
  */
@@ -201,6 +285,65 @@ function contactSheet({ height, rows, cols, labels, thumb, labelWidth }) {
   });
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">` +
     `<rect width="100%" height="100%" fill="#f4f6f9"/>${lines.join('')}</svg>`;
+}
+
+// ---------- 1. the base sheet (idle / walk / sleep / click) ----------
+
+async function buildSheet() {
+  // Rows 1-3 (walk / sleep / click) are carried over from the 64 px sheet — their
+  // sources are gone, so a 3x lanczos resample into the bigger cells is as far as
+  // this can go. Row 0 (idle) is rebuilt from the static default pose.
+  const previous = await sharp(sheetOutput).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  const previousCell = Math.round(previous.info.width / COLS);
+  const composites = [];
+  for (let row = 1; row < ROWS; row++) {
+    for (let col = 0; col < COLS; col++) {
+      const cell = await sharp(previous.data, { raw: previous.info })
+        .extract({ left: col * previousCell, top: row * previousCell, width: previousCell, height: previousCell })
+        .png().toBuffer();
+      composites.push({
+        input: await sharp(cell).resize(CELL, CELL, { kernel: sharp.kernel.lanczos3 }).png().toBuffer(),
+        left: col * CELL,
+        top: row * CELL,
+      });
+    }
+  }
+
+  // Idle is a *still* pose: the pet must not move on its own, so all four frames
+  // hold the same art (frame 0 of the default-pose sheet). Only walking — auto-walk
+  // or dragging — plays an animation.
+  const idleSheet = await sharp(resolveActionSource(IDLE_SHEET)).ensureAlpha()
+    .raw().toBuffer({ resolveWithObject: true });
+  const first = gridCells(idleSheet.info.width, idleSheet.info.height, COLS, ROWS)[0];
+  const { data, info: frameInfo } = await sharp(idleSheet.data, { raw: idleSheet.info })
+    .extract(first).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  keepLargestComponent(data, frameInfo.width, frameInfo.height);
+  const bounds = visibleBounds(data, frameInfo.width, frameInfo.height);
+  if (bounds.empty) throw new Error(`${IDLE_SHEET}: frame 0 of the default pose is empty`);
+  const posed = await sharp(data, { raw: frameInfo }).extract({
+    left: bounds.left, top: bounds.top, width: bounds.width, height: bounds.height,
+  }).png().toBuffer();
+  const posedMeta = await sharp(posed).metadata();
+  const scale = Math.min(
+    (IDLE_HEIGHT_RATIO * CELL) / posedMeta.height,
+    (CELL - PAD * 2) / posedMeta.width,
+  );
+  const width = Math.max(1, Math.round(posedMeta.width * scale));
+  const height = Math.max(1, Math.round(posedMeta.height * scale));
+  const idle = await sharp(posed).resize(width, height, { kernel: sharp.kernel.lanczos3 }).png().toBuffer();
+  for (let col = 0; col < COLS; col++) {
+    composites.push({ input: idle, left: col * CELL + Math.round((CELL - width) / 2), top: CELL - PAD - height });
+  }
+
+  mkdirSync(path.dirname(sheetOutput), { recursive: true });
+  await sharp({ create: { width: CELL * COLS, height: CELL * ROWS, channels: 4, background: '#00000000' } })
+    .composite(composites).png({ compressionLevel: 9 }).toFile(sheetOutput);
+  const meta = await sharp(sheetOutput).metadata();
+  if (meta.width !== CELL * COLS || meta.height !== CELL * ROWS || !meta.hasAlpha) {
+    throw new Error(`Invalid Bulu base sheet: ${meta.width}x${meta.height}`);
+  }
+  console.log(`✓ ${path.relative(root, sheetOutput)}  (${meta.width}x${meta.height}, 每格 ${CELL}px, ` +
+    `idle 静止帧 ${width}x${height}, ${statSync(sheetOutput).size} bytes)`);
 }
 
 // ---------- 2. the action atlas ----------
@@ -233,6 +376,9 @@ async function actionFrames(file, label) {
     const { data, info: cellInfo } = await sharp(source, {
       raw: { width: info.width, height: info.height, channels: 4 },
     }).extract(box).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    // The model's own 4x4 layout drifts a little, so a cell can carry a piece of
+    // the neighbouring pose; keep only the subject.
+    keepLargestComponent(data, cellInfo.width, cellInfo.height);
     const visible = visibleBounds(data, cellInfo.width, cellInfo.height);
     if (visible.empty) { frames.push({ buffer: null, empty: true }); continue; }
     const right = visible.left + visible.width - 1;
@@ -329,11 +475,12 @@ async function buildActions() {
 
   console.log(`✓ ${path.relative(root, actionOutput)}  (${meta.width}x${meta.height}, ` +
     `${FRAMES} 帧/动作, ${rows.length} 个动作, ${statSync(actionOutput).size} bytes)`);
-  console.log(`  预览: ${path.relative(root, actionPreview)}  （每个动作一块 4x4，行顺序: ${ACTIONS.map((a) => a.id).join(' / ')}）`);
+  console.log(`  预览: ${path.relative(root, actionPreview)}  （每行一块 4x4，行顺序: ${ACTIONS.map((a) => a.id).join(' / ')}）`);
   for (const [row, { action, file, keyed, crop }] of rows.entries()) {
     console.log(`  row ${row} ${action.id.padEnd(8)} ${path.basename(file).padEnd(12)} ` +
       `抠图=${keyed ? 'yes' : 'no '}  裁切框 ${crop.width}x${crop.height}`);
   }
 }
 
+await buildSheet();
 await buildActions();
