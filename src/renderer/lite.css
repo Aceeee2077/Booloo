@@ -7,5 +7,15 @@ canvas { display: block; width: 300px; height: 300px; cursor: grab; }
 #pet-hearts[hidden] { display: none; }
 #pet-dream { position: absolute; min-width: 27px; height: 27px; padding: 3px 5px; border: 1px solid #f1c394; border-radius: 50%; background: #fffaf0e8; color: #653e24; box-shadow: 0 3px 10px #75411630; font: 18px/27px "Segoe UI Emoji", "Microsoft YaHei", sans-serif; text-align: center; pointer-events: none; animation: dream-float 1.7s ease-in-out infinite; }
 #pet-dream[hidden] { display: none; }
+/* System-load badge: the same shape as the dream bubble, kept on the left so the
+   two can never sit on top of each other. */
+#pet-mood { position: absolute; min-width: 27px; height: 27px; padding: 3px 5px; border: 1px solid #f1c394; border-radius: 50%; background: #fffaf0e8; color: #653e24; box-shadow: 0 3px 10px #75411630; font: 17px/27px "Segoe UI Emoji", "Microsoft YaHei", sans-serif; text-align: center; pointer-events: none; animation: mood-pulse 1.9s ease-in-out infinite; }
+#pet-mood[hidden] { display: none; }
+/* Reminders are shown as a sign the pet holds up, wider and calmer than a bubble
+   so a sentence stays readable. */
+#pet-sign { position: absolute; left: 50%; transform: translateX(-50%); max-width: 268px; width: max-content; padding: 9px 13px; border: 2px solid #e2a463; border-radius: 12px; background: #fffdf4; color: #5c4326; box-shadow: 0 6px 16px #75411638; font: 13px/1.45 "Microsoft YaHei", "Segoe UI", sans-serif; text-align: center; pointer-events: none; animation: sign-pop .22s ease-out; }
+#pet-sign[hidden] { display: none; }
 @keyframes heart-float { from { opacity: 0; transform: translateY(10px) scale(.7); } 20% { opacity: 1; } to { opacity: 0; transform: translateY(-30px) scale(1.2); } }
 @keyframes dream-float { 0%, 100% { transform: translateY(2px); opacity: .72; } 50% { transform: translateY(-5px); opacity: 1; } }
+@keyframes mood-pulse { 0%, 100% { transform: scale(1); opacity: .8; } 50% { transform: scale(1.12); opacity: 1; } }
+@keyframes sign-pop { from { opacity: 0; transform: translateX(-50%) translateY(6px) scale(.94); } to { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); } }

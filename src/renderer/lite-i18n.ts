@@ -45,6 +45,7 @@ function liteSetLocaleData(locale: Locale, dict: Record<string, I18nValue>): voi
  * Translate the static markup:
  *   data-i18n="key"        → textContent
  *   data-i18n-label="key"  → aria-label
+ *   data-i18n-placeholder="key" → placeholder
  *   data-i18n-title="key"  → title
  *
  * Elements whose text is built by script keep their key list in the script and
@@ -56,6 +57,9 @@ function liteApplyStaticText(root: ParentNode = document): void {
   }
   for (const element of Array.from(root.querySelectorAll<HTMLElement>('[data-i18n-label]'))) {
     element.setAttribute('aria-label', liteT(element.dataset.i18nLabel as string));
+  }
+  for (const element of Array.from(root.querySelectorAll<HTMLElement>('[data-i18n-placeholder]'))) {
+    element.setAttribute('placeholder', liteT(element.dataset.i18nPlaceholder as string));
   }
   for (const element of Array.from(root.querySelectorAll<HTMLElement>('[data-i18n-title]'))) {
     element.setAttribute('title', liteT(element.dataset.i18nTitle as string));

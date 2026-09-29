@@ -72,8 +72,27 @@
       </div>
       <p id="stand-status" class="note" role="status"></p>
       <label class="check"><input id="hourly-chime" type="checkbox" /><span data-i18n="lite.settings.hourlyChime">整点轻报时</span></label>
+      <label class="check"><input id="load-awareness" type="checkbox" /><span data-i18n="lite.settings.loadAwareness">根据电脑状态做反应</span></label>
+      <p class="note" data-i18n="lite.settings.loadHint"></p>
       <label class="check"><input id="auto-launch" type="checkbox" /><span data-i18n="lite.settings.autoLaunch">开机启动</span></label>
       <button id="reset-position" type="button" data-i18n="lite.settings.resetPosition">重置桌宠位置</button>
+    </section>
+
+    <section id="reminders">
+      <h2 data-i18n="lite.reminders.title">待办提醒</h2>
+      <div class="reminder-form">
+        <input id="reminder-text" type="text" maxlength="80" data-i18n-placeholder="lite.reminders.placeholder" />
+        <input id="reminder-time" type="time" step="60" data-i18n-label="lite.reminders.time" />
+        <button id="reminder-add" class="primary" type="button" data-i18n="lite.reminders.add">添加提醒</button>
+      </div>
+      <div class="reminder-quick">
+        <button type="button" data-reminder-quick="10" data-i18n="lite.reminders.quick10">10 分钟后</button>
+        <button type="button" data-reminder-quick="30" data-i18n="lite.reminders.quick30">30 分钟后</button>
+        <button type="button" data-reminder-quick="60" data-i18n="lite.reminders.quick60">1 小时后</button>
+      </div>
+      <ul id="reminder-list" class="reminder-list"></ul>
+      <p id="reminder-status" class="status" role="status"></p>
+      <p class="note" data-i18n="lite.reminders.hint"></p>
     </section>
 
     <section id="update-panel">

@@ -60,6 +60,8 @@
     setConfig: (patch: Partial<AppConfig>) => call<AppConfig>('config_set', { patch }),
     getI18n: () => call<I18nPayload>('i18n_get'),
     onConfigChanged: (callback: (cfg: AppConfig) => void) => subscribe<AppConfig>('config-changed', callback),
+    onSettingsFocusSection: (callback: (section: string) => void) => subscribe<string>('settings-focus-section', callback),
+    getSystemLoad: () => call<SystemLoad>('system_load'),
     onFileDrop: (callback: (drop: PetFileDrop) => void) => subscribe<PetFileDrop>('tauri://drag-drop', callback),
     onPetAction: (callback: (action: string) => void) => subscribe<string>('pet-action', callback),
     getCustomImage: async () => {

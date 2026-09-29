@@ -27,6 +27,7 @@ function makeElement(id) {
   return {
     id, value: '', checked: false, disabled: false, hidden: false, textContent: '', title: '', style: {},
     focus() { this.focused = true; }, select() { this.selected = true; },
+    append(...nodes) { this.children = (this.children || []).concat(nodes); },
     classList: { err: false, toggle(name, on) { if (name === 'err') this.err = !!on; }, add(name) { if (name === 'err') this.err = true; }, remove() {}, contains: () => false },
     addEventListener(name, callback) { events.set(`${id}:${name}`, callback); },
     querySelectorAll: () => [],
@@ -54,6 +55,7 @@ const api = {
   autoLaunchGet: async () => false,
   autoLaunchSet: async () => false,
   onConfigChanged: (callback) => { configChanged = callback; },
+  onSettingsFocusSection: () => {},
   onCustomImageChanged: () => {},
   onUpdateState: (callback) => { updateState = callback; },
   updateGetState: async () => {
@@ -85,6 +87,7 @@ const context = {
   document: {
     documentElement: {},
     getElementById: element,
+    createElement: (tag) => makeElement(tag),
     querySelectorAll: (selector) => (selector === '#skins button' ? [] : []),
   },
   Math, Number, String, Promise, Error, Array, console,

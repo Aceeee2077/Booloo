@@ -11,6 +11,7 @@ mod config;
 mod cutout;
 mod custom;
 mod i18n;
+mod load;
 mod tray;
 mod updater;
 mod window;
@@ -84,7 +85,20 @@ const LITE_CHECK_JS: &str = r#"
     out.hitTestPet = bounds
       ? [0.5, 0.6, 0.7].map(part => window.__prismooHitTest?.(bounds.x + bounds.w / 2, bounds.y + bounds.h * part) ?? null)
       : null;
+    // The reminder sign and the load badge are part of the page's contract even
+    // while they are hidden.
+    out.hasSign = !!document.getElementById('pet-sign');
+    out.hasMood = !!document.getElementById('pet-mood');
   } catch (error) { out.error = String(error); }
+  // Proves the system_load command is registered and answers on this platform:
+  // the load reactions have no other source.
+  try {
+    const load = await window.__TAURI__.core.invoke('system_load');
+    out.load = {
+      available: load.available, cpu: load.cpu !== null,
+      memory: load.memory !== null, battery: load.batteryPercent !== null,
+    };
+  } catch (error) { out.loadError = String(error); }
   await window.__TAURI__.core.invoke('probe_report', { payload: JSON.stringify(out) });
 })();
 "#;
@@ -101,6 +115,8 @@ const LITE_SETTINGS_CHECK_JS: &str = r#"
     translatedQuit: typeof window.liteT === 'function' ? window.liteT('lite.menu.quit') : null,
     hasExtraPanels: !!document.getElementById('wardrobe-root') || !!document.getElementById('ai-enabled'),
     hasUpdatePanel: !!document.getElementById('update-panel'),
+    hasReminders: !!document.getElementById('reminders') && !!document.getElementById('reminder-text'),
+    hasLoadToggle: !!document.getElementById('load-awareness'),
   };
   try { out.configSkin = (await window.api.getConfig()).skin; }
   catch (error) { out.error = String(error); }
@@ -112,6 +128,16 @@ const LITE_SETTINGS_CHECK_JS: &str = r#"
     out.updateVersion = update.currentVersion;
     out.updatePanelVersion = document.getElementById('update-version')?.textContent ?? null;
   } catch (error) { out.updateError = String(error); }
+  // A reminder has to survive a round trip through the config file: write one,
+  // read it back, then take it out again.
+  try {
+    const at = Date.now() + 60_000;
+    const saved = await window.api.setConfig({ reminders: [{ id: 'selfcheck', text: 'selfcheck', at }] });
+    out.reminderRoundTrip = Array.isArray(saved.reminders) &&
+      saved.reminders.some(item => item.id === 'selfcheck' && item.at === at);
+    const cleared = await window.api.setConfig({ reminders: [] });
+    out.reminderCleared = Array.isArray(cleared.reminders) && cleared.reminders.length === 0;
+  } catch (error) { out.reminderError = String(error); }
   await window.__TAURI__.core.invoke('probe_report', { payload: JSON.stringify(out) });
 })();
 "#;
@@ -245,6 +271,7 @@ pub fn run() {
             app.manage(config);
             app.manage(window::DragState::default());
             app.manage(updater::DownloadedState::default());
+            app.manage(load::LoadState::default());
             tray::build(app.handle())?;
             window::spawn_position_saver(app.handle());
 
@@ -295,6 +322,7 @@ pub fn run() {
             updater::update_download,
             updater::update_install,
             updater::update_install_when_ready,
+            load::system_load,
             custom::custom_get,
             custom::custom_pick_preview,
             custom::custom_mask_preview,

@@ -42,6 +42,10 @@ child.on('exit', code => {
     // the user cannot drag the pet or open its right-click menu.
     Array.isArray(pet?.hitTestPet) && pet.hitTestPet.some(hit => hit === true) &&
     pet?.i18nReady === true &&
+    // The reminder sign and the load badge live in the pet page, and the
+    // system_load command behind the load reactions has to answer.
+    pet?.hasSign === true && pet?.hasMood === true &&
+    pet?.load && pet.load.available === true && pet.loadError === undefined &&
     (pet?.state?.skin !== 'custom' || pet?.state?.customReady === true);
   // Two choices now: Bulu and "my image".
   const settingsOk = settings?.hasApi && settings?.skinChoices === 2 &&
@@ -53,6 +57,10 @@ child.on('exit', code => {
     // the panel has to have painted it.
     settings?.hasUpdatePanel === true && settings?.updateVersion === appVersion &&
     settings?.updateStatus === 'idle' && settings?.updatePanelVersion === `v${appVersion}` &&
+    // The reminders section, its round trip through the config file and the
+    // computer-reaction switch all have to be there.
+    settings?.hasReminders === true && settings?.hasLoadToggle === true &&
+    settings?.reminderRoundTrip === true && settings?.reminderCleared === true &&
     close?.closed === true;
   // The mask editor is the third window: it proves the new capability entry works
   // and that the cutout command answers the renderer.

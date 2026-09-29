@@ -20,7 +20,13 @@
   const standCustomLabel = $<HTMLLabelElement>('stand-custom-label');
   const standStatus = $<HTMLParagraphElement>('stand-status');
   const hourlyChime = $<HTMLInputElement>('hourly-chime');
+  const loadAwareness = $<HTMLInputElement>('load-awareness');
   const autoLaunch = $<HTMLInputElement>('auto-launch');
+  const reminderText = $<HTMLInputElement>('reminder-text');
+  const reminderTime = $<HTMLInputElement>('reminder-time');
+  const reminderAdd = $<HTMLButtonElement>('reminder-add');
+  const reminderList = $<HTMLUListElement>('reminder-list');
+  const reminderStatus = $<HTMLParagraphElement>('reminder-status');
   const updateVersion = $<HTMLSpanElement>('update-version');
   const updateStatus = $<HTMLSpanElement>('update-status');
   const updateProgressRow = $<HTMLElement>('update-progress-row');
@@ -182,6 +188,122 @@
     return Number.isInteger(value) && value >= 1 && value <= 240 ? value : 5;
   }
 
+  // ---------- the user's own reminders ----------
+  /** `HH:MM` for a time input, in local time. */
+  function timeValue(date: Date) {
+    return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+  }
+
+  /**
+   * Turn what the time input says into an announcement time.
+   *
+   * A time that has already passed means tomorrow — "07:30" at noon reads as
+   * tomorrow morning, which is what someone typing it means.
+   */
+  function reminderAt(value: string, now = Date.now()): number | null {
+    const match = /^(\d{1,2}):(\d{2})$/.exec(value.trim());
+    if (!match) return null;
+    const hours = Number(match[1]);
+    const minutes = Number(match[2]);
+    if (hours > 23 || minutes > 59) return null;
+    const at = new Date(now);
+    at.setHours(hours, minutes, 0, 0);
+    if (at.getTime() <= now) at.setDate(at.getDate() + 1);
+    return at.getTime();
+  }
+
+  /** "今天 18:00" / "明天 07:30" / "10/3 09:00" for the list. */
+  function reminderWhen(at: number) {
+    const date = new Date(at);
+    const today = new Date();
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const time = timeValue(date);
+    const sameDay = (a: Date, b: Date) =>
+      a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+    if (sameDay(date, today)) return liteT('lite.reminders.today', { time });
+    if (sameDay(date, tomorrow)) return liteT('lite.reminders.tomorrow', { time });
+    return `${date.getMonth() + 1}/${date.getDate()} ${time}`;
+  }
+
+  function reminderId() {
+    return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  }
+
+  /** Paint the pending list; the delete buttons post the trimmed array back. */
+  function paintReminders(cfg: AppConfig) {
+    const list = Array.isArray(cfg.reminders) ? [...cfg.reminders] : [];
+    list.sort((a, b) => Number(a?.at) - Number(b?.at));
+    reminderList.textContent = '';
+    if (!list.length) {
+      const empty = document.createElement('li');
+      empty.className = 'empty';
+      empty.textContent = liteT('lite.reminders.empty');
+      reminderList.append(empty);
+      return;
+    }
+    for (const item of list) {
+      const row = document.createElement('li');
+      const when = document.createElement('span');
+      when.className = 'when';
+      when.textContent = reminderWhen(Number(item.at));
+      const text = document.createElement('span');
+      text.className = 'text';
+      text.textContent = String(item.text);
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'remove';
+      remove.textContent = '✕';
+      remove.setAttribute('aria-label', liteT('lite.reminders.remove'));
+      remove.title = liteT('lite.reminders.remove');
+      remove.addEventListener('click', () => void removeReminder(item.id));
+      row.append(when, text, remove);
+      reminderList.append(row);
+    }
+  }
+
+  /** Reminders as they are in the panel's own copy of the config. */
+  function reminderListOf(): PetReminder[] {
+    return Array.isArray(current?.reminders) ? [...(current as AppConfig).reminders!] : [];
+  }
+
+  async function addReminder() {
+    const text = reminderText.value.trim();
+    if (!text) {
+      reminderStatus.textContent = liteT('lite.reminders.invalidText');
+      reminderText.focus();
+      return;
+    }
+    const at = reminderAt(reminderTime.value);
+    if (!at) {
+      reminderStatus.textContent = liteT('lite.reminders.invalidTime');
+      reminderTime.focus();
+      return;
+    }
+    try {
+      const cfg = await window.api.setConfig({
+        reminders: [...reminderListOf(), { id: reminderId(), text, at }],
+      });
+      paint(cfg);
+      reminderText.value = '';
+      reminderStatus.textContent = liteT('lite.reminders.added', { text, when: reminderWhen(at) });
+    } catch (error) {
+      reminderStatus.textContent = liteT('lite.reminders.failed', { error: String(error) });
+    }
+  }
+
+  async function removeReminder(id: string) {
+    try {
+      const cfg = await window.api.setConfig({
+        reminders: reminderListOf().filter(item => item.id !== id),
+      });
+      paint(cfg);
+      reminderStatus.textContent = liteT('lite.reminders.removed');
+    } catch (error) {
+      reminderStatus.textContent = liteT('lite.reminders.failed', { error: String(error) });
+    }
+  }
+
   function standSummary(minutes: number) {
     return standReminder.checked ? liteT('lite.reminder.on', { n: minutes }) : liteT('lite.reminder.off');
   }
@@ -208,6 +330,8 @@
     standCustomLabel.hidden = standInterval.value !== 'custom';
     standStatus.textContent = standSummary(minutes);
     hourlyChime.checked = cfg.hourlyChime !== false;
+    loadAwareness.checked = cfg.loadAwareness !== false;
+    paintReminders(cfg);
     updateAutoCheck.checked = cfg.updateAutoCheck !== false;
     updateAutoDownload.checked = cfg.updateAutoDownload !== false;
     // The status line is built from the dictionary, so it is refreshed on every
@@ -279,6 +403,25 @@
   });
   standCustom.addEventListener('change', saveStandReminder);
   hourlyChime.addEventListener('change', () => void window.api.setConfig({ hourlyChime: hourlyChime.checked }));
+  loadAwareness.addEventListener('change', () => void window.api.setConfig({ loadAwareness: loadAwareness.checked }));
+  reminderAdd.addEventListener('click', () => void addReminder());
+  reminderText.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') void addReminder();
+  });
+  for (const button of Array.from(document.querySelectorAll<HTMLButtonElement>('[data-reminder-quick]'))) {
+    button.addEventListener('click', () => {
+      const minutes = Number(button.dataset.reminderQuick);
+      if (!Number.isFinite(minutes)) return;
+      reminderTime.value = timeValue(new Date(Date.now() + minutes * 60_000));
+    });
+  }
+  // The pet's right-click "Remind me…" entry opens this window at the section.
+  window.api.onSettingsFocusSection((section) => {
+    if (section !== 'reminders') return;
+    if (!reminderTime.value) reminderTime.value = timeValue(new Date(Date.now() + 10 * 60_000));
+    document.getElementById('reminders')?.scrollIntoView({ block: 'center' });
+    reminderText.focus();
+  });
   checkUpdateButton.addEventListener('click', async () => {
     checkUpdateButton.disabled = true;
     renderUpdate(await window.api.updateCheck());
@@ -309,6 +452,8 @@
     await liteLoadDictionary().catch((error) => console.error('[lite-settings] i18n:', error));
     const [cfg, enabled] = await Promise.all([window.api.getConfig(), window.api.autoLaunchGet()]);
     paint(cfg);
+    // A sensible starting point for the time box: ten minutes from now.
+    reminderTime.value = timeValue(new Date(Date.now() + 10 * 60_000));
     renderUpdate(await window.api.updateGetState());
     autoLaunch.checked = enabled;
     window.api.onConfigChanged(paint);

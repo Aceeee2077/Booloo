@@ -221,6 +221,16 @@ const menuHtml = readFileSync(join(renderer, 'menu.html'), 'utf8');
 const menuActions = [...menuHtml.matchAll(/data-action="action:([a-z]+)"/g)].map(match => match[1]);
 assert.equal(actionMeta.height / actionCell, menuActions.length,
   `the atlas has ${actionMeta.height / actionCell} pose rows but the menu offers ${menuActions.length} actions`);
+assert.ok(/data-action="reminders"/.test(menuHtml), 'the pet menu should offer the reminder entry');
+// The menu is a fixed-size window: the page's box and the size Rust builds it
+// with have to agree, or the last entry is clipped off the bottom.
+const menuCss = readFileSync(join(renderer, 'lite-menu.css'), 'utf8');
+const menuHeight = /html, body \{[^}]*height:\s*(\d+(?:\.\d+)?)px/.exec(menuCss)?.[1];
+const traySource = readFileSync(join(process.cwd(), 'src-tauri', 'src', 'tray.rs'), 'utf8');
+const windowHeight = /inner_size\(188\.0,\s*(\d+(?:\.\d+)?)\)/.exec(traySource)?.[1];
+assert.ok(menuHeight && windowHeight, 'the pet menu height should be declared in both places');
+assert.equal(Number(menuHeight), Number(windowHeight),
+  `lite-menu.css is ${menuHeight}px tall but the window is built ${windowHeight}px tall`);
 for (let row = 0; row < actionMeta.height / actionCell; row++) {
   const frames = [];
   for (let col = 0; col < actionFrames; col++) {
@@ -245,9 +255,29 @@ assert.equal(sheetMeta.height, actionCell * 4);
 const sheetFrame = (row, col) => sharp(sheetPath)
   .extract({ left: col * actionCell, top: row * actionCell, width: actionCell, height: actionCell })
   .ensureAlpha().raw().toBuffer();
-const idleFrames = [await sheetFrame(0, 0), await sheetFrame(0, 1), await sheetFrame(0, 3)];
+const idleFrames = [await sheetFrame(0, 0), await sheetFrame(0, 1), await sheetFrame(0, 2)];
 assert.deepEqual(idleFrames[1], idleFrames[0], 'the idle state must not animate');
 assert.deepEqual(idleFrames[2], idleFrames[0], 'the idle state must not animate');
+// The fourth idle cell is the blink pose baked by scripts/build-bulu-blink.mjs:
+// the same picture with both eyes closed, so the silhouette may not change and
+// nothing outside the band across the eyes may move.
+const blinkFrame = await sheetFrame(0, 3);
+let blinkPixels = 0;
+let blinkOutsideEyes = 0;
+for (let pixel = 0; pixel < blinkFrame.length; pixel += 4) {
+  const index = pixel / 4;
+  const x = index % actionCell;
+  const y = Math.floor(index / actionCell);
+  assert.equal(blinkFrame[pixel + 3], idleFrames[0][pixel + 3],
+    `the blink frame must keep the silhouette at ${x},${y}`);
+  if (blinkFrame[pixel] === idleFrames[0][pixel] &&
+      blinkFrame[pixel + 1] === idleFrames[0][pixel + 1] &&
+      blinkFrame[pixel + 2] === idleFrames[0][pixel + 2]) continue;
+  blinkPixels++;
+  if (y < 50 || y > 70 || x < 60 || x > 150) blinkOutsideEyes++;
+}
+assert.ok(blinkPixels > 200, `both eyes have to close, only ${blinkPixels} pixels differ`);
+assert.equal(blinkOutsideEyes, 0, 'the blink may only repaint the band across the eyes');
 const walkFrames = [await sheetFrame(1, 0), await sheetFrame(1, 1)];
 assert.notDeepEqual(walkFrames[1], walkFrames[0], 'the walk cycle still animates');
 // And no frame may carry a piece of its neighbour: every cell has to be one blob.

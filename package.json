@@ -9,6 +9,7 @@
     "sprites": "node scripts/generate-sprites.mjs",
     "brand-icons": "node scripts/generate-brand-icons.mjs",
     "bulu-art": "node scripts/build-bulu-art.mjs",
+    "bulu-blink": "node scripts/build-bulu-blink.mjs",
     "clean": "node scripts/clean-dist.mjs",
     "screenshots": "node scripts/render-readme-shots.mjs",
     "build": "npm run clean && npm run sprites && npm run brand-icons && tsc && node scripts/copy-assets.mjs && npm run tauri:resources",

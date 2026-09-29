@@ -279,6 +279,13 @@ interface AppConfig {
   /** Bring the pet to the screen center at the chosen standing interval. */
   standReminderEnabled?: boolean;
   standReminderMinutes?: number;
+  /**
+   * Local reminders ("18:00 交周报") the pet walks over to announce. Kept in the
+   * config so a reminder survives a restart; the pet window is what fires them.
+   */
+  reminders?: PetReminder[];
+  /** Let the pet react to CPU / memory / battery state (see `getSystemLoad`). */
+  loadAwareness?: boolean;
   /** Active built-in skin id or imported PetPack id. */
   currentPetId: string;
   /** Pet skin */
@@ -407,6 +414,41 @@ interface AppConfig {
   updateAutoRetry: number;
 }
 
+/**
+ * One reminder the user left for the pet.
+ *
+ * `at` is the ms epoch it should be announced at. Reminders live in the config
+ * file rather than a store of their own: the list is small, it has to survive a
+ * restart, and the pet window already receives every config update.
+ */
+interface PetReminder {
+  /** Stable id so the pet window can tell a fired reminder from a fresh one. */
+  id: string;
+  /** What the pet holds up on its sign. */
+  text: string;
+  /** Announce time, ms epoch. */
+  at: number;
+}
+
+/**
+ * Coarse machine state behind the pet's load reactions.
+ *
+ * `null` means "this platform does not report it" and is deliberately distinct
+ * from 0 — a desktop has no battery, which is not the same as an empty one.
+ */
+interface SystemLoad {
+  /** False when the platform reports nothing at all (see src-tauri/src/load.rs). */
+  available: boolean;
+  /** Busy CPU share 0..100; null until a second sample exists. */
+  cpu: number | null;
+  /** Used memory share 0..100. */
+  memory: number | null;
+  /** Battery charge 0..100, or null on a machine without one. */
+  batteryPercent: number | null;
+  /** True while the machine runs on wall power (a full battery still counts). */
+  charging: boolean;
+}
+
 /** Space between the pet's visible box and the sides / bottom of the work area. */
 interface WindowEdgeGaps {
   /** Physical px from the visible box's left edge to the work area's left edge. */
@@ -477,7 +519,7 @@ interface PetApi {
   quitApp(): void;
   /** Show the context menu */
   showContextMenu(): void;
-  /** Run an entry of the right-click menu ('settings' | 'reset' | 'quit' | 'action:<name>') */
+  /** Run an entry of the right-click menu ('settings' | 'reminders' | 'reset' | 'quit' | 'action:<name>') */
   petMenuAction(action: string): void;
   /** Dismiss the right-click menu window */
   closePetMenu(): void;
@@ -499,6 +541,14 @@ interface PetApi {
   updateInstallWhenReady(): Promise<UpdateState>;
   /** Subscribe to config changes, returns an unsubscribe function */
   onConfigChanged(cb: (cfg: AppConfig) => void): () => void;
+  /** Subscribe to "settings was opened at this section" (right-click shortcuts). */
+  onSettingsFocusSection(cb: (section: string) => void): () => void;
+  /**
+   * Coarse CPU / memory / battery state. Only polled while
+   * `AppConfig.loadAwareness` is on; the first call may report a null CPU
+   * because load is a delta between two samples.
+   */
+  getSystemLoad(): Promise<SystemLoad>;
   /** Open (or focus) the standalone ChatGPT-style chat window */
   openChat(): void;
   /** Close the chat window (frameless windows close themselves via this IPC) */

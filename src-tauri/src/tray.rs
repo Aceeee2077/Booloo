@@ -111,7 +111,9 @@ fn show_menu_at(app: &AppHandle, pointer: PhysicalPosition<f64>) -> Result<(), S
     } else {
         WebviewWindowBuilder::new(app, "pet-menu", WebviewUrl::App("renderer/menu.html".into()))
             .title("Prismoo menu")
-            .inner_size(188.0, 318.0)
+            // Height matches html/body in src/renderer/lite-menu.css: the pet's
+            // menu lists 5 actions, the reminder entry, reset and quit.
+            .inner_size(188.0, 352.0)
             .decorations(false)
             .resizable(false)
             .transparent(true)
@@ -169,6 +171,9 @@ pub async fn pet_menu_action(app: AppHandle, action: String) -> Result<(), Strin
     }
     match action.as_str() {
         "settings" => crate::window::open_settings(app, None).await,
+        // The pet menu's "Remind me…" entry: settings opens at, and focuses, the
+        // reminder section so the user can type the line right away.
+        "reminders" => crate::window::open_settings(app, Some("reminders".to_string())).await,
         "reset" => { crate::window::center_pet(&app); Ok(()) },
         "quit" => { app.exit(0); Ok(()) },
         _ => Err("unknown menu action".into()),

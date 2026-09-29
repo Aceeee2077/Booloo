@@ -31,12 +31,15 @@ Open Settings from the tray or the right-click menu to switch pets, import your 
 - **Bring your own picture** — Choose **Import my image** and the picture goes through a preview first. Background removal is intended for simple, solid backgrounds, and if it would erase the subject Prismoo keeps the original image.
 - **Automatic cutout + manual touch-up** — **Refine the cutout…** opens a separate editor window: Rust builds the first mask locally, then the erase / restore brushes fix the edges, with brush size and edge hardness. Undo / redo (Ctrl+Z / Ctrl+Y), wheel zoom, panning, a side-by-side original and a **Run it again** pass (strength and feather) are all there. The picture is never uploaded and the result is saved as a transparent PNG.
 - **Drop a file on the pet** — It answers with a short animated line based on the file type: image, document, archive, audio, video, or a general response. Prismoo checks only the extension and never reads or modifies the file. File reactions can be disabled in Settings.
-- **Pet the head** — Move the pointer gently back and forth over the pet's head to see hearts.
+- **Blinking** — While Bulu stands still, both eyes blink together, roughly every 3.2–8.4 seconds and held shut for about 150 ms. The closed-eye frame is painted by `scripts/build-bulu-blink.mjs` out of the resting pose, so it costs no extra atlas art.
+- **Touch means different things in different places** — Petting the head melts it into hearts; stroking its back makes it purr and groom; a single tap answers depending on what you poked; a quick double tap gets a happy wave and hearts; holding on too long makes it scratch its head and complain; waking it up with a poke earns a sleepy grumble first.
+- **Reminders** — Right-click and pick **Remind me…** (or use the Reminders section in Settings), type a line and a time — a time earlier than now means tomorrow. When it comes due, the pet runs to the middle of the screen and holds up a sign until you touch it. Anything missed by more than ten minutes is dropped rather than announced late.
 - **Standing reminders** — On by default every 5 minutes, with 10, 20, 30, and custom 1–240 minute intervals. When due, the pet runs to the center of the current screen and asks you to stand up.
+- **Aware of this computer** — CPU, memory and battery (system APIs on Windows, the 1-minute load average on macOS): a CPU that stays pinned makes the pet sweat and mutter, a battery below 20% puts a 🪫 badge on it and sends it to nap more often, and plugging in wakes it right up. Turn it off under Daily settings; everything is read locally and nothing is sent anywhere.
 - **Sleep and chimes** — While asleep the pet occasionally shows a brief dream bubble, and a quiet hourly speech bubble is on by default. Hours missed while the computer sleeps are not announced later.
 - **Chinese / English UI** — Switch the language under Daily settings; the pet's speech bubbles, the right-click menu, the settings panel and the tray tooltip all follow, and your choice is remembered.
 - **Auto-update** — An installed build checks for a new version a few seconds after start (can be turned off in Settings), downloads it in the background and lets the pet say so. The **🔄 Update** section in Settings checks manually, shows download progress and restarts into the new version. Packages come from this repository's GitHub Releases and are verified with a minisign signature.
-- **Daily settings** — Pet size, opacity, autonomous walking, launch at login, and reset position.
+- **Daily settings** — Pet size, opacity, autonomous walking, file-drop reactions, standing reminder, hourly chime, load awareness, launch at login, and reset position.
 
 A single image gets gentle breathing and click motion. It does not become a new set of walking or sleeping poses; Bulu uses frame animation and the pose atlas.
 
@@ -98,7 +101,7 @@ Requirements: Windows 10/11 with the WebView2 runtime, or macOS 10.15+ (it uses 
 
 ```text
 src/renderer/      pet page index.html, settings.html, cutout window mask.html, context menu menu.html
-  lite-app.ts      pet loop: animation, dragging, sleep, standing reminders, hourly chime
+  lite-app.ts      pet loop: animation, blinking, dragging, part-aware touch, sleep, reminders, hourly chime, load reactions
   lite-settings.ts settings panel  ·  lite-mask.ts cutout editor  ·  lite-menu.ts context menu
   lite-api.ts      Tauri bridge (window / config / drag / events)
   lite-image.ts    image import: solid-background cutout and preview
@@ -106,8 +109,9 @@ src/renderer/      pet page index.html, settings.html, cutout window mask.html, 
 src/shared/        types and i18n strings shared by frontend and backend (i18n.ts is the source of truth)
 src-tauri/         Rust backend: window, tray, config, custom image, i18n
   cutout.rs        automatic cutout: border colour + flood fill → the initial mask (swap `segment()` for a model)
+  load.rs          machine state: CPU / memory / battery (kernel32 on Windows, 1-minute load on macOS)
 src/assets/        animation art and brand icons (sprite sheets and icons are generated by npm run build)
-scripts/           build, asset generation and test scripts
+scripts/           build, asset generation and test scripts (build-bulu-blink.mjs bakes Bulu's closed-eye frame)
 docs/screenshots/  images used by the READMEs
 ```
 

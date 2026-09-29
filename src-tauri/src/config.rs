@@ -74,6 +74,12 @@ pub fn defaults() -> Value {
         "fileDropReactions": true,
         "standReminderEnabled": true,
         "standReminderMinutes": 5,
+        // Reminders the user left for the pet: [{ id, text, at }], `at` being the
+        // ms epoch to announce at. Small enough to live in this file, and it has
+        // to survive a restart, so there is no separate store.
+        "reminders": [],
+        // Whether the pet reacts to CPU / memory / battery (src-tauri/src/load.rs).
+        "loadAwareness": true,
         "petScale": 1,
         "stayOnOneDisplay": true,
         "snapToEdge": false,

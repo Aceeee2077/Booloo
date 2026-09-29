@@ -4,6 +4,10 @@
   const speech = document.getElementById('pet-speech') as HTMLDivElement;
   const hearts = document.getElementById('pet-hearts') as HTMLDivElement;
   const dream = document.getElementById('pet-dream') as HTMLDivElement;
+  // The reminder sign and the load badge are optional elements: a harness (or an
+  // older page) without them must not take the whole pet loop down.
+  const sign = document.getElementById('pet-sign') as HTMLDivElement | undefined;
+  const mood = document.getElementById('pet-mood') as HTMLDivElement | undefined;
   const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
 
   // Every Mac is Retina and Windows machines frequently sit at 125–150%, while the
@@ -37,9 +41,21 @@
   buluActions.src = '../assets/animated-pets/bulu-actions.webp';
 // Row order must match ACTIONS in scripts/build-bulu-art.mjs.
 type PetAction = 'wave' | 'groom' | 'stretch' | 'yawn' | 'scratch';
+/** Which half of the pet a pointer landed on: the head, or everything below it. */
+type PetRegion = 'head' | 'body';
 const actionRows: Record<PetAction, number> = { wave: 0, groom: 1, stretch: 2, yawn: 3, scratch: 4 };
 /** Each atlas row is one action's whole sheet: 4x4 source frames in a row. */
 const ACTION_FRAMES = 16;
+/**
+ * Bulu's blink. The idle row's last cell is a closed-eye pose baked into
+ * bulu.png by scripts/build-bulu-blink.mjs; the pet holds it for BLINK_MS and
+ * then waits BLINK_GAP +/- jitter before the next one, so the resting pose
+ * breathes without turning into a twitch.
+ */
+const BLINK_COLUMN = 3;
+const BLINK_MS = 150;
+const BLINK_GAP_MS = 3200;
+const BLINK_JITTER_MS = 5200;
   let activeAction: { kind: PetAction; started: number; duration: number } | null = null;
   let config: AppConfig | null = null;
   let custom: LitePreparedImage | null = null;
@@ -69,6 +85,27 @@ const ACTION_FRAMES = 16;
   let pettingLastX: number | null = null;
   let pettingLastAt = 0;
   let pettingCooldownUntil = 0;
+  /** Which half of the pet the current stroke started on (head vs body). */
+  let pettingRegion: PetRegion | null = null;
+  /** Where the pointer went down, so a tap can be answered from its own region. */
+  let pressRegion: PetRegion = 'body';
+  let pressStartedAt = 0;
+  let longPressFired = false;
+  let lastTapAt = 0;
+  let nextBlinkAt = 0;
+  let blinkUntil = 0;
+  let signTimer: number | null = null;
+  /** Reminder ids already handed to the sign; the config update lands a tick later. */
+  const handledReminders = new Set<string>();
+  let load: SystemLoad | null = null;
+  /** Consecutive polls above the "busy" threshold — one hot reading is noise. */
+  let hotPolls = 0;
+  /** -Infinity, not 0: the first hot streak has to be announced too. */
+  let lastTiredAt = Number.NEGATIVE_INFINITY;
+  let lowBatteryAnnounced = false;
+  let wasCharging: boolean | null = null;
+  let moodIcon = '';
+  let moodUntil = 0;
   let lastEdgePoll = 0;
   let visibleRect: PetBox = { x: 86, y: 140, w: 128, h: 150 };
   let lastHover = false;
@@ -94,6 +131,7 @@ const ACTION_FRAMES = 16;
     dream.hidden = true;
     nextDreamAt = 0;
     dreamUntil = 0;
+    hideSign();
     if (walkUntil) stopWalking();
   }
 
@@ -102,6 +140,75 @@ const ACTION_FRAMES = 16;
     speech.textContent = line;
     speech.hidden = false;
     speechTimer = window.setTimeout(() => { speech.hidden = true; speechTimer = null; }, duration);
+  }
+
+  // ---------- the reminder sign ----------
+  // A reminder is announced with a card above the pet rather than a speech
+  // bubble: it holds a whole sentence, and it stays up until the user
+  // acknowledges it by touching the pet (or after SIGN_HOLD_MS).
+  const SIGN_HOLD_MS = 25_000;
+
+  function hideSign() {
+    if (signTimer !== null) { window.clearTimeout(signTimer); signTimer = null; }
+    if (sign && !sign.hidden) sign.hidden = true;
+  }
+
+  function showSign(text: string) {
+    // Without the element (a trimmed page) the line still has to reach the user.
+    if (!sign) { say(liteT('lite.pet.reminder', { text }), 8000); return; }
+    speech.hidden = true;
+    sign.textContent = liteT('lite.pet.reminder', { text });
+    sign.hidden = false;
+    if (signTimer !== null) window.clearTimeout(signTimer);
+    signTimer = window.setTimeout(() => { sign.hidden = true; signTimer = null; }, SIGN_HOLD_MS);
+  }
+
+  // ---------- where on the pet a pointer landed ----------
+  // The head band is the same one the original petting check used: the body
+  // starts slightly before the halfway line so a stroke that drifts across the
+  // boundary keeps counting as one stroke rather than restarting.
+  const HEAD_BOTTOM = 0.55;
+  const BODY_TOP = 0.45;
+
+  function regionAt(x: number, y: number): PetRegion | null {
+    if (!hit(x, y)) return null;
+    if (x < visibleRect.x + visibleRect.w * 0.1 || x > visibleRect.x + visibleRect.w * 0.9) {
+      // The edges are tail / whiskers: touchable, but not strokeable.
+      return y <= visibleRect.y + visibleRect.h * HEAD_BOTTOM ? null : 'body';
+    }
+    if (y <= visibleRect.y + visibleRect.h * HEAD_BOTTOM) return 'head';
+    return y >= visibleRect.y + visibleRect.h * BODY_TOP ? 'body' : null;
+  }
+
+  function showHearts() {
+    hearts.style.left = `${Math.min(245, visibleRect.x + visibleRect.w * 0.67)}px`;
+    hearts.style.top = `${Math.max(35, visibleRect.y)}px`;
+    hearts.hidden = false;
+    hearts.style.animation = 'none';
+    void hearts.offsetWidth;
+    hearts.style.animation = '';
+    if (heartsTimer !== null) window.clearTimeout(heartsTimer);
+    heartsTimer = window.setTimeout(() => { hearts.hidden = true; heartsTimer = null; }, 1300);
+  }
+
+  // ---------- blinking ----------
+  /**
+   * Which idle column to draw. Only the resting pose blinks: while the pet
+   * walks, sleeps or plays an action its eyes are part of that pose, and a blink
+   * is scheduled from wherever it settles down again instead of piling up.
+   */
+  function blinkColumn(now: number, state: string, acting: boolean): number {
+    const resting = state === 'idle' && !acting;
+    if (!resting) {
+      if (nextBlinkAt < now) nextBlinkAt = now + 1500;
+      return 0;
+    }
+    if (!nextBlinkAt) nextBlinkAt = now + 2200 + Math.random() * 1800;
+    if (now >= nextBlinkAt) {
+      blinkUntil = now + BLINK_MS;
+      nextBlinkAt = now + BLINK_GAP_MS + Math.random() * BLINK_JITTER_MS;
+    }
+    return now < blinkUntil ? BLINK_COLUMN : 0;
   }
 
   // ---------- software updates ----------
@@ -151,16 +258,28 @@ const ACTION_FRAMES = 16;
     pettingTurns = 0;
     pettingDirection = 0;
     pettingLastX = null;
+    pettingRegion = null;
   }
 
-  function petHeadMove(x: number, y: number, buttons: number) {
+  /**
+   * A back-and-forth stroke over the pet. The head and the body answer
+   * differently — a stroked head just melts, a stroked back makes the pet settle
+   * down and groom itself — so the straight-line distance and the number of
+   * direction changes are tracked per region.
+   */
+  function petStrokeMove(x: number, y: number, buttons: number) {
     const now = performance.now();
-    const head = y >= visibleRect.y && y <= visibleRect.y + visibleRect.h * 0.55 &&
-      x >= visibleRect.x + visibleRect.w * 0.1 && x <= visibleRect.x + visibleRect.w * 0.9;
-    if (buttons || pressed || dragging || reminderRunning || now < pettingCooldownUntil || !head || !hit(x, y)) {
+    const region = buttons || pressed || dragging || reminderRunning || now < pettingCooldownUntil
+      ? null
+      : regionAt(x, y);
+    if (!region) {
       resetPetting();
       return;
     }
+    // Crossing from the head to the back restarts the count instead of adding a
+    // second, unrelated stroke to the first one.
+    if (pettingRegion && pettingRegion !== region) resetPetting();
+    pettingRegion = region;
     if (now - pettingLastAt > 900) resetPetting();
     if (pettingLastX !== null) {
       const dx = x - pettingLastX;
@@ -174,32 +293,35 @@ const ACTION_FRAMES = 16;
     pettingLastX = x;
     pettingLastAt = now;
     if (pettingDistance < 55 || pettingTurns < 1) return;
+    const stroked = region;
     resetPetting();
     pettingCooldownUntil = now + 3200;
     activity();
     clickUntil = now + 900;
-    hearts.style.left = `${Math.min(245, visibleRect.x + visibleRect.w * 0.67)}px`;
-    hearts.style.top = `${Math.max(35, visibleRect.y)}px`;
-    hearts.hidden = false;
-    hearts.style.animation = 'none';
-    void hearts.offsetWidth;
-    hearts.style.animation = '';
-    if (heartsTimer !== null) window.clearTimeout(heartsTimer);
-    heartsTimer = window.setTimeout(() => { hearts.hidden = true; heartsTimer = null; }, 1300);
-    say(liteT('lite.pet.petting'), 2000);
+    showHearts();
+    if (stroked === 'head') {
+      say(liteT('lite.pet.petting'), 2000);
+    } else {
+      // A groomed back reads as "that was good": the pet answers by grooming.
+      playAction('groom');
+      // After the action, because starting one clears whatever bubble was up.
+      say(liteT('lite.pet.purring'), 2200);
+    }
   }
 
-  async function runStandReminder() {
-    if (reminderRunning || pressed || dragging || config?.standReminderEnabled === false) return;
+  /**
+   * Run the pet to the middle of its screen. Shared by the standing reminder and
+   * the user's own reminders — both need the pet to come over and be noticed.
+   * A press or a new call cancels it mid-flight; the result says whether this run
+   * was the one that arrived.
+   */
+  async function walkToCenter(): Promise<boolean> {
     const runId = ++reminderRunId;
-    reminderRunning = true;
-    clickUntil = 0;
-    activity();
     try {
       const [start, target] = await Promise.all([
         window.api.getWindowPosition(), window.api.getWindowCenterTarget(visibleRect),
       ]);
-      if (runId !== reminderRunId) return;
+      if (runId !== reminderRunId) return false;
       facing = target[0] < start[0] ? -1 : 1;
       const distance = Math.hypot(target[0] - start[0], target[1] - start[1]);
       const duration = Math.max(450, Math.min(2600, distance / 550 * 1000));
@@ -215,14 +337,44 @@ const ACTION_FRAMES = 16;
         await new Promise(resolve => window.setTimeout(resolve, 32));
       }
     } catch (error) {
-      (window as unknown as Record<string, unknown>).__petError = `stand reminder: ${String(error)}`;
+      (window as unknown as Record<string, unknown>).__petError = `walk to center: ${String(error)}`;
       if (runId === reminderRunId) window.api.resetPosition();
+    }
+    return runId === reminderRunId;
+  }
+
+  async function runStandReminder() {
+    if (reminderRunning || pressed || dragging || config?.standReminderEnabled === false) return;
+    reminderRunning = true;
+    clickUntil = 0;
+    activity();
+    let arrived = false;
+    try {
+      arrived = await walkToCenter();
     } finally {
-      if (runId === reminderRunId) {
-        reminderRunning = false;
-        clickUntil = performance.now() + 1100;
-        say(liteT('lite.pet.standReminder'), 6500);
-      }
+      reminderRunning = false;
+      // Being picked up cancels the walk, and the newer interaction owns the
+      // bubble: saying "stand up" to someone holding the pet reads as a bug.
+      if (!arrived) return;
+      clickUntil = performance.now() + 1100;
+      say(liteT('lite.pet.standReminder'), 6500);
+    }
+  }
+
+  /** Bring the pet over and hold up the reminder until the user touches it. */
+  async function runReminder(text: string) {
+    if (reminderRunning) return;
+    reminderRunning = true;
+    clickUntil = 0;
+    activity();
+    try {
+      await walkToCenter();
+    } finally {
+      reminderRunning = false;
+      clickUntil = performance.now() + 900;
+      // Shown even when the walk was interrupted: the reminder has already been
+      // taken out of the config, and touching the pet is how it is acknowledged.
+      showSign(text);
     }
   }
 
@@ -252,7 +404,124 @@ const ACTION_FRAMES = 16;
     say(liteT('lite.pet.hourlyChime', { h: new Date(now).getHours() }), 3200);
   }
 
-  window.setInterval(() => { checkStandReminder(); checkHourlyChime(); }, 1000);
+  // ---------- the user's own reminders ----------
+  // A reminder that came due while the machine was asleep is dropped the same way
+  // a missed hourly chime is: nobody wants yesterday's "take the cake out" now.
+  const REMINDER_GRACE_MS = 10 * 60_000;
+
+  function checkReminders() {
+    if (!config) return;
+    const list = Array.isArray(config.reminders) ? config.reminders : [];
+    if (!list.length) {
+      handledReminders.clear();
+      return;
+    }
+    // An id that has left the config finished its round trip; the pet is free to
+    // notice the same id again if the user re-creates it.
+    for (const id of Array.from(handledReminders)) {
+      if (!list.some(item => item?.id === id)) handledReminders.delete(id);
+    }
+    const now = Date.now();
+    const stale = list.filter(item => now - Number(item?.at) > REMINDER_GRACE_MS);
+    const due = list.filter(item => {
+      const at = Number(item?.at);
+      return !!item?.text && at > 0 && at <= now && now - at <= REMINDER_GRACE_MS &&
+        !handledReminders.has(item.id);
+    });
+    // Only the newest due reminder is announced; older ones in the same batch
+    // would just queue up behind it.
+    const next = due[due.length - 1];
+    const free = !pressed && !dragging && !reminderRunning;
+    const drop = new Set(stale.map(item => item.id));
+    if (next && free) drop.add(next.id);
+    if (drop.size) {
+      void window.api.setConfig({ reminders: list.filter(item => !drop.has(item?.id)) })
+        .catch(error => console.error('[lite-app] reminders:', error));
+    }
+    if (!next || !free) return;
+    handledReminders.add(next.id);
+    void runReminder(next.text);
+  }
+
+  // ---------- load awareness ----------
+  // The pet mirrors the machine: a pinned CPU makes it sweat, a nearly empty
+  // battery makes it nap, and plugging in wakes it right up. Everything here is
+  // driven by `config.loadAwareness`, which is on by default and read-only in
+  // the sense that nothing is ever sent back.
+  const HOT_CPU = 85;
+  const LOW_BATTERY = 20;
+  const LOAD_POLL_MS = 4000;
+  let lastLoadPoll = 0;
+
+  function isLowBattery() {
+    return !!load && load.available && load.batteryPercent !== null &&
+      load.batteryPercent <= LOW_BATTERY && !load.charging;
+  }
+
+  function showMood(icon: string, until: number) {
+    moodIcon = icon;
+    moodUntil = Math.max(moodUntil, until);
+    if (mood) mood.textContent = icon;
+  }
+
+  function reactToLoad(now: number) {
+    if (!load || !load.available) return;
+    // One hot reading is noise (a build step, a page load); two in a row is a
+    // machine that is actually busy.
+    hotPolls = load.cpu !== null && load.cpu >= HOT_CPU ? hotPolls + 1 : 0;
+    if (hotPolls >= 2) {
+      showMood('💦', now + LOAD_POLL_MS * 2);
+      if (now - lastTiredAt > 5 * 60_000) {
+        lastTiredAt = now;
+        say(liteT('lite.pet.tired'), 3200);
+      }
+    }
+    if (isLowBattery()) {
+      showMood('🪫', now + LOAD_POLL_MS * 3);
+      if (!lowBatteryAnnounced) {
+        lowBatteryAnnounced = true;
+        say(liteT('lite.pet.lowBattery'), 4000);
+      }
+    }
+    if (load.batteryPercent === null) return;
+    if (wasCharging === false && load.charging) {
+      lowBatteryAnnounced = false;
+      showMood('⚡', now + LOAD_POLL_MS * 2);
+      say(liteT('lite.pet.pluggedIn'), 3200);
+    }
+    wasCharging = load.charging;
+  }
+
+  async function pollLoad() {
+    if (!config || config.loadAwareness === false) {
+      load = null;
+      hotPolls = 0;
+      moodIcon = '';
+      moodUntil = 0;
+      return;
+    }
+    try {
+      load = await window.api.getSystemLoad();
+    } catch (error) {
+      // An older backend without the command (or a platform that cannot answer)
+      // simply means no reactions.
+      load = null;
+      console.error('[lite-app] system load:', error);
+      return;
+    }
+    reactToLoad(performance.now());
+  }
+
+  window.setInterval(() => {
+    checkStandReminder();
+    checkHourlyChime();
+    checkReminders();
+    const now = performance.now();
+    if (now - lastLoadPoll >= LOAD_POLL_MS) {
+      lastLoadPoll = now;
+      void pollLoad();
+    }
+  }, 1000);
 
   async function loadCustom() {
     const serial = ++loadSerial;
@@ -280,6 +549,7 @@ const ACTION_FRAMES = 16;
     const reminderChanged = !config || config.standReminderEnabled !== next.standReminderEnabled ||
       config.standReminderMinutes !== next.standReminderMinutes;
     const chimeChanged = !config || config.hourlyChime !== next.hourlyChime;
+    const loadChanged = !config || config.loadAwareness !== next.loadAwareness;
     // Strings come from the backend dictionary, so a language switch re-fetches it.
     const localeChanged = !config || config.locale !== next.locale;
     config = next;
@@ -293,6 +563,9 @@ const ACTION_FRAMES = 16;
       nextReminderAt = next.standReminderEnabled === false ? 0 : Date.now() + minutes * 60_000;
     }
     if (chimeChanged) nextHourAt = next.hourlyChime === false ? 0 : nextLocalHour(Date.now());
+    // Reading the machine is cheap but not free, so it happens on that switch and
+    // on the poll timer — never per frame.
+    if (loadChanged) void pollLoad();
     if (reload) void loadCustom();
   }
 
@@ -315,6 +588,21 @@ const ACTION_FRAMES = 16;
     dream.style.top = `${Math.max(6, visibleRect.y - 36)}px`;
   }
 
+  /** Keep the load badge pinned above the pet's left shoulder while it is up. */
+  function updateMood(now: number) {
+    if (!mood) return;
+    const visible = moodIcon !== '' && now < moodUntil;
+    mood.hidden = !visible;
+    if (!visible) return;
+    mood.style.left = `${Math.max(6, visibleRect.x + visibleRect.w * 0.08)}px`;
+    mood.style.top = `${Math.max(14, visibleRect.y - 28)}px`;
+  }
+
+  /** True while a reminder sign is on screen (the pet stays put for it). */
+  function signVisible() {
+    return !!sign && !sign.hidden;
+  }
+
   function currentState(now: number): 'idle' | 'walk' | 'sleep' | 'click' {
     if (reminderRunning) return 'walk';
     if (activeAction && now < activeAction.started + activeAction.duration) return 'click';
@@ -322,8 +610,11 @@ const ACTION_FRAMES = 16;
     if (walkUntil > now) return 'walk';
     if (now < sleepUntil) return 'sleep';
     if (now >= nextSleep) {
-      sleepUntil = now + 20_000;
-      nextSleep = now + 120_000;
+      // A machine running out of battery drags the pet down with it: it naps
+      // more often and for longer until the charger shows up.
+      const low = isLowBattery();
+      sleepUntil = now + (low ? 32_000 : 20_000);
+      nextSleep = now + (low ? 55_000 : 120_000);
       return 'sleep';
     }
     return 'idle';
@@ -336,7 +627,8 @@ const ACTION_FRAMES = 16;
       activeAction = null;
     }
     if (walkUntil && now >= walkUntil) stopWalking();
-    if (!config.autoMove || walkUntil || now < nextWalk || currentState(now) === 'sleep') return;
+    // A pet holding up a reminder stays where the user can read it.
+    if (!config.autoMove || walkUntil || now < nextWalk || signVisible() || currentState(now) === 'sleep') return;
     facing = Math.random() < 0.5 ? -1 : 1;
     walkUntil = now + 1600 + Math.random() * 1800;
     window.api.autoMoveStart(facing, 48);
@@ -383,7 +675,11 @@ const ACTION_FRAMES = 16;
       if (image?.complete && image.naturalWidth) {
         const cell = image.naturalWidth / 4;
         const frame = Math.floor(now / (state === 'walk' ? 125 : 220)) % 4;
-        const column = target === 'bulu' && state === 'idle' && frame === 3 ? 1 : frame;
+        // Bulu's resting pose blinks; walking, sleeping and the click answer play
+        // their own frames. The blink cell only exists in the bundled sheet, so an
+        // imported picture is never asked for one.
+        const blink = target === 'bulu' ? blinkColumn(now, state, !!action) : 0;
+        const column = target === 'bulu' && state === 'idle' ? blink : frame;
         const row = action ? action.kind === 'yawn' ? 2 : 3 : state === 'walk' ? 1 : state === 'sleep' ? 2 : state === 'click' ? 3 : 0;
         const size = 132 * sizeScale;
         const x = 150 - size / 2, y = 293 - size + bob;
@@ -401,6 +697,9 @@ const ACTION_FRAMES = 16;
     }
     ctx.restore();
     updateDream(state, now);
+    updateMood(now);
+    // The sign follows the pet instead of being pinned to wherever it arrived.
+    if (signVisible()) sign!.style.bottom = `${Math.min(248, 300 - visibleRect.y + 44)}px`;
     if (!speech.hidden) speech.style.bottom = `${Math.min(240, 300 - visibleRect.y + 6)}px`;
   }
 
@@ -413,6 +712,7 @@ const ACTION_FRAMES = 16;
 
   function frame(now: number) {
     try {
+      checkLongPress(now);
       update(now);
       void pollEdge(now);
       draw(now);
@@ -420,6 +720,43 @@ const ACTION_FRAMES = 16;
       (window as unknown as Record<string, unknown>).__petError = `draw: ${String(error)}`;
     }
     requestAnimationFrame(frame);
+  }
+
+  // ---------- taps, double taps and holds ----------
+  /** Long enough to read as a deliberate hold, short enough not to feel stuck. */
+  const LONG_PRESS_MS = 700;
+  const DOUBLE_TAP_MS = 320;
+
+  function isAsleep(now: number) {
+    return sleepUntil > now;
+  }
+
+  /** One tap: a word from the spot that was touched, or a sleepy complaint. */
+  function tapReaction(region: PetRegion, now: number) {
+    if (isAsleep(now)) {
+      // Woken up on purpose: the pet sits up first, then grumbles.
+      sleepUntil = 0;
+      nextSleep = now + 120_000;
+      dream.hidden = true;
+      say(liteT('lite.pet.sleepPoke'), 2400);
+      return;
+    }
+    say(liteT(region === 'head' ? 'lite.pet.pokeHead' : 'lite.pet.pokeBody'), 2200);
+  }
+
+  /**
+   * A hold that never turned into a drag. Checked from the frame loop rather than
+   * a timer: while the pointer rests on the pet no pointer event arrives to
+   * notice it, and the loop is already running anyway.
+   */
+  function checkLongPress(now: number) {
+    if (!pressed || dragging || longPressFired || reminderRunning || !config) return;
+    if (now - pressStartedAt < LONG_PRESS_MS) return;
+    longPressFired = true;
+    // Held too long: the pet stops enjoying it, scratches its head and asks.
+    activity();
+    activeAction = { kind: 'scratch', started: now, duration: 2100 };
+    say(liteT('lite.pet.longPress'), 2600);
   }
 
   function hit(x: number, y: number) {
@@ -448,7 +785,7 @@ const ACTION_FRAMES = 16;
   window.api.onPetAction(playAction);
 
   canvas.addEventListener('mousemove', (event) => {
-    petHeadMove(event.offsetX, event.offsetY, event.buttons);
+    petStrokeMove(event.offsetX, event.offsetY, event.buttons);
     const over = dragging || pressed || hit(event.offsetX, event.offsetY);
     if (over !== lastHover) {
       lastHover = over;
@@ -476,13 +813,33 @@ const ACTION_FRAMES = 16;
     reminderRunning = false;
     resetPetting();
     pressed = true; pressAt = { x: event.screenX, y: event.screenY };
+    pressRegion = regionAt(event.offsetX, event.offsetY) ?? 'body';
+    pressStartedAt = performance.now();
+    longPressFired = false;
     activity(); window.api.dragBegin(visibleRect);
   });
   function release() {
     if (!pressed) return;
-    if (!dragging) { clickUntil = performance.now() + 580; activity(); }
+    const wasDragging = dragging;
     window.api.dragEnd(visibleRect);
     pressed = false; dragging = false; canvas.style.cursor = 'grab';
+    if (wasDragging) return;
+    // A tap answers from where the pet was touched; two taps in quick succession
+    // are read as affection rather than as two pokes.
+    const now = performance.now();
+    clickUntil = now + 580;
+    activity();
+    const double = now - lastTapAt < DOUBLE_TAP_MS;
+    lastTapAt = now;
+    if (!double) {
+      tapReaction(pressRegion, now);
+      return;
+    }
+    activity();
+    showHearts();
+    playAction('wave');
+    // After the action: starting one clears whatever bubble was on screen.
+    say(liteT('lite.pet.doubleTap'), 2400);
   }
   window.addEventListener('mouseup', release);
   canvas.addEventListener('contextmenu', (event) => {

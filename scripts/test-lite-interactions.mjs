@@ -15,6 +15,10 @@ let actionReceived;
 let updateState;
 let frame;
 let lastDraw;
+/** Patches the pet window wrote back, in order (reminder bookkeeping). */
+const configPatches = [];
+/** What the (stubbed) backend answers for `system_load`. */
+let loadState = { available: false, cpu: null, memory: null, batteryPercent: null, charging: false };
 /** Every drawImage the pet window issued, so a single frame can be asserted on. */
 const drawHistory = [];
 const transforms = [];
@@ -28,6 +32,8 @@ let speechCount = 0;
 const speech = { hidden: true, style: {}, get textContent() { return this.line || ''; }, set textContent(value) { this.line = value; speechCount++; } };
 const hearts = { hidden: true, style: {}, offsetWidth: 20 };
 const dream = { hidden: true, style: {}, textContent: '' };
+const sign = { hidden: true, style: {}, textContent: '' };
+const mood = { hidden: true, style: {}, textContent: '' };
 class FakeDate extends Date {
   constructor(value = wallClock) { super(value); }
   static now() { return wallClock; }
@@ -54,6 +60,8 @@ const api = {
   getWindowCenterTarget: async () => [810, 294],
   moveWindowTo: async (x, y) => { moves.push([x, y]); },
   windowEdgeGaps: async () => null,
+  getSystemLoad: async () => loadState,
+  setConfig: async (patch) => { configPatches.push(patch); return patch; },
   updateCheck: async () => ({ status: 'available', currentVersion: '0.6.5', version: '0.6.6',
     autoCheck: true, autoDownload: true, channel: 'stable' }),
   updateDownload: async () => ({ status: 'downloaded', currentVersion: '0.6.5', version: '0.6.6',
@@ -77,7 +85,10 @@ const context = {
     body: { style: {} },
     documentElement: {},
     querySelectorAll: () => [],
-    getElementById: id => ({ 'pet-canvas': canvas, 'pet-speech': speech, 'pet-hearts': hearts, 'pet-dream': dream })[id],
+    getElementById: id => ({
+      'pet-canvas': canvas, 'pet-speech': speech, 'pet-hearts': hearts, 'pet-dream': dream,
+      'pet-sign': sign, 'pet-mood': mood,
+    })[id],
   },
   // The atlas is 16 frames wide at 192 px per frame (see scripts/build-bulu-actions.mjs).
   Image: class { complete = true; naturalWidth = 512; set src(url) { if (url.includes('bulu-actions')) this.naturalWidth = 16 * 192; } },
@@ -94,6 +105,19 @@ await new Promise(resolve => setImmediate(resolve));
 frame(clock += 16);
 assert.ok(drawHistory.some(args => args[3] === 128 && args[2] === 0),
   'the idle state should draw the base sheet idle row');
+
+// The resting pose blinks: the sheet's fourth idle cell is the closed-eye frame
+// scripts/build-bulu-blink.mjs bakes in, and it has to appear every few seconds
+// without turning the pet into a metronome.
+drawHistory.length = 0;
+for (let i = 0; i < 240; i++) frame(clock += 50);
+const idleFrames = drawHistory.filter(args => args[2] === 0);
+const blinkFrames = idleFrames.filter(args => args[1] === 3 * 128);
+assert.ok(blinkFrames.length > 0, 'the resting pet should blink every few seconds');
+assert.ok(blinkFrames.length < idleFrames.length / 4,
+  `blinking must stay occasional, got ${blinkFrames.length}/${idleFrames.length} frames`);
+assert.ok(idleFrames.every(args => args[1] === 0 || args[1] === 3 * 128),
+  'the idle row only contains the open pose and the baked blink pose');
 
 for (const x of [110, 135, 115, 140]) {
   clock += 50;
@@ -126,6 +150,53 @@ configChanged({ skin: 'cat', petScale: 1, opacity: 1, autoMove: false, locale: '
   standReminderEnabled: true, standReminderMinutes: 5, hourlyChime: true });
 await new Promise(resolve => setImmediate(resolve));
 assert.equal(context.liteCurrentLocale(), 'zh');
+
+// ---------- part-aware interaction ----------
+// One tap answers from the region it landed on, a quick second tap is read as
+// affection, and a hold that never becomes a drag makes the pet ask for mercy.
+const config = (extra = {}) => configChanged({
+  skin: 'bulu', petScale: 1, opacity: 1, autoMove: false, locale: 'zh',
+  standReminderEnabled: true, standReminderMinutes: 5, hourlyChime: true,
+  fileDropReactions: true, ...extra,
+});
+const tap = (x, y) => {
+  canvasEvents.get('mousedown')({ button: 0, offsetX: x, offsetY: y, screenX: 100, screenY: 100 });
+  canvasEvents.get('mousemove')({ offsetX: x, offsetY: y, screenX: 100, screenY: 100, buttons: 0 });
+};
+config();
+clock += 400; // clear the petting cooldown and the double-tap window
+tap(120, 175);
+assert.equal(speech.textContent, '喵？叫我干嘛～', 'a tap on the head should answer as the head');
+clock += 400;
+tap(120, 270);
+assert.equal(speech.textContent, '痒痒的，别戳啦～', 'a tap on the body should answer as the body');
+
+clock += 400;
+tap(120, 175);
+clock += 100;
+tap(120, 175);
+assert.equal(speech.textContent, '嘿嘿，我也喜欢你！', 'two quick taps should be read as affection');
+assert.equal(hearts.hidden, false, 'a double tap should show hearts');
+assert.equal(browser.__prismooLiteState().action, 'wave', 'a double tap should wave');
+frame(clock += 2600);
+
+canvasEvents.get('mousedown')({ button: 0, offsetX: 120, offsetY: 175, screenX: 100, screenY: 100 });
+frame(clock += 800);
+assert.equal(speech.textContent, '摸够了吗…爪子都麻了', 'holding the pet should make it complain');
+assert.equal(browser.__prismooLiteState().action, 'scratch', 'the hold reaction is the fifth pose row');
+windowEvents.get('mouseup')();
+frame(clock += 2600);
+
+// Stroking the back is a different gesture from stroking the head: the pet
+// settles down and grooms itself instead of just melting.
+clock += 400;
+for (const x of [110, 135, 115, 140]) {
+  clock += 50;
+  canvasEvents.get('mousemove')({ offsetX: x, offsetY: 270, buttons: 0 });
+}
+assert.equal(speech.textContent, '呼噜噜……背上也舒服～', 'stroking the back should purr');
+assert.equal(browser.__prismooLiteState().action, 'groom', 'a stroked back makes the pet groom');
+frame(clock += 2600);
 
 wallClock = 300_001;
 intervals[0]();
@@ -231,4 +302,70 @@ assert.equal(speechCount, announced, 'download progress must not repeat the bubb
 update('downloaded', { version: '0.9.0' });
 assert.equal(speech.textContent, '✅ v0.9.0 已下载完成，重启后生效');
 
-console.log('Petting, dreams, actions, reminders, language switch and update notice: passed');
+// ---------- the user's own reminders ----------
+// A due reminder is taken out of the config and held up on the sign; one that
+// came due while the machine was asleep is dropped without a word.
+const tick = () => new Promise(resolve => setImmediate(resolve));
+const quiet = { standReminderEnabled: false, hourlyChime: false };
+// The drag test above left the pointer down; a pet being dragged is not free to
+// walk over with a reminder until it is let go.
+windowEvents.get('mouseup')();
+config({ ...quiet, reminders: [{ id: 'r-due', text: '交周报', at: wallClock - 1000 }] });
+intervals[0]();
+await tick();
+await tick();
+assert.equal(sign.hidden, false, 'a due reminder should raise the sign');
+assert.equal(sign.textContent, '⏰ 交周报');
+assert.deepEqual(configPatches.at(-1).reminders, [], 'a fired reminder leaves the config');
+
+frame(clock += 16);
+tap(150, 175);
+assert.equal(sign.hidden, true, 'touching the pet acknowledges the reminder');
+
+config({ ...quiet, reminders: [{ id: 'r-stale', text: '昨天的蛋糕', at: wallClock - 3 * 60 * 60_000 }] });
+intervals[0]();
+await tick();
+assert.deepEqual(configPatches.at(-1).reminders, [], 'a reminder missed by hours is dropped');
+assert.equal(sign.hidden, true, 'a stale reminder is never announced');
+
+// ---------- load awareness ----------
+// One hot reading is noise; two in a row make the pet sweat. A nearly empty
+// battery brings the badge and a nudge, and the charger wakes it up.
+loadState = { available: true, cpu: 96, memory: 72, batteryPercent: 90, charging: true };
+clock += 5000;
+intervals[0]();
+await tick();
+clock += 5000;
+intervals[0]();
+await tick();
+frame(clock += 16);
+assert.equal(mood.textContent, '💦', 'a pinned CPU should make the pet sweat');
+assert.equal(mood.hidden, false, 'the sweat badge stays on screen while it is hot');
+assert.equal(speech.textContent, '有点热…我歇一会儿');
+
+loadState = { available: true, cpu: 10, memory: 40, batteryPercent: 12, charging: false };
+clock += 5000;
+intervals[0]();
+await tick();
+frame(clock += 16);
+assert.equal(mood.textContent, '🪫', 'a low battery should switch the badge');
+assert.equal(speech.textContent, '电量不多了，记得插电哦');
+
+loadState = { available: true, cpu: 10, memory: 40, batteryPercent: 25, charging: true };
+clock += 5000;
+intervals[0]();
+await tick();
+frame(clock += 16);
+assert.equal(mood.textContent, '⚡', 'plugging in should show the power badge');
+assert.equal(speech.textContent, '来电啦！精神了 ⚡');
+
+// A platform that cannot answer leaves the pet alone instead of guessing.
+loadState = { available: false, cpu: null, memory: null, batteryPercent: null, charging: false };
+clock += 5000;
+intervals[0]();
+await tick();
+frame(clock += 16);
+assert.equal(mood.textContent, '⚡', 'an unavailable reading must not clear the last badge on its own');
+
+console.log('Petting, taps, holds, blinking, reminders, load reactions, ' +
+  'dreams, actions, language switch and update notice: passed');
