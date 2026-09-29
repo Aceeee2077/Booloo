@@ -2814,7 +2814,7 @@ checksum = "925383efa346730478fb4838dbe9137d2a47675ad789c546d150a6e1dd4ab31c"
 
 [[package]]
 name = "prismoo"
-version = "0.6.10"
+version = "0.6.11"
 dependencies = [
  "base64 0.22.1",
  "image",

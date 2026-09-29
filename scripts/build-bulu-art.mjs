@@ -37,11 +37,11 @@ const actionPreview = path.join(sourceDir, 'bulu-actions-preview.png');
  * `actionRows` (rows 0-4) in src/renderer/lite-app.ts.
  */
 const ACTIONS = [
-  { id: 'wave', source: '挥爪子' },
-  { id: 'groom', source: '舔爪子' },
+  { id: 'wave', source: '挥爪子-修正版' },
+  { id: 'groom', source: '舔爪子-修正版' },
   { id: 'stretch', source: '伸懒腰' },
   { id: 'yawn', source: '打哈欠' },
-  { id: 'scratch', source: '挠头' },
+  { id: 'scratch', source: '挠头-修正版2' },
 ];
 /** The static default pose, taken from frame 0 of this 4x4 sheet. */
 const IDLE_SHEET = '默认状态';
