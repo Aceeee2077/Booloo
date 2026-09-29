@@ -24,14 +24,24 @@ let configChanged = () => {};
 let pendingCheck = null;
 
 function makeElement(id) {
-  return {
-    id, value: '', checked: false, disabled: false, hidden: false, textContent: '', title: '', style: {},
+  const element = {
+    id, value: '', checked: false, disabled: false, hidden: false, title: '', style: {},
+    dataset: {}, attributes: {},
     focus() { this.focused = true; }, select() { this.selected = true; },
     append(...nodes) { this.children = (this.children || []).concat(nodes); },
+    setAttribute(name, value) { this.attributes[name] = String(value); },
     classList: { err: false, toggle(name, on) { if (name === 'err') this.err = !!on; }, add(name) { if (name === 'err') this.err = true; }, remove() {}, contains: () => false },
     addEventListener(name, callback) { events.set(`${id}:${name}`, callback); },
     querySelectorAll: () => [],
   };
+  // Setting textContent replaces the children in a real DOM; the heatmap and the
+  // reminder list both rely on that to clear themselves before a repaint.
+  let text = '';
+  Object.defineProperty(element, 'textContent', {
+    get: () => text,
+    set: (value) => { text = value; element.children = []; },
+  });
+  return element;
 }
 const element = (id) => {
   if (!elements.has(id)) elements.set(id, makeElement(id));
@@ -94,6 +104,7 @@ const context = {
 };
 vm.createContext(context);
 vm.runInContext(readFileSync(join(process.cwd(), 'dist', 'renderer', 'lite-i18n.js'), 'utf8'), context);
+vm.runInContext(readFileSync(join(process.cwd(), 'dist', 'renderer', 'lite-day.js'), 'utf8'), context);
 vm.runInContext(readFileSync(join(process.cwd(), 'dist', 'renderer', 'lite-settings.js'), 'utf8'), context);
 const settle = async () => { await new Promise(resolve => setImmediate(resolve)); await new Promise(resolve => setImmediate(resolve)); };
 await settle();
@@ -206,3 +217,38 @@ await settle();
 assert.equal(status.textContent, 'This build cannot update itself — download new versions manually');
 
 console.log('Settings update panel: status machine, progress and preferences: passed');
+
+// ---------- click heatmap ----------
+// GitHub's shape: 53 week columns plus the weekday gutter and the month header,
+// with the thresholds that were asked for — 10 clicks is the first shade and 100
+// and up the darkest. Today sits in the last column, on its own weekday row.
+const grid = element('heatmap-grid');
+const columns = 54;
+assert.equal(grid.children.length, columns * 8, 'the grid should be 53 weeks plus the two label rows');
+// The panel was switched to English above; the strings below are asserted in
+// Chinese, so put it back and let the dictionary reload finish.
+locale = 'zh';
+configChanged({ ...config, locale: 'zh' });
+await settle();
+const now = new Date();
+const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+const cellFor = () => element('heatmap-grid').children[((now.getDay() + 6) % 7 + 1) * columns + (columns - 1)];
+const levelOf = (clicks) => {
+  config.dailyStats = clicks === null ? {} : { [todayKey]: { clicks } };
+  configChanged({ ...config });
+  return cellFor().attributes['data-level'];
+};
+assert.equal(levelOf(null), '0', 'a day without clicks is drawn as empty');
+assert.equal(levelOf(9), '0', '9 clicks is still below the first shade');
+assert.equal(levelOf(10), '1', '10 clicks is the lightest shade');
+assert.equal(levelOf(45), '2');
+assert.equal(levelOf(80), '3');
+assert.equal(levelOf(100), '4', '100 clicks and up is the darkest shade');
+assert.equal(levelOf(400), '4');
+levelOf(45);
+assert.match(element('heatmap-summary').textContent, /45/, 'the summary reports the last 30 days');
+assert.match(cellFor().title, /45/, 'a day cell carries its real count in the tooltip');
+levelOf(null);
+assert.match(element('heatmap-summary').textContent, /还没有记录/, 'an empty year says so');
+
+console.log('Click heatmap shading, summary and empty state: passed');

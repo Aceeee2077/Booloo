@@ -56,26 +56,56 @@
       <label class="setting" for="opacity"><span><span data-i18n="lite.settings.opacity">透明度</span> <output id="opacity-value"></output></span><input id="opacity" type="range" min="0.5" max="1" step="0.05" /></label>
       <label class="check"><input id="auto-move" type="checkbox" /><span data-i18n="lite.settings.autoMove">自主走动</span></label>
       <label class="check"><input id="file-drop-reactions" type="checkbox" /><span data-i18n="lite.settings.fileDrop">拖文件给桌宠时显示互动气泡</span></label>
-      <label class="check"><input id="stand-reminder" type="checkbox" /><span data-i18n="lite.settings.standReminder">站立提醒</span></label>
-      <div class="reminder-controls">
-        <label for="stand-interval" data-i18n="lite.settings.interval">提醒间隔</label>
-        <select id="stand-interval">
-          <option value="5" data-i18n="lite.settings.minutes5">5 分钟</option>
-          <option value="10" data-i18n="lite.settings.minutes10">10 分钟</option>
-          <option value="20" data-i18n="lite.settings.minutes20">20 分钟</option>
-          <option value="30" data-i18n="lite.settings.minutes30">30 分钟</option>
-          <option value="custom" data-i18n="lite.settings.custom">自定义</option>
-        </select>
-        <label id="stand-custom-label" for="stand-custom" hidden><span data-i18n="lite.settings.customMinutes">分钟数</span>
-          <input id="stand-custom" type="number" min="1" max="240" step="1" value="5" />
-        </label>
-      </div>
-      <p id="stand-status" class="note" role="status"></p>
       <label class="check"><input id="hourly-chime" type="checkbox" /><span data-i18n="lite.settings.hourlyChime">整点轻报时</span></label>
       <label class="check"><input id="load-awareness" type="checkbox" /><span data-i18n="lite.settings.loadAwareness">根据电脑状态做反应</span></label>
       <p class="note" data-i18n="lite.settings.loadHint"></p>
       <label class="check"><input id="auto-launch" type="checkbox" /><span data-i18n="lite.settings.autoLaunch">开机启动</span></label>
       <button id="reset-position" type="button" data-i18n="lite.settings.resetPosition">重置桌宠位置</button>
+    </section>
+
+    <section id="health">
+      <h2 data-i18n="lite.health.title">健康计划</h2>
+      <div class="health-row">
+        <label class="check"><input id="stand-reminder" type="checkbox" /><span data-i18n="lite.settings.standReminder">站立提醒</span></label>
+        <div class="reminder-controls">
+          <label for="stand-interval" data-i18n="lite.settings.interval">提醒间隔</label>
+          <select id="stand-interval">
+            <option value="5" data-i18n="lite.settings.minutes5">5 分钟</option>
+            <option value="10" data-i18n="lite.settings.minutes10">10 分钟</option>
+            <option value="20" data-i18n="lite.settings.minutes20">20 分钟</option>
+            <option value="30" data-i18n="lite.settings.minutes30">30 分钟</option>
+            <option value="custom" data-i18n="lite.settings.custom">自定义</option>
+          </select>
+          <label id="stand-custom-label" for="stand-custom" hidden><span data-i18n="lite.settings.customMinutes">分钟数</span>
+            <input id="stand-custom" type="number" min="1" max="240" step="1" value="5" />
+          </label>
+        </div>
+      </div>
+      <p id="stand-status" class="note" role="status"></p>
+      <div class="health-row">
+        <label class="check"><input id="eye-rest" type="checkbox" /><span data-i18n="lite.health.eyeRest">护眼</span></label>
+        <select id="eye-interval" class="health-interval"></select>
+      </div>
+      <div class="health-row">
+        <label class="check"><input id="water" type="checkbox" /><span data-i18n="lite.health.water">喝水</span></label>
+        <select id="water-interval" class="health-interval"></select>
+      </div>
+      <p id="health-status" class="note" role="status"></p>
+      <p class="note" data-i18n="lite.health.hint"></p>
+    </section>
+
+    <section id="heatmap">
+      <h2 data-i18n="lite.heatmap.title">点击热力图</h2>
+      <div class="heatmap-scroll">
+        <div id="heatmap-grid" class="heatmap-grid" role="img"></div>
+      </div>
+      <div class="heatmap-foot">
+        <span id="heatmap-summary" class="note"></span>
+        <span class="heatmap-legend"><span data-i18n="lite.heatmap.less">少</span>
+          <i class="heatmap-cell" data-level="0"></i><i class="heatmap-cell" data-level="1"></i><i class="heatmap-cell" data-level="2"></i><i class="heatmap-cell" data-level="3"></i><i class="heatmap-cell" data-level="4"></i>
+          <span data-i18n="lite.heatmap.more">多</span></span>
+      </div>
+      <p class="note" data-i18n="lite.heatmap.hint"></p>
     </section>
 
     <section id="reminders">
@@ -120,6 +150,7 @@
     </section>
   </main>
   <script src="./lite-i18n.js"></script>
+  <script src="./lite-day.js"></script>
   <script src="./lite-api.js"></script>
   <script src="./lite-image.js"></script>
   <script src="./lite-settings.js"></script>

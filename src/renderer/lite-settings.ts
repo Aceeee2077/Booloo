@@ -27,6 +27,13 @@
   const reminderAdd = $<HTMLButtonElement>('reminder-add');
   const reminderList = $<HTMLUListElement>('reminder-list');
   const reminderStatus = $<HTMLParagraphElement>('reminder-status');
+  const eyeRest = $<HTMLInputElement>('eye-rest');
+  const eyeInterval = $<HTMLSelectElement>('eye-interval');
+  const water = $<HTMLInputElement>('water');
+  const waterInterval = $<HTMLSelectElement>('water-interval');
+  const healthStatus = $<HTMLParagraphElement>('health-status');
+  const heatmapGrid = $<HTMLElement>('heatmap-grid');
+  const heatmapSummary = $<HTMLElement>('heatmap-summary');
   const updateVersion = $<HTMLSpanElement>('update-version');
   const updateStatus = $<HTMLSpanElement>('update-status');
   const updateProgressRow = $<HTMLElement>('update-progress-row');
@@ -189,6 +196,161 @@
   }
 
   // ---------- the user's own reminders ----------
+
+  // ---------- health plan ----------
+  /** Intervals offered for the two new habits (the standing one keeps its own list). */
+  const EYE_PRESETS = [20, 30, 60];
+  const WATER_PRESETS = [30, 45, 60, 90];
+  let eyeSignature = '';
+  let waterSignature = '';
+
+  /** Same clamp the pet window applies, so both agree on what is in effect. */
+  function minutes(value: unknown, fallback: number) {
+    const number = Number(value);
+    return Number.isInteger(number) && number >= 1 && number <= 240 ? number : fallback;
+  }
+
+  /**
+   * Fill an interval box, keeping whatever the config already had even when it is
+   * not one of the presets (an older value must not be silently rewritten).
+   */
+  function fillMinutes(select: HTMLSelectElement, presets: number[], current: number, signature: string) {
+    if (signature === select.dataset.signature) return;
+    select.dataset.signature = signature;
+    select.textContent = '';
+    const values = presets.includes(current) ? presets : [...presets, current].sort((a, b) => a - b);
+    for (const value of values) {
+      const option = document.createElement('option');
+      option.value = String(value);
+      option.textContent = liteT('lite.health.minutes', { n: value });
+      select.append(option);
+    }
+    select.value = String(current);
+  }
+
+  /** Today's counters, straight out of the same buckets the pet writes. */
+  function todayStats(cfg: AppConfig): DailyStat {
+    return (cfg.dailyStats ?? {})[liteDayKey()] ?? {};
+  }
+
+  function paintHealth(cfg: AppConfig) {
+    const eyeMinutes = minutes(cfg.eyeRestMinutes, 20);
+    const waterMinutes = minutes(cfg.waterMinutes, 45);
+    eyeRest.checked = cfg.eyeRestEnabled === true;
+    water.checked = cfg.waterEnabled === true;
+    fillMinutes(eyeInterval, EYE_PRESETS, eyeMinutes, `eye:${eyeMinutes}:${liteCurrentLocale()}`);
+    fillMinutes(waterInterval, WATER_PRESETS, waterMinutes, `water:${waterMinutes}:${liteCurrentLocale()}`);
+    const today = todayStats(cfg);
+    healthStatus.textContent = liteT('lite.health.today', {
+      stand: Number(today.stand) || 0,
+      eye: Number(today.eye) || 0,
+      water: Number(today.water) || 0,
+    });
+  }
+
+  function saveHealth() {
+    void window.api.setConfig({
+      eyeRestEnabled: eyeRest.checked,
+      eyeRestMinutes: minutes(eyeInterval.value, 20),
+      waterEnabled: water.checked,
+      waterMinutes: minutes(waterInterval.value, 45),
+    }).catch(error => { healthStatus.textContent = liteT('lite.health.failed', { error: String(error) }); });
+  }
+
+  // ---------- click heatmap ----------
+  /**
+   * 53 weeks, GitHub's shape. The thresholds are the ones asked for: the first
+   * shade starts at 10 clicks and the darkest at 100 — days below 10 are drawn
+   * as empty, but their exact count is still in the tooltip. The two steps in
+   * between are even 30-click bands.
+   */
+  const HEATMAP_WEEKS = 53;
+  const HEAT_LEVELS = [10, 40, 70, 100];
+  const SUMMARY_DAYS = 30;
+
+  function heatLevel(count: number) {
+    let level = 0;
+    for (const threshold of HEAT_LEVELS) if (count >= threshold) level++;
+    return level;
+  }
+
+  function dateLocale() {
+    return liteCurrentLocale() === 'en' ? 'en' : 'zh-CN';
+  }
+
+  function dayLabel(key: string) {
+    const date = liteDayStart(key);
+    return date ? date.toLocaleDateString(dateLocale(), { month: 'short', day: 'numeric' }) : key;
+  }
+
+  function monthLabel(key: string) {
+    const date = liteDayStart(key);
+    return date ? date.toLocaleDateString(dateLocale(), { month: 'short' }) : '';
+  }
+
+  /** Narrow weekday letters for the left column (2024-01-01 was a Monday). */
+  function weekdayLabel(row: number) {
+    return new Date(2024, 0, 1 + row).toLocaleDateString(dateLocale(), { weekday: 'narrow' });
+  }
+
+  function paintHeatmap(cfg: AppConfig) {
+    const stats = cfg.dailyStats ?? {};
+    const today = liteDayKey();
+    // The grid ends on the Sunday of the current week, so every column is one
+    // complete Monday-to-Sunday week and the last one is never half empty.
+    const end = liteDayShift(today, 6 - liteDayWeekday(today));
+    const start = liteDayShift(end, -(HEATMAP_WEEKS * 7 - 1));
+    heatmapGrid.textContent = '';
+    let month = '';
+    for (let row = -1; row < 7; row++) {
+      for (let column = 0; column < HEATMAP_WEEKS + 1; column++) {
+        const cell = document.createElement('i');
+        if (row < 0) {
+          // Header row: the month is printed above the week it starts in.
+          cell.className = 'heatmap-month';
+          if (column > 0) {
+            const key = liteDayShift(start, (column - 1) * 7);
+            const label = key.slice(0, 7);
+            if (label !== month) { month = label; cell.textContent = monthLabel(key); }
+          }
+          heatmapGrid.append(cell);
+          continue;
+        }
+        if (column === 0) {
+          cell.className = 'heatmap-weekday';
+          cell.textContent = row % 2 === 0 ? weekdayLabel(row) : '';
+          heatmapGrid.append(cell);
+          continue;
+        }
+        const key = liteDayShift(start, (column - 1) * 7 + row);
+        cell.className = 'heatmap-cell';
+        if (liteDayDiff(today, key) > 0) {
+          // Days still to come in the current week: present, but blank.
+          cell.setAttribute('data-level', '-1');
+          heatmapGrid.append(cell);
+          continue;
+        }
+        const count = Number(stats[key]?.clicks) || 0;
+        cell.setAttribute('data-level', String(heatLevel(count)));
+        cell.title = liteT(count ? 'lite.heatmap.cell' : 'lite.heatmap.cellEmpty',
+          { date: dayLabel(key), count });
+        heatmapGrid.append(cell);
+      }
+    }
+
+    let total = 0, best = 0, bestDay = '';
+    for (let back = 0; back < SUMMARY_DAYS; back++) {
+      const key = liteDayShift(today, -back);
+      const count = Number(stats[key]?.clicks) || 0;
+      total += count;
+      if (count > best) { best = count; bestDay = key; }
+    }
+    heatmapSummary.textContent = total
+      ? liteT('lite.heatmap.summary', {
+        days: SUMMARY_DAYS, total, day: dayLabel(bestDay), count: best,
+      })
+      : liteT('lite.heatmap.empty');
+  }
   /** `HH:MM` for a time input, in local time. */
   function timeValue(date: Date) {
     return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
@@ -331,6 +493,8 @@
     standStatus.textContent = standSummary(minutes);
     hourlyChime.checked = cfg.hourlyChime !== false;
     loadAwareness.checked = cfg.loadAwareness !== false;
+    paintHealth(cfg);
+    paintHeatmap(cfg);
     paintReminders(cfg);
     updateAutoCheck.checked = cfg.updateAutoCheck !== false;
     updateAutoDownload.checked = cfg.updateAutoDownload !== false;
@@ -402,6 +566,10 @@
     saveStandReminder();
   });
   standCustom.addEventListener('change', saveStandReminder);
+  eyeRest.addEventListener('change', saveHealth);
+  water.addEventListener('change', saveHealth);
+  eyeInterval.addEventListener('change', saveHealth);
+  waterInterval.addEventListener('change', saveHealth);
   hourlyChime.addEventListener('change', () => void window.api.setConfig({ hourlyChime: hourlyChime.checked }));
   loadAwareness.addEventListener('change', () => void window.api.setConfig({ loadAwareness: loadAwareness.checked }));
   reminderAdd.addEventListener('click', () => void addReminder());

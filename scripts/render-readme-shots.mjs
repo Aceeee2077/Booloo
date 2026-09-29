@@ -89,6 +89,24 @@ function settledDom(file) {
  * pages run their real code paths against a fixed config + the real dictionary.
  */
 function stubSource(locale) {
+  // A deterministic click history for the shot: without one the heatmap renders
+  // as an empty year and the screenshots cannot show what the shades mean. The
+  // pattern keeps weekday peaks and quiet weekends, and covers every bucket.
+  const dailyStats = {};
+  const today = new Date();
+  for (let back = 199; back >= 0; back--) {
+    const day = new Date(today.getFullYear(), today.getMonth(), today.getDate() - back);
+    const key = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`;
+    const weekend = day.getDay() === 0 || day.getDay() === 6;
+    const wave = Math.sin(back / 9) * 60 + Math.sin(back / 3.5) * 35;
+    // Tuned to the heatmap's thresholds (10 / 40 / 70 / 100) so the shot spreads
+    // across all four shades instead of saturating at the darkest one.
+    const clicks = Math.max(0, Math.round((weekend ? 12 : 55) + wave - (back > 170 ? 35 : 0)));
+    if (clicks) dailyStats[key] = { clicks };
+  }
+  const now = new Date();
+  const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  dailyStats[todayKey] = { ...(dailyStats[todayKey] ?? {}), stand: 3, eye: 5, water: 2 };
   const config = {
     skin: 'bulu',
     currentPetId: 'bulu',
@@ -98,7 +116,12 @@ function stubSource(locale) {
     fileDropReactions: true,
     standReminderEnabled: true,
     standReminderMinutes: 10,
+    eyeRestEnabled: true,
+    eyeRestMinutes: 20,
+    waterEnabled: true,
+    waterMinutes: 45,
     hourlyChime: true,
+    dailyStats,
     locale,
   };
   return `window.__TAURI__ = (() => {
@@ -133,8 +156,15 @@ function settingsPage(locale) {
   const page = join(scratch, `settings-${locale}.html`);
   const html = readFileSync(join(RENDERER, 'settings.html'), 'utf8');
   // The stub has to win the race against the first `getI18n` call.
-  writeFileSync(page, html.replace('<script src="./lite-i18n.js"></script>',
-    '<script src="./stub.js"></script>\n  <script src="./lite-i18n.js"></script>'), 'utf8');
+  // The real settings window is transparent over the desktop, so the page gets a
+  // wallpaper for the shot: without one there is nothing for the glass card to
+  // tint and the effect would not be visible in the README image.
+  writeFileSync(page, html
+    .replace('<script src="./lite-i18n.js"></script>',
+      '<script src="./stub.js"></script>\n  <script src="./lite-i18n.js"></script>')
+    .replace('</head>',
+      '  <style>html { background: linear-gradient(135deg, #d9e6f5 0%, #eef2f7 46%, #f7e2cf 100%); }</style>\n</head>'),
+    'utf8');
   return page;
 }
 
@@ -198,7 +228,7 @@ function desktopPage(locale) {
 }
 
 copyFileSync(join(ROOT, 'src', 'assets', 'animated-pets', 'bulu.png'), join(scratch, 'pet.png'));
-for (const asset of ['lite-i18n.js', 'lite-api.js', 'lite-image.js', 'lite-settings.js', 'lite-settings.css']) {
+for (const asset of ['lite-i18n.js', 'lite-day.js', 'lite-api.js', 'lite-image.js', 'lite-settings.js', 'lite-settings.css']) {
   copyFileSync(join(RENDERER, asset), join(scratch, asset));
 }
 
@@ -208,25 +238,77 @@ const checks = {
 };
 
 /**
- * How tall the settings panel really is, so the screenshot is neither clipped nor
- * mostly empty padding. The panel grew past 780 px once the language selector was
- * added — a fixed height silently cut the last row off.
+ * The page's own layout numbers, read back through the DOM.
+ *
+ * The panel height used to be found by scanning the screenshot for anything that
+ * was not the panel's `#fff8f2`, which stopped working the moment the panel became
+ * a translucent card. Asking the page is both simpler and gives the heatmap's
+ * width, so a grid that no longer fits the window fails the shot instead of
+ * quietly shipping a clipped picture.
  */
-async function panelHeight(file, width) {
-  const probe = join(scratch, `probe-${Math.random().toString(36).slice(2)}.png`);
-  shoot(file, width, 1400, probe);
-  const { data, info } = await sharp(probe).raw().toBuffer({ resolveWithObject: true });
-  let last = 0;
-  for (let y = 0; y < info.height; y++) {
-    for (let x = 0; x < info.width; x++) {
-      const offset = (y * info.width + x) * info.channels;
-      const [r, g, b] = [data[offset], data[offset + 1], data[offset + 2]];
-      // Anything that is not the panel's #fff8f2 background.
-      if (!(r > 243 && g > 234 && b > 226)) { last = y; break; }
-    }
+async function layoutMetrics(file) {
+  const suffix = Math.random().toString(36).slice(2);
+  const probe = join(scratch, `metrics-${suffix}.html`);
+  // The probe is a separate file rather than an inline <script>: the settings page
+  // ships `script-src 'self'`, so an inline block is refused before it runs.
+  // Measurement is driven by a DOM mutation rather than a timer because headless
+  // Chrome's virtual time does not advance while the panel's slow background
+  // animation is running, so `setTimeout` would never fire before the dump.
+  writeFileSync(join(scratch, `probe-${suffix}.js`), `
+(() => {
+  // Page errors are recorded too: without them a failed shot only says "no
+  // metrics", which says nothing about what actually broke.
+  const fail = (message) => {
+    const out = document.createElement('pre');
+    out.id = 'prismoo-error';
+    out.textContent = String(message);
+    document.body.append(out);
+  };
+  window.addEventListener('error', (event) => fail(event.message));
+  window.addEventListener('unhandledrejection', (event) => fail(event.reason));
+  const report = () => {
+    const panel = document.querySelector('.panel');
+    const scroll = document.querySelector('.heatmap-scroll');
+    const grid = document.getElementById('heatmap-grid');
+    const cell = document.querySelector('.heatmap-cell');
+    const measured = {
+      panelWidth: Math.ceil(panel.getBoundingClientRect().width),
+      panelHeight: Math.ceil(panel.getBoundingClientRect().height),
+      pageWidth: Math.ceil(document.documentElement.clientWidth),
+      headerWidth: Math.ceil(document.querySelector('header').getBoundingClientRect().width),
+      heatmapCells: grid.children.length,
+      cellSize: cell ? Math.round(cell.getBoundingClientRect().width) : 0,
+      gridWidth: Math.ceil(grid.getBoundingClientRect().width),
+      // Where the chart sits in the page, so a preview can be cropped to it.
+      heatmapTop: Math.ceil(document.getElementById('heatmap').getBoundingClientRect().top + window.scrollY),
+      viewportWidth: scroll.clientWidth,
+      scrollWidth: scroll.scrollWidth,
+    };
+    const out = document.createElement('pre');
+    out.id = 'prismoo-metrics';
+    out.textContent = JSON.stringify(measured);
+    document.body.append(out);
+  };
+  const grid = document.getElementById('heatmap-grid');
+  if (grid.children.length) { report(); return; }
+  const observer = new MutationObserver(() => {
+    if (!grid.children.length) return;
+    observer.disconnect();
+    report();
+  });
+  observer.observe(grid, { childList: true });
+})();
+`, 'utf8');
+  const html = readFileSync(file, 'utf8')
+    .replace('</body>', `  <script src="./probe-${suffix}.js"></script>\n</body>`);
+  writeFileSync(probe, html, 'utf8');
+  const dom = settledDom(probe);
+  const match = /<pre id="prismoo-metrics">([^<]*)<\/pre>/.exec(dom);
+  if (!match) {
+    const error = /<pre id="prismoo-error">([^<]*)<\/pre>/.exec(dom);
+    throw new Error(`the settings page did not report its layout metrics${error ? `: ${error[1]}` : ''}`);
   }
-  unlinkSync(probe);
-  return Math.max(520, Math.min(1400, last + 18));
+  return JSON.parse(match[1]);
 }
 
 mkdirSync(OUT, { recursive: true });
@@ -242,9 +324,33 @@ for (const locale of languages) {
   for (const text of checks[locale].reject) {
     if (dom.includes(text)) throw new Error(`settings page leaked "${text}" into ${locale}`);
   }
-  const height = await panelHeight(settingsFile, 680);
+  // Shot at the window's real width (see build_settings) so the picture shows the
+  // layout the app actually opens with.
+  const layout = await layoutMetrics(settingsFile);
+  // The glass has to fill the window: a narrower card leaves a transparent ring
+  // around it, which is what "there is an obvious gap at the outermost edge"
+  // was about.
+  if (layout.pageWidth - layout.panelWidth > 1) {
+    throw new Error(`the glass card is ${layout.panelWidth}px in a ${layout.pageWidth}px window`);
+  }
+  // The title bar has to span the card (bar its 1px border on each side); a
+  // narrower header is the "why is the top strip a different width" bug.
+  if (layout.panelWidth - layout.headerWidth > 2) {
+    throw new Error(`the title bar is ${layout.headerWidth}px wide inside a ${layout.panelWidth}px card`);
+  }
+  if (layout.scrollWidth > layout.viewportWidth + 1) {
+    throw new Error(`the click heatmap overflows: ${layout.scrollWidth}px of grid in ${layout.viewportWidth}px`);
+  }
+  if (layout.heatmapCells !== 54 * 8) {
+    throw new Error(`the heatmap drew ${layout.heatmapCells} cells, expected ${54 * 8}`);
+  }
+  console.log(`  热力图 ${layout.gridWidth}px / 可用 ${layout.viewportWidth}px，` +
+    `${layout.heatmapCells} 格 × ${layout.cellSize}px；面板 ${layout.panelWidth}×${layout.panelHeight}` +
+    `（窗口 ${layout.pageWidth}，标题栏 ${layout.headerWidth}），` +
+    `热力图在 y=${layout.heatmapTop}`);
+  const height = Math.max(560, Math.min(1400, layout.panelHeight + 24));
   console.log(`✓ docs/screenshots/lightweight-settings${suffix}.png (${locale})`,
-    shoot(settingsFile, 680, height, join(OUT, `lightweight-settings${suffix}.png`)));
+    shoot(settingsFile, 820, height, join(OUT, `lightweight-settings${suffix}.png`)));
 
   console.log(`✓ docs/screenshots/lightweight-pet${suffix}.png (${locale})`,
     shoot(desktopPage(locale), 900, 520, join(OUT, `lightweight-pet${suffix}.png`)));

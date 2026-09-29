@@ -279,6 +279,19 @@ interface AppConfig {
   /** Bring the pet to the screen center at the chosen standing interval. */
   standReminderEnabled?: boolean;
   standReminderMinutes?: number;
+  /** Health plan: remind the user to look away from the screen (20-20-20). */
+  eyeRestEnabled?: boolean;
+  eyeRestMinutes?: number;
+  /** Health plan: remind the user to drink some water. */
+  waterEnabled?: boolean;
+  waterMinutes?: number;
+  /**
+   * Per local-day counters, keyed `YYYY-MM-DD` (see src/renderer/lite-day.ts):
+   * how often the pet was clicked and how often each health reminder fired.
+   * Missing days simply have no entry — the heatmap draws them as empty rather
+   * than as zero, which is what "the app was not running" deserves.
+   */
+  dailyStats?: Record<string, DailyStat>;
   /**
    * Local reminders ("18:00 交周报") the pet walks over to announce. Kept in the
    * config so a reminder survives a restart; the pet window is what fires them.
@@ -412,6 +425,18 @@ interface AppConfig {
   updateNextAutoCheckAt: number;
   /** Update: consecutive automatic-check failures (drives the backoff schedule) */
   updateAutoRetry: number;
+}
+
+/** One local day's counters behind the click heatmap and the health summary. */
+interface DailyStat {
+  /** Times the pet was clicked (a tap, not a drag). */
+  clicks?: number;
+  /** Times the standing reminder was delivered. */
+  stand?: number;
+  /** Times the look-away reminder was delivered. */
+  eye?: number;
+  /** Times the drink-water reminder was delivered. */
+  water?: number;
 }
 
 /**

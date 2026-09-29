@@ -34,12 +34,13 @@ Open Settings from the tray or the right-click menu to switch pets, import your 
 - **Blinking** — While Bulu stands still, both eyes blink together, roughly every 3.2–8.4 seconds and held shut for about 150 ms. The closed-eye frame is painted by `scripts/build-bulu-blink.mjs` out of the resting pose, so it costs no extra atlas art.
 - **Touch means different things in different places** — Petting the head melts it into hearts; stroking its back makes it purr and groom; a single tap answers depending on what you poked; a quick double tap gets a happy wave and hearts; holding on too long makes it scratch its head and complain; waking it up with a poke earns a sleepy grumble first.
 - **Reminders** — Right-click and pick **Remind me…** (or use the Reminders section in Settings), type a line and a time — a time earlier than now means tomorrow. When it comes due, the pet runs to the middle of the screen and holds up a sign until you touch it. Anything missed by more than ten minutes is dropped rather than announced late.
-- **Standing reminders** — On by default every 5 minutes, with 10, 20, 30, and custom 1–240 minute intervals. When due, the pet runs to the center of the current screen and asks you to stand up.
+- **Health plan** — Three habits on their own timers: the standing reminder (on by default, 5 minutes, or 10/20/30 and a custom 1–240), a look-away nudge and a drink-water nudge (the last two start off; turn them on under **Health plan** in Settings). When one is due the pet says a line — the standing one also runs to the centre of the screen — and the panel keeps a running "today" tally underneath.
+- **Click heatmap** — Settings draws every day you clicked the pet as a 53-week grid: 10 clicks is the lightest shade, then 40 and 70, and 100 or more is the darkest. Days below 10 are drawn empty, but hovering still shows the real count. Days are bucketed by the local calendar date (`src/renderer/lite-day.ts`), so the grid rolls over at midnight on its own — no network clock involved.
 - **Aware of this computer** — CPU, memory and battery (system APIs on Windows, the 1-minute load average on macOS): a CPU that stays pinned makes the pet sweat and mutter, a battery below 20% puts a 🪫 badge on it and sends it to nap more often, and plugging in wakes it right up. Turn it off under Daily settings; everything is read locally and nothing is sent anywhere.
 - **Sleep and chimes** — While asleep the pet occasionally shows a brief dream bubble, and a quiet hourly speech bubble is on by default. Hours missed while the computer sleeps are not announced later.
 - **Chinese / English UI** — Switch the language under Daily settings; the pet's speech bubbles, the right-click menu, the settings panel and the tray tooltip all follow, and your choice is remembered.
 - **Auto-update** — An installed build checks for a new version a few seconds after start (can be turned off in Settings), downloads it in the background and lets the pet say so. The **🔄 Update** section in Settings checks manually, shows download progress and restarts into the new version. Packages come from this repository's GitHub Releases and are verified with a minisign signature.
-- **Daily settings** — Pet size, opacity, autonomous walking, file-drop reactions, standing reminder, hourly chime, load awareness, launch at login, and reset position.
+- **Daily settings** — Pet size, opacity, autonomous walking, file-drop reactions, hourly chime, load awareness, launch at login, and reset position; the health plan and the click heatmap have sections of their own.
 
 A single image gets gentle breathing and click motion. It does not become a new set of walking or sleeping poses; Bulu uses frame animation and the pose atlas.
 
@@ -103,6 +104,7 @@ Requirements: Windows 10/11 with the WebView2 runtime, or macOS 10.15+ (it uses 
 src/renderer/      pet page index.html, settings.html, cutout window mask.html, context menu menu.html
   lite-app.ts      pet loop: animation, blinking, dragging, part-aware touch, sleep, reminders, hourly chime, load reactions
   lite-settings.ts settings panel  ·  lite-mask.ts cutout editor  ·  lite-menu.ts context menu
+  lite-day.ts      local calendar days: the bucketing rule behind the daily counters
   lite-api.ts      Tauri bridge (window / config / drag / events)
   lite-image.ts    image import: solid-background cutout and preview
   lite-i18n.ts     language switching: dictionary, {placeholders}, data-i18n markup

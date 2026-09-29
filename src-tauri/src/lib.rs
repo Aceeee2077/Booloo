@@ -117,6 +117,10 @@ const LITE_SETTINGS_CHECK_JS: &str = r#"
     hasUpdatePanel: !!document.getElementById('update-panel'),
     hasReminders: !!document.getElementById('reminders') && !!document.getElementById('reminder-text'),
     hasLoadToggle: !!document.getElementById('load-awareness'),
+    hasHealth: !!document.getElementById('health') && !!document.getElementById('eye-rest'),
+    hasHeatmap: !!document.getElementById('heatmap-grid'),
+    // 53 weeks + the weekday gutter, drawn by the settings page itself.
+    heatmapCells: document.querySelectorAll('#heatmap-grid .heatmap-cell').length,
   };
   try { out.configSkin = (await window.api.getConfig()).skin; }
   catch (error) { out.error = String(error); }

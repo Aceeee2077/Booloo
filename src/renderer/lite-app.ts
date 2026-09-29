@@ -106,6 +106,16 @@ const BLINK_JITTER_MS = 5200;
   let wasCharging: boolean | null = null;
   let moodIcon = '';
   let moodUntil = 0;
+  /** Health plan: when the look-away / drink-water nudges are next due. */
+  let nextEyeRestAt = 0;
+  let nextWaterAt = 0;
+  /**
+   * Daily counters that have not been written to the config yet. Clicking is
+   * cheap and frequent, so the write is batched (see `flushDailyStats`) instead
+   * of rewriting the config file on every tap.
+   */
+  const pendingStats: Record<string, DailyStat> = {};
+  let statsFlushAt = 0;
   let lastEdgePoll = 0;
   let visibleRect: PetBox = { x: 86, y: 140, w: 128, h: 150 };
   let lastHover = false;
@@ -358,6 +368,7 @@ const BLINK_JITTER_MS = 5200;
       if (!arrived) return;
       clickUntil = performance.now() + 1100;
       say(liteT('lite.pet.standReminder'), 6500);
+      bumpDaily('stand', true);
     }
   }
 
@@ -408,6 +419,98 @@ const BLINK_JITTER_MS = 5200;
   // A reminder that came due while the machine was asleep is dropped the same way
   // a missed hourly chime is: nobody wants yesterday's "take the cake out" now.
   const REMINDER_GRACE_MS = 10 * 60_000;
+
+  // ---------- daily counters ----------
+  // Clicks and health-plan completions, bucketed by local calendar day (see
+  // lite-day.ts). The heatmap in Settings reads the very same buckets.
+  const STATS_FLUSH_MS = 5000;
+  /** More than the heatmap draws; older days are dropped so the config stays small. */
+  const STATS_KEEP_DAYS = 400;
+
+  function clampMinutes(value: unknown, fallback: number) {
+    const minutes = Number(value);
+    return Number.isInteger(minutes) && minutes >= 1 && minutes <= 240 ? minutes : fallback;
+  }
+
+  /**
+   * Count something for today.
+   *
+   * The day is looked up on every call rather than remembered, so a running pet
+   * crosses midnight into a fresh bucket on its own — no timer, no date sync.
+   */
+  function bumpDaily(kind: keyof DailyStat, flushNow = false) {
+    const day = liteDayKey();
+    const entry = pendingStats[day] ?? (pendingStats[day] = {});
+    entry[kind] = (Number(entry[kind]) || 0) + 1;
+    const at = performance.now() + (flushNow ? 0 : STATS_FLUSH_MS);
+    statsFlushAt = statsFlushAt ? Math.min(statsFlushAt, at) : at;
+  }
+
+  function pruneDailyStats(stats: Record<string, DailyStat>) {
+    const days = Object.keys(stats).sort();
+    if (days.length <= STATS_KEEP_DAYS) return stats;
+    const keep = new Set(days.slice(days.length - STATS_KEEP_DAYS));
+    const pruned: Record<string, DailyStat> = {};
+    for (const day of days) if (keep.has(day)) pruned[day] = stats[day];
+    return pruned;
+  }
+
+  /** Merge the buffered counts into the config and write them once. */
+  function flushDailyStats() {
+    if (!config) return;
+    const days = Object.keys(pendingStats);
+    if (!days.length) return;
+    const merged: Record<string, DailyStat> = { ...(config.dailyStats ?? {}) };
+    for (const day of days) {
+      const target = merged[day] ?? (merged[day] = {});
+      for (const [kind, value] of Object.entries(pendingStats[day])) {
+        const key = kind as keyof DailyStat;
+        target[key] = (Number(target[key]) || 0) + (Number(value) || 0);
+      }
+      delete pendingStats[day];
+    }
+    void window.api.setConfig({ dailyStats: pruneDailyStats(merged) })
+      .catch(error => console.error('[lite-app] daily stats:', error));
+  }
+
+  // ---------- the health plan ----------
+  /**
+   * Three independent timers: the standing reminder the pet already had, plus a
+   * look-away nudge and a drink-water nudge. Each is armed from `applyConfig`,
+   * so changing the interval restarts that item's countdown and unchecking it
+   * disarms it — the same contract the standing reminder has always had.
+   */
+  function checkHealthPlan() {
+    if (!config) return;
+    // A reminder is not worth interrupting a drag or another announcement for;
+    // the timer stays armed and fires on the next tick instead.
+    if (pressed || dragging || reminderRunning) return;
+    const now = Date.now();
+    if (config.eyeRestEnabled === true && nextEyeRestAt && now >= nextEyeRestAt) {
+      nextEyeRestAt = now + clampMinutes(config.eyeRestMinutes, 20) * 60_000;
+      announceEyeRest();
+    }
+    if (config.waterEnabled === true && nextWaterAt && now >= nextWaterAt) {
+      nextWaterAt = now + clampMinutes(config.waterMinutes, 45) * 60_000;
+      announceWater();
+    }
+  }
+
+  function announceEyeRest() {
+    activity();
+    clickUntil = performance.now() + 700;
+    playAction('stretch');
+    // After the action: starting one clears whatever bubble was on screen.
+    say(liteT('lite.pet.eyeRest'), 6000);
+    bumpDaily('eye', true);
+  }
+
+  function announceWater() {
+    activity();
+    clickUntil = performance.now() + 900;
+    say(liteT('lite.pet.water'), 6000);
+    bumpDaily('water', true);
+  }
 
   function checkReminders() {
     if (!config) return;
@@ -514,9 +617,14 @@ const BLINK_JITTER_MS = 5200;
 
   window.setInterval(() => {
     checkStandReminder();
+    checkHealthPlan();
     checkHourlyChime();
     checkReminders();
     const now = performance.now();
+    if (statsFlushAt && now >= statsFlushAt) {
+      statsFlushAt = 0;
+      flushDailyStats();
+    }
     if (now - lastLoadPoll >= LOAD_POLL_MS) {
       lastLoadPoll = now;
       void pollLoad();
@@ -549,6 +657,9 @@ const BLINK_JITTER_MS = 5200;
     const reminderChanged = !config || config.standReminderEnabled !== next.standReminderEnabled ||
       config.standReminderMinutes !== next.standReminderMinutes;
     const chimeChanged = !config || config.hourlyChime !== next.hourlyChime;
+    const healthChanged = !config || config.eyeRestEnabled !== next.eyeRestEnabled ||
+      config.eyeRestMinutes !== next.eyeRestMinutes ||
+      config.waterEnabled !== next.waterEnabled || config.waterMinutes !== next.waterMinutes;
     const loadChanged = !config || config.loadAwareness !== next.loadAwareness;
     // Strings come from the backend dictionary, so a language switch re-fetches it.
     const localeChanged = !config || config.locale !== next.locale;
@@ -563,6 +674,12 @@ const BLINK_JITTER_MS = 5200;
       nextReminderAt = next.standReminderEnabled === false ? 0 : Date.now() + minutes * 60_000;
     }
     if (chimeChanged) nextHourAt = next.hourlyChime === false ? 0 : nextLocalHour(Date.now());
+    if (healthChanged) {
+      // Opt-in habits: a config that predates them (no key at all) arms nothing,
+      // and only an explicit `true` starts a countdown.
+      nextEyeRestAt = next.eyeRestEnabled === true ? Date.now() + clampMinutes(next.eyeRestMinutes, 20) * 60_000 : 0;
+      nextWaterAt = next.waterEnabled === true ? Date.now() + clampMinutes(next.waterMinutes, 45) * 60_000 : 0;
+    }
     // Reading the machine is cheap but not free, so it happens on that switch and
     // on the poll timer — never per frame.
     if (loadChanged) void pollLoad();
@@ -827,6 +944,9 @@ const BLINK_JITTER_MS = 5200;
     // A tap answers from where the pet was touched; two taps in quick succession
     // are read as affection rather than as two pokes.
     const now = performance.now();
+    // Every tap counts towards the day's heatmap square, whether the pet was
+    // asleep, happy about it or not.
+    bumpDaily('clicks');
     clickUntil = now + 580;
     activity();
     const double = now - lastTapAt < DOUBLE_TAP_MS;

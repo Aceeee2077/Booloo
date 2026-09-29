@@ -71,8 +71,8 @@ context.liteT = makeTranslate(zhDict);
 
 const renderer = join(process.cwd(), 'dist', 'renderer');
 const shippedScripts = readdirSync(renderer).filter(name => name.endsWith('.js')).sort();
-assert.deepEqual(shippedScripts, ['lite-api.js', 'lite-app.js', 'lite-file-reaction.js', 'lite-i18n.js',
-  'lite-image.js', 'lite-mask.js', 'lite-menu.js', 'lite-settings.js']);
+assert.deepEqual(shippedScripts, ['lite-api.js', 'lite-app.js', 'lite-day.js', 'lite-file-reaction.js',
+  'lite-i18n.js', 'lite-image.js', 'lite-mask.js', 'lite-menu.js', 'lite-settings.js']);
 const fileReaction = { liteT: makeTranslate(zhDict) };
 vm.createContext(fileReaction);
 vm.runInContext(readFileSync(join(renderer, 'lite-file-reaction.js'), 'utf8'), fileReaction);
@@ -192,7 +192,17 @@ for (const key of scriptKeys) {
 }
 
 assert.match(readFileSync(join(renderer, 'lite-menu.css'), 'utf8'), /#fff8f2/);
-assert.match(readFileSync(join(renderer, 'lite-settings.css'), 'utf8'), /header\s*\{[^}]*position:\s*sticky;[^}]*top:\s*0;/);
+// The settings panel is a floating glass card, so the title bar has to span the
+// card's full width and carry its top rounding — inset by the panel's padding it
+// reads as a narrower strip glued to the top. The 24 px inset therefore belongs
+// to `header` / `section`, and the sticky offset matches the card's margin.
+const settingsCss = readFileSync(join(renderer, 'lite-settings.css'), 'utf8');
+assert.match(settingsCss, /header\s*\{[^}]*position:\s*sticky;[^}]*top:\s*0;/);
+assert.match(settingsCss, /header\s*\{[^}]*border-radius:\s*20px\s+20px\s+0\s+0;/);
+// ...and the card has to reach the window edges: an outer margin leaves a
+// transparent ring that reads as a gap around the panel.
+assert.match(settingsCss, /\.panel\s*\{[^}]*padding:\s*0\s+0\s+24px;/);
+assert.match(settingsCss, /\.panel\s*\{[^}]*margin:\s*0;/);
 
 // The two READMEs ship their own screenshots: the English one pointed at the
 // Chinese panel for a while, which is exactly what this guards against.

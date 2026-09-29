@@ -61,6 +61,9 @@ child.on('exit', code => {
     // computer-reaction switch all have to be there.
     settings?.hasReminders === true && settings?.hasLoadToggle === true &&
     settings?.reminderRoundTrip === true && settings?.reminderCleared === true &&
+    // Health plan and the click heatmap are rendered by the page from the config.
+    settings?.hasHealth === true && settings?.hasHeatmap === true &&
+    typeof settings?.heatmapCells === 'number' && settings.heatmapCells > 300 &&
     close?.closed === true;
   // The mask editor is the third window: it proves the new capability entry works
   // and that the cutout command answers the renderer.

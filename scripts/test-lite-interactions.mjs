@@ -17,6 +17,13 @@ let frame;
 let lastDraw;
 /** Patches the pet window wrote back, in order (reminder bookkeeping). */
 const configPatches = [];
+/** What the pet window believes the config is, kept in step with the patches. */
+let currentConfig = {};
+/** Local day key of a timestamp, mirroring src/renderer/lite-day.ts. */
+const dayKeyOf = (time) => {
+  const date = new Date(time);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+};
 /** What the (stubbed) backend answers for `system_load`. */
 let loadState = { available: false, cpu: null, memory: null, batteryPercent: null, charging: false };
 /** Every drawImage the pet window issued, so a single frame can be asserted on. */
@@ -48,10 +55,13 @@ const canvas = {
   addEventListener: (name, callback) => canvasEvents.set(name, callback),
 };
 const api = {
-  getConfig: async () => ({ skin: 'cat', petScale: 1, opacity: 1, autoMove: false,
-    standReminderEnabled: true, standReminderMinutes: 5, hourlyChime: true }),
+  getConfig: async () => ({ ...currentConfig }),
   getI18n: async () => ({ locale, dict: locale === 'en' ? enDict : zhDict }),
-  onConfigChanged: callback => { configChanged = callback; },
+  // Any broadcast — from a patch or from the test — records what the pet will
+  // believe, exactly like the real `config-changed` event does.
+  onConfigChanged: callback => {
+    configChanged = (cfg) => { currentConfig = { ...cfg }; callback(cfg); };
+  },
   onPetAction: callback => { actionReceived = callback; },
   onFileDrop: () => () => {},
   setClickThrough() {}, autoMoveStop() {}, autoMoveStart() {},
@@ -61,7 +71,14 @@ const api = {
   moveWindowTo: async (x, y) => { moves.push([x, y]); },
   windowEdgeGaps: async () => null,
   getSystemLoad: async () => loadState,
-  setConfig: async (patch) => { configPatches.push(patch); return patch; },
+  // Mirrors the real backend: the patch is merged, persisted and broadcast back,
+  // which is what makes the daily counters accumulate across batches.
+  setConfig: async (patch) => {
+    configPatches.push(patch);
+    currentConfig = { ...currentConfig, ...patch };
+    queueMicrotask(() => configChanged?.({ ...currentConfig }));
+    return currentConfig;
+  },
   updateCheck: async () => ({ status: 'available', currentVersion: '0.6.5', version: '0.6.6',
     autoCheck: true, autoDownload: true, channel: 'stable' }),
   updateDownload: async () => ({ status: 'downloaded', currentVersion: '0.6.5', version: '0.6.6',
@@ -97,6 +114,7 @@ const context = {
 };
 vm.createContext(context);
 vm.runInContext(readFileSync(join(process.cwd(), 'dist/renderer/lite-i18n.js'), 'utf8'), context);
+vm.runInContext(readFileSync(join(process.cwd(), 'dist/renderer/lite-day.js'), 'utf8'), context);
 vm.runInContext(readFileSync(join(process.cwd(), 'dist/renderer/lite-app.js'), 'utf8'), context);
 await new Promise(resolve => setImmediate(resolve));
 
@@ -154,11 +172,14 @@ assert.equal(context.liteCurrentLocale(), 'zh');
 // ---------- part-aware interaction ----------
 // One tap answers from the region it landed on, a quick second tap is read as
 // affection, and a hold that never becomes a drag makes the pet ask for mercy.
-const config = (extra = {}) => configChanged({
-  skin: 'bulu', petScale: 1, opacity: 1, autoMove: false, locale: 'zh',
-  standReminderEnabled: true, standReminderMinutes: 5, hourlyChime: true,
-  fileDropReactions: true, ...extra,
-});
+const config = (extra = {}) => {
+  currentConfig = {
+    skin: 'bulu', petScale: 1, opacity: 1, autoMove: false, locale: 'zh',
+    standReminderEnabled: true, standReminderMinutes: 5, hourlyChime: true,
+    fileDropReactions: true, ...extra,
+  };
+  configChanged(currentConfig);
+};
 const tap = (x, y) => {
   canvasEvents.get('mousedown')({ button: 0, offsetX: x, offsetY: y, screenX: 100, screenY: 100 });
   canvasEvents.get('mousemove')({ offsetX: x, offsetY: y, screenX: 100, screenY: 100, buttons: 0 });
@@ -316,7 +337,10 @@ await tick();
 await tick();
 assert.equal(sign.hidden, false, 'a due reminder should raise the sign');
 assert.equal(sign.textContent, '⏰ 交周报');
-assert.deepEqual(configPatches.at(-1).reminders, [], 'a fired reminder leaves the config');
+// The counter batches land whenever they land, so look at the reminder patch
+// itself rather than at whatever was written last.
+assert.deepEqual(configPatches.filter(patch => patch.reminders).at(-1).reminders, [],
+  'a fired reminder leaves the config');
 
 frame(clock += 16);
 tap(150, 175);
@@ -325,7 +349,8 @@ assert.equal(sign.hidden, true, 'touching the pet acknowledges the reminder');
 config({ ...quiet, reminders: [{ id: 'r-stale', text: '昨天的蛋糕', at: wallClock - 3 * 60 * 60_000 }] });
 intervals[0]();
 await tick();
-assert.deepEqual(configPatches.at(-1).reminders, [], 'a reminder missed by hours is dropped');
+assert.deepEqual(configPatches.filter(patch => patch.reminders).at(-1).reminders, [],
+  'a reminder missed by hours is dropped');
 assert.equal(sign.hidden, true, 'a stale reminder is never announced');
 
 // ---------- load awareness ----------
@@ -367,5 +392,71 @@ await tick();
 frame(clock += 16);
 assert.equal(mood.textContent, '⚡', 'an unavailable reading must not clear the last badge on its own');
 
-console.log('Petting, taps, holds, blinking, reminders, load reactions, ' +
-  'dreams, actions, language switch and update notice: passed');
+// ---------- daily counters behind the click heatmap ----------
+// Taps are batched and merged into the config, so the settings panel's heatmap
+// reads one growing bucket per local day.
+config({ ...quiet });
+const todayKey = dayKeyOf(wallClock);
+clock += 400;
+tap(120, 175);
+clock += 6000; // past the 5 s batch window
+intervals[0]();
+await tick();
+assert.equal(configPatches.at(-1).dailyStats?.[todayKey]?.clicks, 1,
+  'a tap should be counted for today');
+clock += 400;
+tap(120, 175);
+clock += 6000;
+intervals[0]();
+await tick();
+assert.equal(configPatches.at(-1).dailyStats?.[todayKey]?.clicks, 2,
+  'later taps add to the same day rather than replacing it');
+
+// ---------- health plan ----------
+// The standing reminder the pet already had, plus the look-away and water
+// nudges: each keeps its own countdown and each counts towards today.
+config({ ...quiet, standReminderEnabled: true, standReminderMinutes: 5 });
+wallClock += 5 * 60_000 + 1000;
+intervals[0]();
+await tick();
+await tick();
+intervals[0]();
+await tick();
+assert.equal(configPatches.at(-1).dailyStats?.[todayKey]?.stand, 1,
+  'standing up counts towards today');
+
+config({ ...quiet, eyeRestEnabled: true, eyeRestMinutes: 20, waterEnabled: true, waterMinutes: 45 });
+const beforeHealth = configPatches.length;
+wallClock += 5 * 60_000;
+intervals[0]();
+assert.equal(configPatches.length, beforeHealth, 'the look-away nudge waits its full interval');
+wallClock += 15 * 60_000 + 1000;
+intervals[0]();
+await tick();
+assert.match(speech.textContent, /看会儿远处/, 'the look-away nudge should speak up');
+intervals[0]();
+await tick();
+assert.equal(configPatches.at(-1).dailyStats?.[todayKey]?.eye, 1,
+  'a delivered look-away nudge is counted');
+
+wallClock += 25 * 60_000;
+intervals[0]();
+await tick();
+assert.match(speech.textContent, /喝口水/, 'the water nudge should speak up');
+intervals[0]();
+await tick();
+assert.equal(configPatches.at(-1).dailyStats?.[todayKey]?.water, 1,
+  'a delivered water nudge is counted');
+
+// Turning an item off means it never fires again, whatever the interval.
+config({ ...quiet, eyeRestEnabled: false, eyeRestMinutes: 20, waterEnabled: false, waterMinutes: 45 });
+speech.textContent = '';
+const afterDisable = configPatches.length;
+wallClock += 2 * 60 * 60_000;
+intervals[0]();
+await tick();
+assert.equal(configPatches.length, afterDisable, 'disabled habits count nothing');
+assert.equal(speech.textContent, '', 'disabled habits stay quiet');
+
+console.log('Petting, taps, holds, blinking, reminders, load reactions, daily counters, ' +
+  'health plan, dreams, actions, language switch and update notice: passed');

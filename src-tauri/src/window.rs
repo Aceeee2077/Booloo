@@ -593,8 +593,28 @@ fn build_settings(app: &AppHandle, section: Option<String>) -> Result<(), String
     )
     .title("Prismoo")
     .decorations(false)
-    .inner_size(640.0, 650.0)
-    .min_inner_size(520.0, 520.0)
+    // Wide enough for the 53-week click heatmap to show a whole year without a
+    // horizontal scrollbar: the page needs ~660 px for the grid, and the panel
+    // keeps 24 px of padding on each side. The minimum matches, so the grid can
+    // never be squeezed into scrolling.
+    .inner_size(820.0, 700.0)
+    .min_inner_size(720.0, 520.0)
+    // Not resizable: Windows keeps a sizing frame on a borderless window that can
+    // be resized, and on a transparent one that frame paints as a thin outline
+    // around the whole window — the "transparent margin with an obvious edge"
+    // report. The pet window avoids it the same way, and the panel is already
+    // sized for the widest thing in it (the 53-week click heatmap).
+    .resizable(false)
+    // Transparent so the "liquid glass" card in lite-settings.css can let the
+    // desktop tint it, and so its rounded corners are really rounded instead of
+    // sitting on an opaque rectangle. macOS needs app.macOSPrivateApi for this,
+    // which tauri.conf.json already sets.
+    .transparent(true)
+    // No native frame shadow. Windows draws it around the *window*, so on a
+    // transparent window it shows up as a rectangular halo in the margin around
+    // the card — the pet window turns it off for the same reason, and the card
+    // carries its own shadow instead.
+    .shadow(false)
     .center()
     .build()
     .map_err(|e| e.to_string())?;

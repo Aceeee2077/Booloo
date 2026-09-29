@@ -74,6 +74,18 @@ pub fn defaults() -> Value {
         "fileDropReactions": true,
         "standReminderEnabled": true,
         "standReminderMinutes": 5,
+        // Health plan. The two new items start off: the standing reminder is
+        // already on by default, and stacking two more timers on a fresh install
+        // would turn the pet into a metronome. They are one click away in
+        // Settings → 健康计划.
+        "eyeRestEnabled": false,
+        "eyeRestMinutes": 20,
+        "waterEnabled": false,
+        "waterMinutes": 45,
+        // Per local-day counters: { "YYYY-MM-DD": { clicks, stand, eye, water } }.
+        // Written by the pet window (batched, see `flushDailyStats`) and read by
+        // the settings panel's click heatmap. Pruned to the last ~400 days.
+        "dailyStats": {},
         // Reminders the user left for the pet: [{ id, text, at }], `at` being the
         // ms epoch to announce at. Small enough to live in this file, and it has
         // to survive a restart, so there is no separate store.

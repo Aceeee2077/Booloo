@@ -1,15 +1,55 @@
-:root { font-family: "Segoe UI", "Microsoft YaHei", sans-serif; color: #513a2c; background: #fff8f2; }
+:root { font-family: "Segoe UI", "Microsoft YaHei", sans-serif; color: #513a2c; }
 * { box-sizing: border-box; }
+/* The window is transparent (see build_settings in src-tauri/src/window.rs), so
+   the card below is what the user sees: a translucent sheet the desktop tints,
+   with a slow light drift inside it. The blur is kept to the sticky header,
+   where the backdrop is the page's own scrolled content — a webview cannot
+   sample the desktop, and a backdrop-filter over a transparent window is what
+   makes panels go black on some Windows builds. The card stays deep enough
+   (≈0.9 alpha) to remain readable over any wallpaper. */
+html, body { background: transparent; }
 body { margin: 0; }
-.panel { max-width: 650px; margin: auto; padding: 0 24px 24px; }
-header { position: sticky; top: 0; z-index: 10; height: 56px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #efdacb; background: #fff8f2; user-select: none; }
+.panel {
+  position: relative;
+  /* The glass fills the window: with an outer margin the transparent ring around
+     the card reads as a gap between the window and the panel, and it also gives
+     any OS shadow somewhere to show up as a phantom outline. Flush to the edges,
+     only the corners are transparent. */
+  width: 100%;
+  min-height: 100vh;
+  margin: 0;
+  /* The 24 px inset lives on each row (header / section) instead of on the card,
+     so the title bar reaches both edges of the glass instead of floating inside
+     it as a narrower strip. */
+  padding: 0 0 24px;
+  border: 1px solid #ffffff59;
+  border-radius: 20px;
+  background-color: #fffaf4ee;
+  background-image:
+    radial-gradient(42% 34% at 14% 6%, #ffd7a7b0, transparent 70%),
+    radial-gradient(34% 28% at 88% 4%, #ffbfd6a8, transparent 72%),
+    linear-gradient(160deg, #fffdfbe8, #fff7f1e4 52%, #ffefe6ea);
+  background-size: 190% 190%, 170% 170%, 100% 100%;
+  background-repeat: no-repeat;
+  background-position: 0% 40%, 100% 0%, 0 0;
+  /* Only the glass's own inner highlight: an outer shadow on a card that reaches
+     the window edge would simply be cut off there, drawing a hard line. */
+  box-shadow: inset 0 1px 0 #ffffffcc;
+  animation: glass-shift 32s ease-in-out infinite alternate;
+}
+@keyframes glass-shift {
+  from { background-position: 0% 40%, 100% 0%, 0 0; }
+  to { background-position: 34% 62%, 68% 12%, 0 0; }
+}
+@media (prefers-reduced-motion: reduce) { .panel { animation: none; } }
+header { position: sticky; top: 0; z-index: 10; height: 56px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 24px; border-bottom: 1px solid #efdacbcc; border-radius: 20px 20px 0 0; background: #fff8f2e0; backdrop-filter: blur(10px) saturate(130%); user-select: none; }
 header div { display: flex; gap: 12px; align-items: baseline; }
 header strong { font-size: 17px; }
 header span { color: #9a7660; font-size: 12px; }
-section { padding: 18px 0; border-bottom: 1px solid #efdacb; }
+section { padding: 18px 24px; border-bottom: 1px solid #efdacb99; }
 h1, h2 { margin: 0 0 15px; font-size: 16px; }
-button { font: inherit; color: inherit; background: white; border: 1px solid #e9cbb6; border-radius: 10px; padding: 8px 12px; cursor: pointer; }
-button:hover { background: #ffecdc; }
+button { font: inherit; color: inherit; background: #ffffffd4; border: 1px solid #e9cbb6; border-radius: 10px; padding: 8px 12px; cursor: pointer; }
+button:hover { background: #ffeadae6; }
 button:disabled { opacity: .5; cursor: default; }
 button.primary { color: white; background: #ea773b; border-color: #ea773b; }
 button.primary:hover { background: #d7642c; }
@@ -29,16 +69,16 @@ header button { border: 0; background: transparent; }
 .setting { display: block; margin: 12px 0; }
 .setting span { display: flex; justify-content: space-between; margin-bottom: 6px; }
 .setting input { display: block; width: 100%; accent-color: #ea773b; }
-.setting select { display: block; width: 100%; font: inherit; color: inherit; padding: 5px 8px; border: 1px solid #e9cbb6; border-radius: 8px; background: white; }
+.setting select { display: block; width: 100%; font: inherit; color: inherit; padding: 5px 8px; border: 1px solid #e9cbb6; border-radius: 8px; background: #ffffffd4; }
 .check { display: flex; width: fit-content; max-width: 100%; align-items: center; gap: 8px; margin: 14px 0; }
 .check input { accent-color: #ea773b; width: 17px; height: 17px; }
 .reminder-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 0 0 2px 25px; font-size: 13px; }
-.reminder-controls select, .reminder-controls input { font: inherit; color: inherit; padding: 5px 8px; border: 1px solid #e9cbb6; border-radius: 8px; background: white; }
+.reminder-controls select, .reminder-controls input { font: inherit; color: inherit; padding: 5px 8px; border: 1px solid #e9cbb6; border-radius: 8px; background: #ffffffd4; }
 .reminder-controls input { width: 72px; margin-left: 6px; }
 .reminder-controls [hidden] { display: none; }
 .reminder-form { display: flex; flex-wrap: wrap; gap: 8px; }
-.reminder-form input[type="text"] { flex: 1 1 220px; font: inherit; color: inherit; padding: 7px 10px; border: 1px solid #e9cbb6; border-radius: 10px; background: white; }
-.reminder-form input[type="time"] { font: inherit; color: inherit; padding: 6px 8px; border: 1px solid #e9cbb6; border-radius: 10px; background: white; }
+.reminder-form input[type="text"] { flex: 1 1 220px; font: inherit; color: inherit; padding: 7px 10px; border: 1px solid #e9cbb6; border-radius: 10px; background: #ffffffd4; }
+.reminder-form input[type="time"] { font: inherit; color: inherit; padding: 6px 8px; border: 1px solid #e9cbb6; border-radius: 10px; background: #ffffffd4; }
 .reminder-quick { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 0; }
 .reminder-quick button { padding: 5px 10px; font-size: 12px; border-radius: 999px; color: #8a6552; }
 .reminder-list { list-style: none; margin: 12px 0 0; padding: 0; }
@@ -48,6 +88,33 @@ header button { border: 0; background: transparent; }
 .reminder-list .text { flex: 1 1 auto; overflow-wrap: anywhere; font-size: 13px; }
 .reminder-list .remove { flex: 0 0 auto; padding: 3px 8px; border-radius: 8px; color: #9a7660; font-size: 12px; }
 .reminder-list li.empty { border: 1px dashed #ecd8c8; background: transparent; color: #9a7660; font-size: 12px; }
+/* Health plan: one row per habit — its switch on the left, its interval beside it. */
+.health-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 14px; }
+.health-row .check { margin: 8px 0; }
+.health-row .reminder-controls { margin-left: 25px; }
+.health-interval { font: inherit; color: inherit; padding: 5px 8px; border: 1px solid #e9cbb6; border-radius: 8px; background: #ffffffd4; }
+/* Click heatmap: GitHub's shape — a column per week, a row per weekday, with the
+   month printed above the week it starts in. */
+/* A whole year in one row of 53 weeks. The cells are 10 px so the grid is 652 px
+   wide, which fits the 820 px window (and its 720 px minimum) with room to
+   spare; it is centred so the extra width reads as breathing room rather than
+   as a short chart. */
+/* `safe` keeps the first week reachable if a narrow window ever does force the
+   grid to scroll; browsers without it simply fall back to left-aligned. */
+.heatmap-scroll { display: flex; justify-content: safe center; overflow-x: auto; padding-bottom: 2px; }
+.heatmap-grid { display: grid; grid-template-columns: 16px repeat(53, 10px); grid-template-rows: 14px repeat(7, 10px); gap: 2px; width: max-content; }
+.heatmap-month { font-size: 10px; line-height: 14px; color: #a08a7a; white-space: nowrap; }
+.heatmap-weekday { font-size: 10px; line-height: 10px; color: #a08a7a; text-align: right; }
+.heatmap-cell { display: block; width: 10px; height: 10px; border-radius: 3px; background: #f2e6da; }
+.heatmap-cell[data-level="1"] { background: #ffd9b5; }
+.heatmap-cell[data-level="2"] { background: #f7b273; }
+.heatmap-cell[data-level="3"] { background: #ea773b; }
+.heatmap-cell[data-level="4"] { background: #a8420f; }
+.heatmap-cell[data-level="-1"] { background: transparent; }
+.heatmap-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px; }
+.heatmap-foot .note { margin: 0; }
+.heatmap-legend { display: flex; align-items: center; gap: 3px; color: #a08a7a; font-size: 11px; }
+.heatmap-legend .heatmap-cell { width: 10px; height: 10px; }
 .update-grid { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; margin-bottom: 12px; font-size: 13px; }
 .update-grid .value { color: #886c5b; }
 .update-grid .value.err { color: #ba3e2e; }
@@ -60,4 +127,4 @@ header button { border: 0; background: transparent; }
 #update-notes-box pre { margin: 0; max-height: 140px; overflow: auto; padding: 8px 10px; border: 1px solid #f3e4d8; border-radius: 10px; background: #fffdfb; color: #6b5346; font-size: 12px; white-space: pre-wrap; word-break: break-word; }
 #update-manual { user-select: text; }
 [hidden] { display: none !important; }
-@media (max-width: 560px) { .skins { grid-template-columns: repeat(2, 1fr); } .panel { padding: 0 16px 20px; } }
+@media (max-width: 560px) { .skins { grid-template-columns: repeat(2, 1fr); } header, section { padding-left: 16px; padding-right: 16px; } }
