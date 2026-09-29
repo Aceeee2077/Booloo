@@ -92,11 +92,21 @@
       <p id="stand-status" class="note" role="status"></p>
       <div class="health-row">
         <label class="check"><input id="eye-rest" type="checkbox" /><span data-i18n="lite.health.eyeRest">护眼</span></label>
-        <select id="eye-interval" class="health-interval"></select>
+        <div class="reminder-controls">
+          <select id="eye-interval" class="health-interval"></select>
+          <label id="eye-custom-label" for="eye-custom" hidden><span data-i18n="lite.settings.customMinutes">分钟数</span>
+            <input id="eye-custom" type="number" min="1" max="240" step="1" value="20" />
+          </label>
+        </div>
       </div>
       <div class="health-row">
         <label class="check"><input id="water" type="checkbox" /><span data-i18n="lite.health.water">喝水</span></label>
-        <select id="water-interval" class="health-interval"></select>
+        <div class="reminder-controls">
+          <select id="water-interval" class="health-interval"></select>
+          <label id="water-custom-label" for="water-custom" hidden><span data-i18n="lite.settings.customMinutes">分钟数</span>
+            <input id="water-custom" type="number" min="1" max="240" step="1" value="45" />
+          </label>
+        </div>
       </div>
       <p id="health-status" class="note" role="status"></p>
       <p class="note" data-i18n="lite.health.hint"></p>

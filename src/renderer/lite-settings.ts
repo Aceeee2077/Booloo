@@ -29,8 +29,12 @@
   const reminderStatus = $<HTMLParagraphElement>('reminder-status');
   const eyeRest = $<HTMLInputElement>('eye-rest');
   const eyeInterval = $<HTMLSelectElement>('eye-interval');
+  const eyeCustom = $<HTMLInputElement>('eye-custom');
+  const eyeCustomLabel = $<HTMLLabelElement>('eye-custom-label');
   const water = $<HTMLInputElement>('water');
   const waterInterval = $<HTMLSelectElement>('water-interval');
+  const waterCustom = $<HTMLInputElement>('water-custom');
+  const waterCustomLabel = $<HTMLLabelElement>('water-custom-label');
   const healthStatus = $<HTMLParagraphElement>('health-status');
   const heatmapGrid = $<HTMLElement>('heatmap-grid');
   const heatmapSummary = $<HTMLElement>('heatmap-summary');
@@ -214,21 +218,46 @@
   }
 
   /**
-   * Fill an interval box, keeping whatever the config already had even when it is
-   * not one of the presets (an older value must not be silently rewritten).
+   * Fill an interval box: the presets, then "custom". A stored value that is not
+   * one of the presets leaves the box on "custom" with that number in the field,
+   * which is also how the standing reminder has always behaved.
    */
   function fillMinutes(select: HTMLSelectElement, presets: number[], current: number, signature: string) {
     if (signature === select.dataset.signature) return;
     select.dataset.signature = signature;
     select.textContent = '';
-    const values = presets.includes(current) ? presets : [...presets, current].sort((a, b) => a - b);
-    for (const value of values) {
+    for (const value of presets) {
       const option = document.createElement('option');
       option.value = String(value);
       option.textContent = liteT('lite.health.minutes', { n: value });
       select.append(option);
     }
-    select.value = String(current);
+    const custom = document.createElement('option');
+    custom.value = 'custom';
+    custom.textContent = liteT('lite.settings.custom');
+    select.append(custom);
+  }
+
+  /** Show the chosen preset in the box, and the number field only when it is "custom". */
+  function paintInterval(
+    select: HTMLSelectElement, label: HTMLLabelElement, field: HTMLInputElement,
+    presets: number[], current: number,
+  ) {
+    const custom = !presets.includes(current);
+    select.value = custom ? 'custom' : String(current);
+    label.hidden = !custom;
+    field.value = String(current);
+  }
+
+  /** Picking "custom" only reveals the number field; the value is saved after. */
+  function revealCustom(select: HTMLSelectElement, label: HTMLLabelElement, field: HTMLInputElement) {
+    if (select.value !== 'custom') {
+      saveHealth();
+      return;
+    }
+    label.hidden = false;
+    field.focus();
+    field.select();
   }
 
   /** Today's counters, straight out of the same buckets the pet writes. */
@@ -243,6 +272,8 @@
     water.checked = cfg.waterEnabled === true;
     fillMinutes(eyeInterval, EYE_PRESETS, eyeMinutes, `eye:${eyeMinutes}:${liteCurrentLocale()}`);
     fillMinutes(waterInterval, WATER_PRESETS, waterMinutes, `water:${waterMinutes}:${liteCurrentLocale()}`);
+    paintInterval(eyeInterval, eyeCustomLabel, eyeCustom, EYE_PRESETS, eyeMinutes);
+    paintInterval(waterInterval, waterCustomLabel, waterCustom, WATER_PRESETS, waterMinutes);
     const today = todayStats(cfg);
     healthStatus.textContent = liteT('lite.health.today', {
       stand: Number(today.stand) || 0,
@@ -252,11 +283,23 @@
   }
 
   function saveHealth() {
+    // A custom value is typed in, so it is validated rather than clamped: writing
+    // the fallback while the field still shows 999 would look like a bug.
+    const chosen = (select: HTMLSelectElement, field: HTMLInputElement) => {
+      const value = Number(select.value === 'custom' ? field.value : select.value);
+      return Number.isInteger(value) && value >= 1 && value <= 240 ? value : null;
+    };
+    const eyeMinutes = chosen(eyeInterval, eyeCustom);
+    const waterMinutes = chosen(waterInterval, waterCustom);
+    if (eyeMinutes === null || waterMinutes === null) {
+      healthStatus.textContent = liteT('lite.health.invalid');
+      return;
+    }
     void window.api.setConfig({
       eyeRestEnabled: eyeRest.checked,
-      eyeRestMinutes: minutes(eyeInterval.value, 20),
+      eyeRestMinutes: eyeMinutes,
       waterEnabled: water.checked,
-      waterMinutes: minutes(waterInterval.value, 45),
+      waterMinutes,
     }).catch(error => { healthStatus.textContent = liteT('lite.health.failed', { error: String(error) }); });
   }
 
@@ -625,8 +668,13 @@
   });
   eyeRest.addEventListener('change', saveHealth);
   water.addEventListener('change', saveHealth);
-  eyeInterval.addEventListener('change', saveHealth);
-  waterInterval.addEventListener('change', saveHealth);
+  // Like the standing reminder: choosing "custom" only opens the number field,
+  // and the value is written when that field changes. Saving on the select's own
+  // change would write the old preset and snap the choice back.
+  eyeInterval.addEventListener('change', () => revealCustom(eyeInterval, eyeCustomLabel, eyeCustom));
+  waterInterval.addEventListener('change', () => revealCustom(waterInterval, waterCustomLabel, waterCustom));
+  eyeCustom.addEventListener('change', saveHealth);
+  waterCustom.addEventListener('change', saveHealth);
   hourlyChime.addEventListener('change', () => void window.api.setConfig({ hourlyChime: hourlyChime.checked }));
   loadAwareness.addEventListener('change', () => void window.api.setConfig({ loadAwareness: loadAwareness.checked }));
   reminderAdd.addEventListener('click', () => void addReminder());

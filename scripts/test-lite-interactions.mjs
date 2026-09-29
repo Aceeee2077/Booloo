@@ -458,5 +458,14 @@ await tick();
 assert.equal(configPatches.length, afterDisable, 'disabled habits count nothing');
 assert.equal(speech.textContent, '', 'disabled habits stay quiet');
 
+// A custom interval — anything from 1 to 240 minutes, not just the presets the
+// settings panel offers — is what actually drives the timer.
+config({ ...quiet, eyeRestEnabled: true, eyeRestMinutes: 7 });
+speech.textContent = '';
+wallClock += 7 * 60_000 + 1000;
+intervals[0]();
+await tick();
+assert.match(speech.textContent, /看会儿远处/, 'a custom look-away interval fires on its own schedule');
+
 console.log('Petting, taps, holds, blinking, reminders, load reactions, daily counters, ' +
   'health plan, dreams, actions, language switch and update notice: passed');

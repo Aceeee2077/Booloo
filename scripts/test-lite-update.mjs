@@ -292,6 +292,51 @@ assert.equal(yearLabel.textContent, String(year));
 
 console.log('Click heatmap shading, summary and empty state: passed');
 
+// ---------- health plan intervals ----------
+// Presets plus "custom", the same contract the standing reminder has: picking
+// custom only opens the number field, and the value is written when that field
+// changes — saving on the select's own change would write the old preset back.
+element('eye-interval').value = 'custom';
+change('eye-interval');
+await settle();
+assert.equal(element('eye-custom-label').hidden, false, 'custom reveals the look-away minutes field');
+assert.equal(element('eye-custom').focused, true, 'and focuses it');
+calls.patches.length = 0;
+element('eye-custom').value = '25';
+change('eye-custom');
+await settle();
+assert.equal(calls.patches.at(-1).eyeRestMinutes, 25, 'a custom look-away interval is saved');
+assert.equal(element('eye-interval').value, 'custom', 'and comes back as custom');
+assert.equal(element('eye-custom').value, '25');
+
+element('water-interval').value = 'custom';
+change('water-interval');
+await settle();
+assert.equal(element('water-custom-label').hidden, false, 'custom reveals the water minutes field');
+calls.patches.length = 0;
+element('water-custom').value = '75';
+change('water-custom');
+await settle();
+assert.equal(calls.patches.at(-1).waterMinutes, 75, 'a custom water interval is saved');
+
+// Out-of-range input is refused rather than silently replaced by the default.
+element('eye-custom').value = '999';
+calls.patches.length = 0;
+change('eye-custom');
+await settle();
+assert.equal(calls.patches.length, 0, 'an out-of-range interval is not written');
+assert.match(element('health-status').textContent, /1～240/, 'and the panel says why');
+
+// A stored value that is no preset is shown as custom with its number.
+config.eyeRestMinutes = 45;
+configChanged({ ...config });
+await settle();
+assert.equal(element('eye-interval').value, 'custom');
+assert.equal(element('eye-custom').value, '45');
+assert.equal(element('eye-custom-label').hidden, false);
+
+console.log('Health plan intervals: presets and custom minutes: passed');
+
 // The title bar's GitHub button opens the repository in the default browser; the
 // URL itself lives in src-tauri/src/opener.rs, so the page only has to ask.
 click('open-github');
