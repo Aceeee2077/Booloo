@@ -64,14 +64,10 @@ A single image gets gentle breathing and click motion. It does not become a new 
 
 ## macOS
 
-One codebase, no separate branch: the platform differences live in `tauri.conf.json` and a few `#[cfg(target_os = "macos")]` blocks.
+**There is no macOS installer for now.** The code itself is cross-platform — the differences live in `tauri.conf.json` and a few `#[cfg(target_os = "macos")]` blocks — but nothing is built or signed for it, so you would have to compile it yourself:
 
-- **Build** — On a Mac: `npm install && npm run dist:mac` (that is `tauri build --bundles dmg,app`). For one binary that runs on both Intel and Apple Silicon: `npx tauri build --target universal-apple-darwin --bundles app,dmg`.
-- **Transparent window** — macOS requires `app.macOSPrivateApi` plus the `macos-private-api` cargo feature on `tauri` (both configured). The trade-off: this build cannot ship on the Mac App Store.
-- **Dock / menu bar** — The pet runs with the Accessory activation policy, so it takes no Dock or ⌘-Tab slot; the menu-bar icon is a monochrome template image (`src/assets/tray-mac.png`, 22 pt @2x) that inverts itself for light and dark menu bars.
-- **Unsigned by default** — The `.dmg` has no Apple certificate, so the first launch needs right-click → Open (or `xattr -dr com.apple.quarantine Prismoo.app`). **macOS auto-update needs a signature too** (it replaces the `.app`); once you have an Apple Developer certificate, add `APPLE_CERTIFICATE` / `APPLE_CERTIFICATE_PASSWORD` / `APPLE_SIGNING_IDENTITY` / `APPLE_ID` / `APPLE_PASSWORD` / `APPLE_TEAM_ID` as repository secrets and uncomment the block in `.github/workflows/release.yml`.
-- **Releasing** — A `v*` tag builds Windows x64 and macOS (Apple Silicon and Intel) together and attaches them to one Release; `latest.json` then carries `windows-x86_64`, `darwin-aarch64` and `darwin-x86_64` entries.
-- **Verify without releasing** — Run `.github/workflows/build-check.yml` manually: it builds both platforms (updater artifacts off, so no signing key needed), uploads the bundles as artifacts and creates no Release.
+- On a Mac: `npm install && npm run dist:mac`; for one binary covering both Intel and Apple Silicon, `npx tauri build --target universal-apple-darwin --bundles app,dmg`.
+- The result is unsigned, so the first launch needs right-click → Open, or `xattr -dr com.apple.quarantine Prismoo.app`.
 
 ## Tech stack
 

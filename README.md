@@ -64,14 +64,10 @@
 
 ## macOS
 
-同一套代码，没有单独的 macOS 分支：平台差异只体现在 `tauri.conf.json` 和几处 `#[cfg(target_os = "macos")]`。
+**暂不提供 macOS 安装包。** 代码本身是跨平台的（差异只在 `tauri.conf.json` 和几处 `#[cfg(target_os = "macos")]`），只是官方没有构建和签名，想用只能自己编：
 
-- **构建** — 在 Mac 上 `npm install && npm run dist:mac`（即 `tauri build --bundles dmg,app`）。想一次产出同时支持 Intel 与 Apple Silicon 的单包：`npx tauri build --target universal-apple-darwin --bundles app,dmg`。
-- **透明窗口** — macOS 必须打开 `app.macOSPrivateApi`，并在 `tauri` 依赖上启用 `macos-private-api` feature（都已配好）。代价是这个构建不能上架 Mac App Store。
-- **Dock / 菜单栏** — 桌宠以 Accessory 策略运行，不占 Dock 与 ⌘-Tab 位置；入口只有菜单栏图标，用的是单色模板图（`src/assets/tray-mac.png`，22pt @2x），会随浅色 / 深色菜单栏自动反色。
-- **未签名** — 默认构建的 `.dmg` 没有 Apple 证书：第一次打开要「右键 → 打开」，或执行 `xattr -dr com.apple.quarantine Prismoo.app`。**macOS 的自动更新同样需要签名**（更新时要替换 `.app`）；拿到 Apple 开发者证书后，把 `APPLE_CERTIFICATE` / `APPLE_CERTIFICATE_PASSWORD` / `APPLE_SIGNING_IDENTITY` / `APPLE_ID` / `APPLE_PASSWORD` / `APPLE_TEAM_ID` 加进仓库 secrets，并取消 `.github/workflows/release.yml` 里的那段注释即可。
-- **发布** — 推 `v*` 标签会同时构建 Windows x64、macOS Apple Silicon、macOS Intel，挂到同一个 Release；`latest.json` 里会同时出现 `windows-x86_64` / `darwin-aarch64` / `darwin-x86_64`，各平台各取所需。
-- **只想验证不想发版** — 手动触发 `.github/workflows/build-check.yml`：它在两个平台各构建一次（关闭更新器产物、不需要签名密钥）、把产物作为 artifact 上传，**不会**创建 Release。
+- 在 Mac 上 `npm install && npm run dist:mac`；想一次产出 Intel 与 Apple Silicon 通用的单包，用 `npx tauri build --target universal-apple-darwin --bundles app,dmg`。
+- 产物未签名，第一次打开需「右键 → 打开」，或执行 `xattr -dr com.apple.quarantine Prismoo.app`。
 
 ## 技术栈
 
