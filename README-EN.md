@@ -4,6 +4,8 @@
 
 # Prismoo · Lightweight Desktop Pet
 
+[中文](./README.md) ｜ **English**
+
 A small, transparent pet that lives on your desktop — it walks, naps, and cheers when you drop a photo on it.
 
 [![Release](https://img.shields.io/github/v/release/Aceeee2077/Prismoo?label=release&color=ff8fb0)](https://github.com/Aceeee2077/Prismoo/releases)
@@ -35,7 +37,7 @@ Open Settings from the tray or the right-click menu to switch pets, import your 
 - **Touch means different things in different places** — Petting the head melts it into hearts; stroking its back makes it purr and groom; a single tap answers depending on what you poked; a quick double tap gets a happy wave and hearts; holding on too long makes it scratch its head and complain; waking it up with a poke earns a sleepy grumble first.
 - **Reminders** — Right-click and pick **Remind me…** (or use the Reminders section in Settings), type a line and a time — a time earlier than now means tomorrow. When it comes due, the pet runs to the middle of the screen and holds up a sign until you touch it. Anything missed by more than ten minutes is dropped rather than announced late.
 - **Health plan** — Three habits on their own timers: the standing reminder (on by default, 5 minutes, or 10/20/30 and a custom 1–240), a look-away nudge and a drink-water nudge (the last two start off; turn them on under **Health plan** in Settings). When one is due the pet says a line — the standing one also runs to the centre of the screen — and the panel keeps a running "today" tally underneath.
-- **Click heatmap** — Settings draws every day you clicked the pet over a **whole calendar year** (January 1st to December 31st, 53–54 weeks, no horizontal scrolling): 10 clicks is the lightest shade, then 40 and 70, and 100 or more is the darkest. Days below 10 are drawn empty, but hovering still shows the real count. Days still to come stay blank until they arrive, and today is the square with the outline — clicking the pet recolours it. The ‹ › arrows step through years (back as far as you have data, never into the future). Days are bucketed by the local calendar date (`src/renderer/lite-day.ts`), so the grid rolls over at midnight on its own — no network clock involved.
+- **Click heatmap** — Settings draws every day you clicked the pet over a **whole calendar year** (January 1st to December 31st, 53–54 weeks, no horizontal scrolling): 10 clicks is the lightest shade, then 40 and 70, and 100 or more is the darkest. Days below 10 are drawn empty, but hovering still shows the real count. **Days still to come are drawn too** — empty for now, with a "not yet" tooltip, and they start counting the moment they arrive. Today is the square with the outline — clicking the pet recolours it. The ‹ › arrows step through years (back as far as you have data, never into the future). Days are bucketed by the local calendar date (`src/renderer/lite-day.ts`), so the grid rolls over at midnight on its own — no network clock involved.
 - **GitHub button** — The settings title bar carries a GitHub icon: the icon grows and turns blue on hover with a "GitHub" label above it, and clicking it opens this repository in the default browser. The address is a constant in `src-tauri/src/opener.rs` and the command takes no arguments, so the page cannot use it to launch arbitrary links.
 - **Aware of this computer** — CPU, memory and battery (system APIs on Windows, the 1-minute load average on macOS): a CPU that stays pinned makes the pet sweat and mutter, a battery below 20% puts a 🪫 badge on it and sends it to nap more often, and plugging in wakes it right up. Turn it off under Daily settings; everything is read locally and nothing is sent anywhere.
 - **Sleep and chimes** — While asleep the pet occasionally shows a brief dream bubble, and a quiet hourly speech bubble is on by default. Hours missed while the computer sleeps are not announced later.
@@ -117,9 +119,3 @@ src/assets/        animation art and brand icons (sprite sheets and icons are ge
 scripts/           build, asset generation and test scripts (build-bulu-blink.mjs bakes Bulu's closed-eye frame)
 docs/screenshots/  images used by the READMEs
 ```
-
-## About this edition
-
-The lightweight pages load only the `lite-*.ts` scripts. The earlier full-featured source and docs (wardrobe, PetPack, AI chat, weather, legacy reminders, statistics, animation debugging) are still kept locally, but they are no longer part of what this repository pushes — see [.gitignore](./.gitignore).
-
-**中文：** [README.md](./README.md)

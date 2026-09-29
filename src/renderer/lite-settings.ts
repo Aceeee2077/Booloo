@@ -370,9 +370,12 @@
           continue;
         }
         if (liteDayDiff(today, key) > 0) {
-          // Later this year: the square is there and stays blank until the day
-          // arrives, which is what makes the year's shape visible from January.
-          cell.setAttribute('data-level', '-1');
+          // Later this year: drawn exactly like a day with no clicks yet, so the
+          // whole year's grid is visible from January instead of the chart
+          // stopping at today. The tooltip is what tells the two apart, and the
+          // square starts counting the moment the day arrives.
+          cell.setAttribute('data-level', '0');
+          cell.title = liteT('lite.heatmap.cellFuture', { date: dayLabel(key) });
           heatmapGrid.append(cell);
           continue;
         }

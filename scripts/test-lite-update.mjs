@@ -266,13 +266,14 @@ assert.match(cellAt(dayOf(now)).title, /45/, 'a day cell carries its real count 
 levelOf(null);
 assert.match(element('heatmap-summary').textContent, /还没有记录/, 'an empty year says so');
 
-// The rest of the year is already on the grid: later days blank, and the padding
-// that belongs to the neighbouring year not drawn as days at all.
+// The rest of the year is on the grid too: later days are drawn as empty squares
+// that say "not yet", and the padding that belongs to the neighbouring year is
+// not drawn as days at all.
 const tomorrow = new Date(year, now.getMonth(), now.getDate() + 1);
 if (tomorrow.getFullYear() === year) {
   const cell = cellAt(dayOf(tomorrow));
-  assert.equal(cell.attributes['data-level'], '-1', 'a day still to come is blank');
-  assert.ok(!cell.title, 'and carries no tooltip');
+  assert.equal(cell.attributes['data-level'], '0', 'a day still to come is drawn as an empty square');
+  assert.match(cell.title, /还没到/, 'and says it has not arrived yet');
 }
 if (lead > 0) {
   const padding = element('heatmap-grid').children[1 * (columns + 1) + 1];

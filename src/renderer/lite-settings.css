@@ -128,7 +128,6 @@ header button { border: 0; background: transparent; }
 .heatmap-cell[data-level="2"] { background: #f7b273; }
 .heatmap-cell[data-level="3"] { background: #ea773b; }
 .heatmap-cell[data-level="4"] { background: #a8420f; }
-.heatmap-cell[data-level="-1"] { background: transparent; }
 /* Outside the year being shown: not a day at all, so it gets no cell. */
 .heatmap-cell[data-level="-2"] { background: transparent; }
 /* Today, so the eye can find the square that lights up when the pet is clicked. */
