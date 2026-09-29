@@ -118,6 +118,7 @@ const LITE_SETTINGS_CHECK_JS: &str = r#"
     hasUpdatePanel: !!document.getElementById('update-panel'),
     hasReminders: !!document.getElementById('reminders') && !!document.getElementById('reminder-text'),
     hasLoadToggle: !!document.getElementById('load-awareness'),
+    hasAffinity: !!document.getElementById('affinity') && !!document.getElementById('affinity-fill'),
     hasHealth: !!document.getElementById('health') && !!document.getElementById('eye-rest'),
     hasHeatmap: !!document.getElementById('heatmap-grid'),
     hasGithubButton: !!document.getElementById('open-github'),

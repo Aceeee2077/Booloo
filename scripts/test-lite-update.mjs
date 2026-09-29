@@ -106,6 +106,7 @@ const context = {
 vm.createContext(context);
 vm.runInContext(readFileSync(join(process.cwd(), 'dist', 'renderer', 'lite-i18n.js'), 'utf8'), context);
 vm.runInContext(readFileSync(join(process.cwd(), 'dist', 'renderer', 'lite-day.js'), 'utf8'), context);
+vm.runInContext(readFileSync(join(process.cwd(), 'dist', 'renderer', 'lite-affinity.js'), 'utf8'), context);
 vm.runInContext(readFileSync(join(process.cwd(), 'dist', 'renderer', 'lite-settings.js'), 'utf8'), context);
 const settle = async () => { await new Promise(resolve => setImmediate(resolve)); await new Promise(resolve => setImmediate(resolve)); };
 await settle();
@@ -336,6 +337,32 @@ assert.equal(element('eye-custom').value, '45');
 assert.equal(element('eye-custom-label').hidden, false);
 
 console.log('Health plan intervals: presets and custom minutes: passed');
+
+// ---------- affinity ----------
+// The panel shows the level name, the score, the bar towards the next level and
+// the three lifetime numbers, all read from the config the pet writes.
+config.affinity = 260;
+config.statsDays = ['2026-09-01', '2026-09-02', '2026-09-03'];
+config.statsFirstSeen = '2026-09-01';
+config.statsClicks = 123;
+configChanged({ ...config });
+await settle();
+assert.equal(element('affinity-level').textContent, '友好', '260 points is the third level');
+assert.equal(element('affinity-value').textContent, '260');
+assert.equal(element('affinity-fill').style.width, '20%', '260 is a fifth of the way from 200 to 500');
+assert.match(element('affinity-next').textContent, /240/, 'and the panel says what is left');
+assert.equal(element('affinity-days').textContent, '3');
+assert.equal(element('affinity-first').textContent, '2026-09-01');
+assert.equal(element('affinity-clicks').textContent, '123');
+
+config.affinity = 1200;
+configChanged({ ...config });
+await settle();
+assert.equal(element('affinity-level').textContent, '挚友', 'the last level is the ceiling');
+assert.equal(element('affinity-fill').style.width, '100%');
+assert.match(element('affinity-next').textContent, /最高等级/, 'and there is nothing left to earn');
+
+console.log('Affinity panel: level, bar, next level and lifetime stats: passed');
 
 // The title bar's GitHub button opens the repository in the default browser; the
 // URL itself lives in src-tauri/src/opener.rs, so the page only has to ask.

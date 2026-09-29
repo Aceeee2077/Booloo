@@ -46,6 +46,11 @@ child.on('exit', code => {
     // system_load command behind the load reactions has to answer.
     pet?.hasSign === true && pet?.hasMood === true &&
     pet?.load && pet.load.available === true && pet.loadError === undefined &&
+    // The affinity model is live in a real window: a score and one of the five
+    // levels, both computed from the shared script.
+    typeof pet?.state?.affinity === 'number' && pet.state.affinity >= 0 &&
+    Number.isInteger(pet?.state?.affinityLevel) &&
+    pet.state.affinityLevel >= 0 && pet.state.affinityLevel <= 4 &&
     (pet?.state?.skin !== 'custom' || pet?.state?.customReady === true);
   // Two choices now: Bulu and "my image".
   const settingsOk = settings?.hasApi && settings?.skinChoices === 2 &&
@@ -63,6 +68,7 @@ child.on('exit', code => {
     settings?.reminderRoundTrip === true && settings?.reminderCleared === true &&
     // Health plan and the click heatmap are rendered by the page from the config.
     settings?.hasHealth === true && settings?.hasHeatmap === true &&
+    settings?.hasAffinity === true &&
     settings?.hasGithubButton === true &&
     ['在浏览器中打开 GitHub 仓库', 'Open the GitHub repository in your browser'].includes(settings?.githubLabel) &&
     typeof settings?.heatmapCells === 'number' && settings.heatmapCells > 300 &&

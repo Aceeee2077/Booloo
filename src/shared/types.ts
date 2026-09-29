@@ -437,6 +437,11 @@ interface DailyStat {
   eye?: number;
   /** Times the drink-water reminder was delivered. */
   water?: number;
+  /**
+   * Affinity points earned that day. Kept per day so the daily cap survives a
+   * restart; nothing draws it yet.
+   */
+  affinity?: number;
 }
 
 /**

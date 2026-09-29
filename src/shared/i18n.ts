@@ -46,6 +46,10 @@ export const zhDict: Record<string, I18nValue> = {
   'affinity.levelUp': '🎉 好感度升级：Lv.{level} {name}！',
   'affinity.maxed': '❤️ 好感度已满，我们是挚友啦！',
   'affinity.badgeTitle': '好感度 {value} · {level}',
+  'affinity.section': '好感度',
+  'affinity.hint': '摸它、戳它、双击、拖文件给它都会涨好感度，每天第一次互动额外 +5；同一天最多累计 40 点，所以这是慢慢处出来的。',
+  'affinity.next': '还差 {n} 点到「{name}」',
+  'affinity.max': '已经是最高等级，谢谢一路陪着它 ❤️',
 
   // Focus mode / break reminder (专注模式)
   'reminder.break': '站起来活动活动啊老板！',
@@ -569,6 +573,10 @@ export const enDict: Record<string, I18nValue> = {
   'affinity.levelUp': '🎉 Affinity up: Lv.{level} {name}!',
   'affinity.maxed': '❤️ Affinity is maxed — we\'re best friends!',
   'affinity.badgeTitle': 'Affinity {value} · {level}',
+  'affinity.section': 'Affinity',
+  'affinity.hint': 'Petting, poking, double-tapping and dropping files on it all raise affinity, and the first hello of a day is worth +5. A single day is capped at 40 points, so the score grows with time rather than with one long session.',
+  'affinity.next': '{n} points to {name}',
+  'affinity.max': 'Already at the top level — thanks for staying with it ❤️',
 
   // Focus mode / break reminder
   'reminder.break': 'Stand up and stretch, boss!',

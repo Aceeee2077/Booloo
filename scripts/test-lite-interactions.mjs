@@ -38,6 +38,7 @@ const hitSamples = [];
 let speechCount = 0;
 const speech = { hidden: true, style: {}, get textContent() { return this.line || ''; }, set textContent(value) { this.line = value; speechCount++; } };
 const hearts = { hidden: true, style: {}, offsetWidth: 20 };
+const affinityChip = { hidden: true, style: {}, textContent: '' };
 const dream = { hidden: true, style: {}, textContent: '' };
 const sign = { hidden: true, style: {}, textContent: '' };
 const mood = { hidden: true, style: {}, textContent: '' };
@@ -105,6 +106,7 @@ const context = {
     getElementById: id => ({
       'pet-canvas': canvas, 'pet-speech': speech, 'pet-hearts': hearts, 'pet-dream': dream,
       'pet-sign': sign, 'pet-mood': mood,
+      'pet-affinity': affinityChip,
     })[id],
   },
   // The atlas is 16 frames wide at 192 px per frame (see scripts/build-bulu-actions.mjs).
@@ -115,6 +117,7 @@ const context = {
 vm.createContext(context);
 vm.runInContext(readFileSync(join(process.cwd(), 'dist/renderer/lite-i18n.js'), 'utf8'), context);
 vm.runInContext(readFileSync(join(process.cwd(), 'dist/renderer/lite-day.js'), 'utf8'), context);
+vm.runInContext(readFileSync(join(process.cwd(), 'dist/renderer/lite-affinity.js'), 'utf8'), context);
 vm.runInContext(readFileSync(join(process.cwd(), 'dist/renderer/lite-app.js'), 'utf8'), context);
 await new Promise(resolve => setImmediate(resolve));
 
@@ -467,5 +470,73 @@ intervals[0]();
 await tick();
 assert.match(speech.textContent, /看会儿远处/, 'a custom look-away interval fires on its own schedule');
 
-console.log('Petting, taps, holds, blinking, reminders, load reactions, daily counters, ' +
-  'health plan, dreams, actions, language switch and update notice: passed');
+// ---------- affinity ----------
+// Points come from touching the pet, the first hello of a day is worth extra,
+// and one day is capped so the score cannot be ground out in an evening. The
+// pet's running total is only ever raised, so these assertions are written as
+// deltas against a total the test pins first.
+config({ ...quiet, affinity: 190, statsDays: [], statsClicks: 0, statsFirstSeen: '' });
+// Flush anything the earlier blocks left buffered, so this one starts from a
+// known state: the pet's "already said hello today?" set is empty again.
+clock += 6000;
+intervals[0]();
+await tick();
+const clicksBefore = configPatches.filter(patch => patch.statsClicks !== undefined).at(-1).statsClicks;
+speech.textContent = '';
+for (let click = 0; click < 5; click++) {
+  clock += 400; // keep the taps apart so they are not read as a double tap
+  tap(120, 175);
+}
+clock += 6000;
+intervals[0]();
+await tick();
+const afterLevelUp = configPatches.filter(patch => patch.affinity).at(-1);
+assert.equal(afterLevelUp.affinity, 200,
+  'five taps plus the first-hello bonus move the score from 190 to 200');
+assert.match(speech.textContent, /好感度升级：Lv\.3 友好/, 'crossing a level says so');
+assert.equal(afterLevelUp.statsClicks, clicksBefore + 5, 'the lifetime click count follows the taps');
+assert.equal(afterLevelUp.affinityHistory.at(-1).value, 200, 'the growth history records the day');
+assert.equal(afterLevelUp.statsDays.length, 1, 'and today counts as a day together');
+assert.equal(afterLevelUp.statsFirstSeen.length, 10, 'the first day is remembered');
+assert.equal(affinityChip.textContent, '+1 ❤️', 'every gain shows the little floating chip');
+assert.equal(affinityChip.hidden, false, 'and it is on screen');
+
+// Every further tap is worth one, until the day's 40 points are used up.
+for (let click = 0; click < 4; click++) {
+  clock += 400;
+  tap(120, 175);
+}
+clock += 6000;
+intervals[0]();
+await tick();
+const capped = configPatches.filter(patch => patch.affinity).at(-1);
+assert.equal(capped.affinity, 204, 'four more taps are worth four points');
+
+// Striking the pet is worth more than poking it.
+clock += 4000;
+for (const x of [110, 135, 115, 140]) {
+  clock += 50;
+  canvasEvents.get('mousemove')({ offsetX: x, offsetY: 270, buttons: 0 });
+}
+clock += 6000;
+intervals[0]();
+await tick();
+assert.equal(configPatches.filter(patch => patch.affinity).at(-1).affinity, 207,
+  'stroking the back is worth three');
+
+// The cap holds even when the clicks keep coming: 45 taps in one day are worth
+// 40 points and no more. `statsDays` already lists today, so no hello bonus.
+const beforeCap = configPatches.filter(patch => patch.affinity).at(-1).affinity;
+config({ ...quiet, affinity: 0, statsDays: [dayKeyOf(wallClock)], statsClicks: 0 });
+for (let click = 0; click < 45; click++) {
+  clock += 400;
+  tap(120, 175);
+}
+clock += 6000;
+intervals[0]();
+await tick();
+assert.equal(configPatches.filter(patch => patch.affinity).at(-1).affinity, beforeCap + 40,
+  'one day stops at 40 points, however many taps arrive');
+
+console.log('Petting, taps, holds, blinking, affinity, reminders, load reactions, daily ' +
+  'counters, health plan, dreams, actions, language switch and update notice: passed');

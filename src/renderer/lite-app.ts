@@ -8,6 +8,7 @@
   // older page) without them must not take the whole pet loop down.
   const sign = document.getElementById('pet-sign') as HTMLDivElement | undefined;
   const mood = document.getElementById('pet-mood') as HTMLDivElement | undefined;
+  const affinityChip = document.getElementById('pet-affinity') as HTMLDivElement | undefined;
   const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
 
   // Every Mac is Retina and Windows machines frequently sit at 125–150%, while the
@@ -116,6 +117,25 @@ const BLINK_JITTER_MS = 5200;
    */
   const pendingStats: Record<string, DailyStat> = {};
   let statsFlushAt = 0;
+  /** Days with a real interaction, pending merge into `statsDays`. */
+  const daysToAdd = new Set<string>();
+  /**
+   * The score and the lifetime click count the pet owns.
+   *
+   * They are kept here rather than re-read from the config on every award: a
+   * write is batched, so the config the pet holds is briefly behind what it has
+   * already handed out. `applyConfig` only ever raises these (an older config
+   * cannot take points away), which keeps a late broadcast from losing any.
+   */
+  let affinityTotal = -1;
+  let clicksTotal = -1;
+  let affinityChipTimer: number | null = null;
+  /**
+   * When the pet last said something about affinity. A tap awards points *and*
+   * answers the poke, and the poke line would otherwise land on top of a level-up
+   * (or the once-a-day hello) that the same tap just triggered.
+   */
+  let affinitySpokeAt = 0;
   let lastEdgePoll = 0;
   let visibleRect: PetBox = { x: 86, y: 140, w: 128, h: 150 };
   let lastHover = false;
@@ -125,6 +145,10 @@ const BLINK_JITTER_MS = 5200;
     cutoutRejected: !!custom?.cutoutRejected,
     bounds: visibleRect,
     action: activeAction?.kind ?? null,
+    // The self-check reads these to prove the affinity model is live in a real
+    // window: the score is a number and the level is one of the five.
+    affinity: affinityTotal >= 0 ? affinityTotal : Number(config?.affinity) || 0,
+    affinityLevel: affinityLevel(affinityTotal >= 0 ? affinityTotal : Number(config?.affinity) || 0),
   });
 
   function stopWalking() {
@@ -309,6 +333,8 @@ const BLINK_JITTER_MS = 5200;
     activity();
     clickUntil = now + 900;
     showHearts();
+    markActiveDay();
+    awardAffinity(stroked === 'head' ? 'petHead' : 'petBody');
     if (stroked === 'head') {
       say(liteT('lite.pet.petting'), 2000);
     } else {
@@ -426,6 +452,10 @@ const BLINK_JITTER_MS = 5200;
   const STATS_FLUSH_MS = 5000;
   /** More than the heatmap draws; older days are dropped so the config stays small. */
   const STATS_KEEP_DAYS = 400;
+  /** How many days of affinity growth the history keeps (one point per day). */
+  const AFFINITY_HISTORY_DAYS = 180;
+  /** What each kind of interaction is worth. See lite-affinity.ts for the levels. */
+  const AFFINITY_GAINS = { tap: 1, doubleTap: 2, petHead: 2, petBody: 3, fileDrop: 2 } as const;
 
   function clampMinutes(value: unknown, fallback: number) {
     const minutes = Number(value);
@@ -446,6 +476,79 @@ const BLINK_JITTER_MS = 5200;
     statsFlushAt = statsFlushAt ? Math.min(statsFlushAt, at) : at;
   }
 
+  function showAffinityChip(gain: number) {
+    if (!affinityChip) return;
+    affinityChip.textContent = `+${gain} ❤️`;
+    affinityChip.style.left = `${Math.min(232, visibleRect.x + visibleRect.w * 0.62)}px`;
+    affinityChip.style.top = `${Math.max(18, visibleRect.y - 16)}px`;
+    affinityChip.hidden = false;
+    affinityChip.style.animation = 'none';
+    void affinityChip.offsetWidth;
+    affinityChip.style.animation = '';
+    if (affinityChipTimer !== null) window.clearTimeout(affinityChipTimer);
+    affinityChipTimer = window.setTimeout(() => { affinityChip.hidden = true; affinityChipTimer = null; }, 1100);
+  }
+
+  /**
+   * Award affinity for touching the pet.
+   *
+   * The daily cap is the interesting part: the room left is measured against what
+   * the config already holds *plus* what is still buffered, so a burst of clicks
+   * inside one write window cannot slip past it. The first interaction of a day
+   * pays extra and says so; crossing a level is the only other thing worth a
+   * bubble, and everything else is just the small floating chip.
+   */
+  function awardAffinity(reason: keyof typeof AFFINITY_GAINS | 'firstHello') {
+    if (!config) return 0;
+    const today = liteDayKey();
+    const earned = (Number(config.dailyStats?.[today]?.affinity) || 0) +
+      (Number(pendingStats[today]?.affinity) || 0);
+    const wanted = reason === 'firstHello' ? AFFINITY_FIRST_HELLO : AFFINITY_GAINS[reason];
+    const gain = Math.min(wanted, Math.max(0, AFFINITY_DAILY_CAP - earned));
+    if (gain <= 0) return 0;
+
+    const entry = pendingStats[today] ?? (pendingStats[today] = {});
+    entry.affinity = (Number(entry.affinity) || 0) + gain;
+    const before = (affinityTotal < 0 ? 0 : affinityTotal);
+    affinityTotal = Math.min(AFFINITY_MAX, before + gain);
+    const landed = affinityTotal - before;
+    if (landed <= 0) return 0;
+
+    showAffinityChip(landed);
+    const levelBefore = affinityLevel(before);
+    const levelAfter = affinityLevel(affinityTotal);
+    if (reason === 'firstHello') {
+      affinitySpokeAt = performance.now();
+      say(liteT('affinity.gained', {
+        n: landed, value: affinityTotal, level: affinityLevelName(levelAfter),
+      }), 4200);
+    }
+    if (levelAfter > levelBefore) {
+      showHearts();
+      const maxed = affinityTotal >= AFFINITY_MAX;
+      affinitySpokeAt = performance.now();
+      say(maxed
+        ? liteT('affinity.maxed')
+        : liteT('affinity.levelUp', { level: levelAfter + 1, name: affinityLevelName(levelAfter) }), 6000);
+    }
+    statsFlushAt = statsFlushAt ? Math.min(statsFlushAt, performance.now() + STATS_FLUSH_MS) : performance.now() + STATS_FLUSH_MS;
+    return landed;
+  }
+
+  /** The first interaction of the day is worth a hello. */
+  function greetIfFirstToday() {
+    if (!config) return;
+    const today = liteDayKey();
+    if ((config.statsDays ?? []).includes(today) || daysToAdd.has(today)) return;
+    markActiveDay();
+    awardAffinity('firstHello');
+  }
+
+  /** Remember that the pet was used today (drives "陪伴天数" and the hello bonus). */
+  function markActiveDay() {
+    daysToAdd.add(liteDayKey());
+  }
+
   function pruneDailyStats(stats: Record<string, DailyStat>) {
     const days = Object.keys(stats).sort();
     if (days.length <= STATS_KEEP_DAYS) return stats;
@@ -455,11 +558,19 @@ const BLINK_JITTER_MS = 5200;
     return pruned;
   }
 
-  /** Merge the buffered counts into the config and write them once. */
-  function flushDailyStats() {
+  /**
+   * Merge the buffered counters into the config and write them once.
+   *
+   * Everything the pet accumulates — the per-day buckets, the affinity score and
+   * its one-point-per-day history, the lifetime click count, the days it was used
+   * and the first day it was ever started — travels in a single patch, so a click
+   * costs one config write at most every few seconds rather than one per event.
+   */
+  function flushStats() {
     if (!config) return;
     const days = Object.keys(pendingStats);
-    if (!days.length) return;
+    if (!days.length && !daysToAdd.size && affinityTotal < 0) return;
+    const patch: Partial<AppConfig> = {};
     const merged: Record<string, DailyStat> = { ...(config.dailyStats ?? {}) };
     for (const day of days) {
       const target = merged[day] ?? (merged[day] = {});
@@ -469,8 +580,24 @@ const BLINK_JITTER_MS = 5200;
       }
       delete pendingStats[day];
     }
-    void window.api.setConfig({ dailyStats: pruneDailyStats(merged) })
-      .catch(error => console.error('[lite-app] daily stats:', error));
+    if (days.length) patch.dailyStats = pruneDailyStats(merged);
+    if (affinityTotal >= 0) {
+      patch.affinity = affinityTotal;
+      const history = (config.affinityHistory ?? []).filter(point => point?.date !== liteDayKey());
+      history.push({ date: liteDayKey(), value: affinityTotal });
+      // One point per day, oldest dropped: a growth curve, not a click log.
+      patch.affinityHistory = history.slice(-AFFINITY_HISTORY_DAYS);
+    }
+    if (clicksTotal >= 0) patch.statsClicks = clicksTotal;
+    if (daysToAdd.size) {
+      const known = new Set(config.statsDays ?? []);
+      for (const day of daysToAdd) known.add(day);
+      patch.statsDays = [...known].sort().slice(-STATS_KEEP_DAYS);
+      daysToAdd.clear();
+    }
+    if (!config.statsFirstSeen) patch.statsFirstSeen = liteDayKey();
+    void window.api.setConfig(patch)
+      .catch(error => console.error('[lite-app] stats:', error));
   }
 
   // ---------- the health plan ----------
@@ -623,7 +750,7 @@ const BLINK_JITTER_MS = 5200;
     const now = performance.now();
     if (statsFlushAt && now >= statsFlushAt) {
       statsFlushAt = 0;
-      flushDailyStats();
+      flushStats();
     }
     if (now - lastLoadPoll >= LOAD_POLL_MS) {
       lastLoadPoll = now;
@@ -664,6 +791,10 @@ const BLINK_JITTER_MS = 5200;
     // Strings come from the backend dictionary, so a language switch re-fetches it.
     const localeChanged = !config || config.locale !== next.locale;
     config = next;
+    // The score and the lifetime click count only ever grow locally; a config
+    // that already carries more (an older pet window, a hand-edited file) wins.
+    affinityTotal = Math.max(affinityTotal < 0 ? 0 : affinityTotal, Number(next.affinity) || 0);
+    clicksTotal = Math.max(clicksTotal < 0 ? 0 : clicksTotal, Number(next.statsClicks) || 0);
     document.body.style.opacity = String(Math.max(0.5, Math.min(1, Number(next.opacity) || 1)));
     if (!next.autoMove) stopWalking();
     if (localeChanged) void liteLoadDictionary().catch(error => console.error('[lite-app] i18n:', error));
@@ -850,6 +981,9 @@ const BLINK_JITTER_MS = 5200;
 
   /** One tap: a word from the spot that was touched, or a sleepy complaint. */
   function tapReaction(region: PetRegion, now: number) {
+    // A level-up (or the first hello of the day) says something worth more than
+    // the poke line, and it came from this very tap.
+    if (now - affinitySpokeAt < 600) return;
     if (isAsleep(now)) {
       // Woken up on purpose: the pet sits up first, then grumbles.
       sleepUntil = 0;
@@ -897,6 +1031,11 @@ const BLINK_JITTER_MS = 5200;
     if (!hit(position.x / scale, position.y / scale)) return;
     activity();
     clickUntil = performance.now() + 1100;
+    // Ask before marking: the hello bonus means "today has not been seen yet",
+    // and marking the day first would answer that question itself.
+    greetIfFirstToday();
+    markActiveDay();
+    awardAffinity('fileDrop');
     say(liteFileReaction(paths));
   });
   window.api.onPetAction(playAction);
@@ -947,6 +1086,10 @@ const BLINK_JITTER_MS = 5200;
     // Every tap counts towards the day's heatmap square, whether the pet was
     // asleep, happy about it or not.
     bumpDaily('clicks');
+    clicksTotal = (clicksTotal < 0 ? 0 : clicksTotal) + 1;
+    greetIfFirstToday();
+    markActiveDay();
+    awardAffinity('tap');
     clickUntil = now + 580;
     activity();
     const double = now - lastTapAt < DOUBLE_TAP_MS;
@@ -958,6 +1101,7 @@ const BLINK_JITTER_MS = 5200;
     activity();
     showHearts();
     playAction('wave');
+    awardAffinity('doubleTap');
     // After the action: starting one clears whatever bubble was on screen.
     say(liteT('lite.pet.doubleTap'), 2400);
   }

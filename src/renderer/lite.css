@@ -11,6 +11,11 @@ canvas { display: block; width: 300px; height: 300px; cursor: grab; }
    two can never sit on top of each other. */
 #pet-mood { position: absolute; min-width: 27px; height: 27px; padding: 3px 5px; border: 1px solid #f1c394; border-radius: 50%; background: #fffaf0e8; color: #653e24; box-shadow: 0 3px 10px #75411630; font: 17px/27px "Segoe UI Emoji", "Microsoft YaHei", sans-serif; text-align: center; pointer-events: none; animation: mood-pulse 1.9s ease-in-out infinite; }
 #pet-mood[hidden] { display: none; }
+/* The affinity gain chip: "+2 ❤️" drifting up, small and quiet so it can show on
+   every interaction without becoming noise. */
+#pet-affinity { position: absolute; padding: 1px 7px; border-radius: 999px; background: #fff9f5e0; color: #d8477a; box-shadow: 0 2px 6px #75411626; font: bold 12px "Segoe UI Emoji", "Microsoft YaHei", sans-serif; text-shadow: 0 1px 2px #fff; pointer-events: none; animation: affinity-rise 1.1s ease-out forwards; }
+#pet-affinity[hidden] { display: none; }
+@keyframes affinity-rise { from { opacity: 0; transform: translateY(8px) scale(.9); } 20% { opacity: 1; } to { opacity: 0; transform: translateY(-22px) scale(1.05); } }
 /* Reminders are shown as a sign the pet holds up, wider and calmer than a bubble
    so a sentence stays readable. */
 #pet-sign { position: absolute; left: 50%; transform: translateX(-50%); max-width: 268px; width: max-content; padding: 9px 13px; border: 2px solid #e2a463; border-radius: 12px; background: #fffdf4; color: #5c4326; box-shadow: 0 6px 16px #75411638; font: 13px/1.45 "Microsoft YaHei", "Segoe UI", sans-serif; text-align: center; pointer-events: none; animation: sign-pop .22s ease-out; }

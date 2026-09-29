@@ -58,17 +58,20 @@
       <p class="note" data-i18n="lite.settings.refineHint"></p>
     </section>
 
-    <section>
-      <h2 data-i18n="lite.settings.daily">日常设置</h2>
-      <label class="setting" for="pet-size"><span><span data-i18n="lite.settings.petSize">宠物大小</span> <output id="size-value"></output></span><input id="pet-size" type="range" min="0.75" max="1.5" step="0.05" /></label>
-      <label class="setting" for="opacity"><span><span data-i18n="lite.settings.opacity">透明度</span> <output id="opacity-value"></output></span><input id="opacity" type="range" min="0.5" max="1" step="0.05" /></label>
-      <label class="check"><input id="auto-move" type="checkbox" /><span data-i18n="lite.settings.autoMove">自主走动</span></label>
-      <label class="check"><input id="file-drop-reactions" type="checkbox" /><span data-i18n="lite.settings.fileDrop">拖文件给桌宠时显示互动气泡</span></label>
-      <label class="check"><input id="hourly-chime" type="checkbox" /><span data-i18n="lite.settings.hourlyChime">整点轻报时</span></label>
-      <label class="check"><input id="load-awareness" type="checkbox" /><span data-i18n="lite.settings.loadAwareness">根据电脑状态做反应</span></label>
-      <p class="note" data-i18n="lite.settings.loadHint"></p>
-      <label class="check"><input id="auto-launch" type="checkbox" /><span data-i18n="lite.settings.autoLaunch">开机启动</span></label>
-      <button id="reset-position" type="button" data-i18n="lite.settings.resetPosition">重置桌宠位置</button>
+    <section id="affinity">
+      <h2 data-i18n="affinity.section">好感度</h2>
+      <div class="affinity-head">
+        <span id="affinity-level" class="affinity-level">陌生</span>
+        <span id="affinity-value" class="affinity-value">0</span>
+      </div>
+      <div class="affinity-bar"><div id="affinity-fill" class="affinity-fill"></div></div>
+      <p id="affinity-next" class="note"></p>
+      <div class="update-grid">
+        <span data-i18n="settings.statsDays">陪伴天数</span><span id="affinity-days" class="value">0</span>
+        <span data-i18n="settings.statsFirstSeen">首次陪伴</span><span id="affinity-first" class="value">—</span>
+        <span data-i18n="settings.statsClicks">点击次数</span><span id="affinity-clicks" class="value">0</span>
+      </div>
+      <p class="note" data-i18n="affinity.hint"></p>
     </section>
 
     <section id="health">
@@ -150,6 +153,19 @@
       <p class="note" data-i18n="lite.reminders.hint"></p>
     </section>
 
+    <section>
+      <h2 data-i18n="lite.settings.daily">日常设置</h2>
+      <label class="setting" for="pet-size"><span><span data-i18n="lite.settings.petSize">宠物大小</span> <output id="size-value"></output></span><input id="pet-size" type="range" min="0.75" max="1.5" step="0.05" /></label>
+      <label class="setting" for="opacity"><span><span data-i18n="lite.settings.opacity">透明度</span> <output id="opacity-value"></output></span><input id="opacity" type="range" min="0.5" max="1" step="0.05" /></label>
+      <label class="check"><input id="auto-move" type="checkbox" /><span data-i18n="lite.settings.autoMove">自主走动</span></label>
+      <label class="check"><input id="file-drop-reactions" type="checkbox" /><span data-i18n="lite.settings.fileDrop">拖文件给桌宠时显示互动气泡</span></label>
+      <label class="check"><input id="hourly-chime" type="checkbox" /><span data-i18n="lite.settings.hourlyChime">整点轻报时</span></label>
+      <label class="check"><input id="load-awareness" type="checkbox" /><span data-i18n="lite.settings.loadAwareness">根据电脑状态做反应</span></label>
+      <p class="note" data-i18n="lite.settings.loadHint"></p>
+      <label class="check"><input id="auto-launch" type="checkbox" /><span data-i18n="lite.settings.autoLaunch">开机启动</span></label>
+      <button id="reset-position" type="button" data-i18n="lite.settings.resetPosition">重置桌宠位置</button>
+    </section>
+
     <section id="update-panel">
       <h2 data-i18n="settings.updateSection">🔄 更新</h2>
       <div class="update-grid">
@@ -176,6 +192,7 @@
   </main>
   <script src="./lite-i18n.js"></script>
   <script src="./lite-day.js"></script>
+  <script src="./lite-affinity.js"></script>
   <script src="./lite-api.js"></script>
   <script src="./lite-image.js"></script>
   <script src="./lite-settings.js"></script>

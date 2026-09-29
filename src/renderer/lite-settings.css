@@ -99,6 +99,13 @@ header button { border: 0; background: transparent; }
 .reminder-list .text { flex: 1 1 auto; overflow-wrap: anywhere; font-size: 13px; }
 .reminder-list .remove { flex: 0 0 auto; padding: 3px 8px; border-radius: 8px; color: #9a7660; font-size: 12px; }
 .reminder-list li.empty { border: 1px dashed #ecd8c8; background: transparent; color: #9a7660; font-size: 12px; }
+/* Affinity: the level, the score and how far the next level is. */
+.affinity-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+.affinity-level { font-size: 18px; font-weight: 700; color: #c0567f; }
+.affinity-value { font-size: 13px; color: #886c5b; }
+.affinity-bar { height: 10px; border-radius: 5px; background: #f6e3ec; overflow: hidden; }
+.affinity-fill { width: 0; height: 100%; border-radius: 5px; background: linear-gradient(90deg, #ffb3c9, #e56a97); transition: width .3s ease; }
+#affinity-next { min-height: 18px; }
 /* Health plan: one row per habit — its switch on the left, its interval beside it. */
 .health-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 14px; }
 .health-row .check { margin: 8px 0; }

@@ -41,6 +41,13 @@
   const heatmapYearLabel = $<HTMLElement>('heatmap-year');
   const heatmapPrev = $<HTMLButtonElement>('heatmap-prev');
   const heatmapNext = $<HTMLButtonElement>('heatmap-next');
+  const affinityLevelLabel = $<HTMLElement>('affinity-level');
+  const affinityValue = $<HTMLElement>('affinity-value');
+  const affinityFill = $<HTMLElement>('affinity-fill');
+  const affinityNext = $<HTMLElement>('affinity-next');
+  const affinityDays = $<HTMLElement>('affinity-days');
+  const affinityFirst = $<HTMLElement>('affinity-first');
+  const affinityClicks = $<HTMLElement>('affinity-clicks');
   const updateVersion = $<HTMLSpanElement>('update-version');
   const updateStatus = $<HTMLSpanElement>('update-status');
   const updateProgressRow = $<HTMLElement>('update-progress-row');
@@ -205,6 +212,28 @@
   // ---------- the user's own reminders ----------
 
   // ---------- health plan ----------
+
+  // ---------- affinity ----------
+  /**
+   * The level, the score, the bar towards the next level and the three lifetime
+   * numbers. All of it comes from the config: the pet window is the only writer,
+   * and it broadcasts after every batch (see flushStats).
+   */
+  function paintAffinity(cfg: AppConfig) {
+    const value = Math.max(0, Number(cfg.affinity) || 0);
+    const level = affinityLevel(value);
+    affinityLevelLabel.textContent = affinityLevelName(level);
+    affinityValue.textContent = String(value);
+    affinityFill.style.width = `${Math.round(affinityProgress(value) * 100)}%`;
+    const next = affinityNextAt(value);
+    affinityNext.textContent = next === null
+      ? liteT('affinity.max')
+      : liteT('affinity.next', { n: next - value, name: affinityLevelName(level + 1) });
+    affinityDays.textContent = String((cfg.statsDays ?? []).length);
+    affinityFirst.textContent = cfg.statsFirstSeen || '—';
+    affinityClicks.textContent = String(Number(cfg.statsClicks) || 0);
+  }
+
   /** Intervals offered for the two new habits (the standing one keeps its own list). */
   const EYE_PRESETS = [20, 30, 60];
   const WATER_PRESETS = [30, 45, 60, 90];
@@ -580,6 +609,7 @@
     standStatus.textContent = standSummary(minutes);
     hourlyChime.checked = cfg.hourlyChime !== false;
     loadAwareness.checked = cfg.loadAwareness !== false;
+    paintAffinity(cfg);
     paintHealth(cfg);
     paintHeatmap(cfg);
     paintReminders(cfg);

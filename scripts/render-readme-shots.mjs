@@ -93,6 +93,7 @@ function stubSource(locale) {
   // as an empty year and the screenshots cannot show what the shades mean. The
   // pattern keeps weekday peaks and quiet weekends, and covers every bucket.
   const dailyStats = {};
+  const activeDays = [];
   const today = new Date();
   for (let back = 199; back >= 0; back--) {
     const day = new Date(today.getFullYear(), today.getMonth(), today.getDate() - back);
@@ -103,6 +104,7 @@ function stubSource(locale) {
     // across all four shades instead of saturating at the darkest one.
     const clicks = Math.max(0, Math.round((weekend ? 12 : 55) + wave - (back > 170 ? 35 : 0)));
     if (clicks) dailyStats[key] = { clicks };
+    if (clicks) activeDays.push(key);
   }
   const now = new Date();
   const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
@@ -121,6 +123,12 @@ function stubSource(locale) {
     waterEnabled: true,
     waterMinutes: 45,
     hourlyChime: true,
+    // A pet that has been around for a while, so the affinity section shows a
+    // real level rather than an empty bar.
+    affinity: 260,
+    statsFirstSeen: activeDays[0] ?? todayKey,
+    statsDays: activeDays,
+    statsClicks: 1240,
     dailyStats,
     locale,
   };
@@ -228,7 +236,7 @@ function desktopPage(locale) {
 }
 
 copyFileSync(join(ROOT, 'src', 'assets', 'animated-pets', 'bulu.png'), join(scratch, 'pet.png'));
-for (const asset of ['lite-i18n.js', 'lite-day.js', 'lite-api.js', 'lite-image.js', 'lite-settings.js', 'lite-settings.css']) {
+for (const asset of ['lite-i18n.js', 'lite-day.js', 'lite-affinity.js', 'lite-api.js', 'lite-image.js', 'lite-settings.js', 'lite-settings.css']) {
   copyFileSync(join(RENDERER, asset), join(scratch, asset));
 }
 

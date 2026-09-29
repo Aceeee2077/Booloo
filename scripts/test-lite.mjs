@@ -71,8 +71,8 @@ context.liteT = makeTranslate(zhDict);
 
 const renderer = join(process.cwd(), 'dist', 'renderer');
 const shippedScripts = readdirSync(renderer).filter(name => name.endsWith('.js')).sort();
-assert.deepEqual(shippedScripts, ['lite-api.js', 'lite-app.js', 'lite-day.js', 'lite-file-reaction.js',
-  'lite-i18n.js', 'lite-image.js', 'lite-mask.js', 'lite-menu.js', 'lite-settings.js']);
+assert.deepEqual(shippedScripts, ['lite-affinity.js', 'lite-api.js', 'lite-app.js', 'lite-day.js',
+  'lite-file-reaction.js', 'lite-i18n.js', 'lite-image.js', 'lite-mask.js', 'lite-menu.js', 'lite-settings.js']);
 const fileReaction = { liteT: makeTranslate(zhDict) };
 vm.createContext(fileReaction);
 vm.runInContext(readFileSync(join(renderer, 'lite-file-reaction.js'), 'utf8'), fileReaction);
@@ -88,6 +88,38 @@ assert.match(fileReaction.liteFileReaction(['/tmp/cat.png']), /photo/);
 assert.match(fileReaction.liteFileReaction(['/tmp/movie.mp4']), /Movie night/);
 assert.match(fileReaction.liteFileReaction(['/tmp/a.txt', '/tmp/b.txt']), /2 paychecks/);
 
+// The affinity model: level thresholds, names and the bar. One shared script so
+// the pet that awards points, the settings panel that draws them and the menu
+// that prints the level can never disagree about where a level starts.
+const affinity = { liteT: makeTranslate(zhDict) };
+vm.createContext(affinity);
+vm.runInContext(readFileSync(join(renderer, 'lite-affinity.js'), 'utf8'), affinity);
+assert.equal(affinity.affinityLevel(0), 0);
+assert.equal(affinity.affinityLevel(59), 0, 'the first level runs up to 60');
+assert.equal(affinity.affinityLevel(60), 1);
+assert.equal(affinity.affinityLevel(199), 1);
+assert.equal(affinity.affinityLevel(200), 2);
+assert.equal(affinity.affinityLevel(500), 3);
+assert.equal(affinity.affinityLevel(1000), 4, '1000 is the last level');
+assert.equal(affinity.affinityLevel(99999), 4, 'and there is nothing above it');
+assert.equal(affinity.affinityLevelName(0), '陌生');
+assert.equal(affinity.affinityLevelName(4), '挚友');
+assert.equal(affinity.affinityNextAt(0), 60);
+assert.equal(affinity.affinityNextAt(999), 1000);
+assert.equal(affinity.affinityNextAt(1000), null, 'a maxed score has no next level');
+assert.equal(affinity.affinityProgress(0), 0);
+assert.equal(affinity.affinityProgress(30), 0.5, 'halfway to the second level');
+assert.equal(affinity.affinityProgress(1000), 1);
+// The constants are `const`, so they live in the context's lexical scope rather
+// than on the context object — evaluated from inside it, exactly as the pages see
+// them (classic scripts share that scope).
+const affinityConst = (name) => vm.runInContext(name, affinity);
+assert.equal(affinityConst('AFFINITY_MAX'), 1000);
+assert.equal(affinityConst('AFFINITY_DAILY_CAP'), 40, 'a day is capped so it cannot be ground out');
+assert.equal(affinityConst('AFFINITY_FIRST_HELLO'), 5);
+affinity.liteT = makeTranslate(enDict);
+assert.equal(affinity.affinityLevelName(4), 'Best Friend');
+
 for (const page of ['index.html', 'settings.html', 'mask.html']) {
   const html = readFileSync(join(renderer, page), 'utf8');
   assert.match(html, /lite-api\.js/);
@@ -96,6 +128,11 @@ for (const page of ['index.html', 'settings.html', 'mask.html']) {
 }
 assert.match(readFileSync(join(renderer, 'menu.html'), 'utf8'), /lite-menu\.js/);
 assert.match(readFileSync(join(renderer, 'menu.html'), 'utf8'), /lite-i18n\.js/);
+// The right-click menu prints the affinity level, so it needs both the shared
+// model and the line to print it into.
+const menuMarkup = readFileSync(join(renderer, 'menu.html'), 'utf8');
+assert.match(menuMarkup, /id="menu-affinity"/);
+assert.match(menuMarkup, /lite-affinity\.js/);
 
 // The cutout mask editor is a third page: it must ship its own script and the
 // controls the brush logic binds to, and the settings panel has to offer a way in.
