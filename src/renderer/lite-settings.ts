@@ -34,6 +34,9 @@
   const healthStatus = $<HTMLParagraphElement>('health-status');
   const heatmapGrid = $<HTMLElement>('heatmap-grid');
   const heatmapSummary = $<HTMLElement>('heatmap-summary');
+  const heatmapYearLabel = $<HTMLElement>('heatmap-year');
+  const heatmapPrev = $<HTMLButtonElement>('heatmap-prev');
+  const heatmapNext = $<HTMLButtonElement>('heatmap-next');
   const updateVersion = $<HTMLSpanElement>('update-version');
   const updateStatus = $<HTMLSpanElement>('update-status');
   const updateProgressRow = $<HTMLElement>('update-progress-row');
@@ -259,14 +262,17 @@
 
   // ---------- click heatmap ----------
   /**
-   * 53 weeks, GitHub's shape. The thresholds are the ones asked for: the first
-   * shade starts at 10 clicks and the darkest at 100 — days below 10 are drawn
-   * as empty, but their exact count is still in the tooltip. The two steps in
-   * between are even 30-click bands.
+   * One whole calendar year, GitHub's shape. The thresholds are the ones asked
+   * for: the first shade starts at 10 clicks and the darkest at 100 — days below
+   * 10 are drawn as empty, but their exact count is still in the tooltip. The two
+   * steps in between are even 30-click bands.
    */
-  const HEATMAP_WEEKS = 53;
   const HEAT_LEVELS = [10, 40, 70, 100];
-  const SUMMARY_DAYS = 30;
+  /** Track sizes, matching the `.heatmap-grid` rule in lite-settings.css. */
+  const HEAT_COLUMN_PX = 10;
+  const HEAT_GUTTER_PX = 16;
+  /** Which year the chart shows; the arrows move it, never past the current one. */
+  let heatmapYear = new Date().getFullYear();
 
   function heatLevel(count: number) {
     let level = 0;
@@ -293,25 +299,58 @@
     return new Date(2024, 0, 1 + row).toLocaleDateString(dateLocale(), { weekday: 'narrow' });
   }
 
+  /**
+   * The year's first and last day, and the Monday the grid has to start on so
+   * every column is one Monday-to-Sunday week.
+   */
+  function yearRange(year: number) {
+    const first = `${year}-01-01`;
+    const last = `${year}-12-31`;
+    const lead = liteDayWeekday(first);
+    return {
+      first,
+      last,
+      start: liteDayShift(first, -lead),
+      columns: Math.ceil((lead + liteDayDiff(first, last) + 1) / 7),
+    };
+  }
+
+  /** Oldest year there is anything to show for (never ahead of this year). */
+  function earliestYear(stats: Record<string, DailyStat>) {
+    const thisYear = new Date().getFullYear();
+    const years = Object.keys(stats)
+      .map(key => Number(key.slice(0, 4)))
+      .filter(year => Number.isInteger(year));
+    return years.length ? Math.min(...years, thisYear) : thisYear;
+  }
+
   function paintHeatmap(cfg: AppConfig) {
     const stats = cfg.dailyStats ?? {};
     const today = liteDayKey();
-    // The grid ends on the Sunday of the current week, so every column is one
-    // complete Monday-to-Sunday week and the last one is never half empty.
-    const end = liteDayShift(today, 6 - liteDayWeekday(today));
-    const start = liteDayShift(end, -(HEATMAP_WEEKS * 7 - 1));
+    const thisYear = Number(today.slice(0, 4));
+    heatmapYear = Math.min(heatmapYear, thisYear);
+    const { first, last, start, columns } = yearRange(heatmapYear);
+    heatmapYearLabel.textContent = String(heatmapYear);
+    heatmapPrev.disabled = heatmapYear <= earliestYear(stats);
+    heatmapNext.disabled = heatmapYear >= thisYear;
+    heatmapGrid.style.gridTemplateColumns =
+      `${HEAT_GUTTER_PX}px repeat(${columns}, ${HEAT_COLUMN_PX}px)`;
     heatmapGrid.textContent = '';
     let month = '';
+    let total = 0, best = 0, bestDay = '';
     for (let row = -1; row < 7; row++) {
-      for (let column = 0; column < HEATMAP_WEEKS + 1; column++) {
+      for (let column = 0; column < columns + 1; column++) {
         const cell = document.createElement('i');
         if (row < 0) {
-          // Header row: the month is printed above the week it starts in.
+          // Header row: the month is printed above the first week that reaches
+          // into it, so a year starting mid-week still gets its January label on
+          // the first column instead of December's.
           cell.className = 'heatmap-month';
           if (column > 0) {
-            const key = liteDayShift(start, (column - 1) * 7);
-            const label = key.slice(0, 7);
-            if (label !== month) { month = label; cell.textContent = monthLabel(key); }
+            const weekStart = liteDayShift(start, (column - 1) * 7);
+            const inYear = liteDayDiff(first, weekStart) < 0 ? first : weekStart;
+            const label = inYear.slice(0, 7);
+            if (label !== month) { month = label; cell.textContent = monthLabel(inYear); }
           }
           heatmapGrid.append(cell);
           continue;
@@ -324,8 +363,15 @@
         }
         const key = liteDayShift(start, (column - 1) * 7 + row);
         cell.className = 'heatmap-cell';
+        if (liteDayDiff(first, key) < 0 || liteDayDiff(last, key) > 0) {
+          // Padding around the year: the grid is whole weeks, the year is not.
+          cell.setAttribute('data-level', '-2');
+          heatmapGrid.append(cell);
+          continue;
+        }
         if (liteDayDiff(today, key) > 0) {
-          // Days still to come in the current week: present, but blank.
+          // Later this year: the square is there and stays blank until the day
+          // arrives, which is what makes the year's shape visible from January.
           cell.setAttribute('data-level', '-1');
           heatmapGrid.append(cell);
           continue;
@@ -334,22 +380,17 @@
         cell.setAttribute('data-level', String(heatLevel(count)));
         cell.title = liteT(count ? 'lite.heatmap.cell' : 'lite.heatmap.cellEmpty',
           { date: dayLabel(key), count });
+        if (key === today) cell.setAttribute('data-today', '1');
+        total += count;
+        if (count > best) { best = count; bestDay = key; }
         heatmapGrid.append(cell);
       }
     }
-
-    let total = 0, best = 0, bestDay = '';
-    for (let back = 0; back < SUMMARY_DAYS; back++) {
-      const key = liteDayShift(today, -back);
-      const count = Number(stats[key]?.clicks) || 0;
-      total += count;
-      if (count > best) { best = count; bestDay = key; }
-    }
     heatmapSummary.textContent = total
       ? liteT('lite.heatmap.summary', {
-        days: SUMMARY_DAYS, total, day: dayLabel(bestDay), count: best,
+        year: heatmapYear, total, day: dayLabel(bestDay), count: best,
       })
-      : liteT('lite.heatmap.empty');
+      : liteT('lite.heatmap.empty', { year: heatmapYear });
   }
   /** `HH:MM` for a time input, in local time. */
   function timeValue(date: Date) {
@@ -523,6 +564,9 @@
   }
 
   $<HTMLButtonElement>('close').addEventListener('click', () => window.api.closeSettings());
+  // The title bar's GitHub button: the address lives in the Rust side, so this
+  // only has to say "open it".
+  $<HTMLButtonElement>('open-github').addEventListener('click', () => window.api.openProjectPage());
   $<HTMLButtonElement>('choose-image').addEventListener('click', () => void chooseImage());
   $<HTMLButtonElement>('cancel-image').addEventListener('click', () => void cancelImage());
   // The mask editor is a separate window; it reports back through the config
@@ -566,6 +610,16 @@
     saveStandReminder();
   });
   standCustom.addEventListener('change', saveStandReminder);
+  // The chart shows one whole calendar year; these step it. The forward arrow
+  // stops at the current year because the future has nothing to show.
+  heatmapPrev.addEventListener('click', () => {
+    heatmapYear -= 1;
+    if (current) paintHeatmap(current);
+  });
+  heatmapNext.addEventListener('click', () => {
+    heatmapYear += 1;
+    if (current) paintHeatmap(current);
+  });
   eyeRest.addEventListener('change', saveHealth);
   water.addEventListener('change', saveHealth);
   eyeInterval.addEventListener('change', saveHealth);

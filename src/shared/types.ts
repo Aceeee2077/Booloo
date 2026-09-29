@@ -569,6 +569,12 @@ interface PetApi {
   /** Subscribe to "settings was opened at this section" (right-click shortcuts). */
   onSettingsFocusSection(cb: (section: string) => void): () => void;
   /**
+   * Open the project's GitHub page in the default browser. The address lives in
+   * the Rust side (src-tauri/src/opener.rs) and this command takes no arguments,
+   * so the page cannot use it to launch arbitrary links.
+   */
+  openProjectPage(): void;
+  /**
    * Coarse CPU / memory / battery state. Only polled while
    * `AppConfig.loadAwareness` is on; the first call may report a null CPU
    * because load is a delta between two samples.

@@ -341,8 +341,11 @@ for (const locale of languages) {
   if (layout.scrollWidth > layout.viewportWidth + 1) {
     throw new Error(`the click heatmap overflows: ${layout.scrollWidth}px of grid in ${layout.viewportWidth}px`);
   }
-  if (layout.heatmapCells !== 54 * 8) {
-    throw new Error(`the heatmap drew ${layout.heatmapCells} cells, expected ${54 * 8}`);
+  // A calendar year is 52–54 whole weeks plus the weekday gutter, and the grid
+  // carries a header row on top of the seven day rows.
+  const heatmapColumns = layout.heatmapCells / 8;
+  if (!Number.isInteger(heatmapColumns) || heatmapColumns < 53 || heatmapColumns > 55) {
+    throw new Error(`the heatmap drew ${layout.heatmapCells} cells, which is not a year of weeks`);
   }
   console.log(`  热力图 ${layout.gridWidth}px / 可用 ${layout.viewportWidth}px，` +
     `${layout.heatmapCells} 格 × ${layout.cellSize}px；面板 ${layout.panelWidth}×${layout.panelHeight}` +

@@ -88,6 +88,7 @@
     updateDownload: () => call<UpdateState>('update_download'),
     updateInstall: () => call<void>('update_install'),
     updateInstallWhenReady: () => call<UpdateState>('update_install_when_ready'),
+    openProjectPage: () => send('open_project_page'),
     onUpdateState: (callback: (state: UpdateState) => void) => subscribe<UpdateState>('update-state', callback),
     dragBegin: (visualBounds?: PetBox) => send('drag_begin', { visualBounds: visualBounds ?? bounds() }),
     dragMove: () => send('drag_move'),

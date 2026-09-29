@@ -10,7 +10,15 @@
   <main class="panel">
     <header data-tauri-drag-region>
       <div data-tauri-drag-region><strong>🐾 Prismoo</strong><span data-i18n="lite.settings.subtitle">轻量桌宠</span></div>
-      <button id="close" type="button" data-i18n-label="settings.close" aria-label="关闭设置">✕</button>
+      <div class="header-actions">
+        <div class="gh">
+          <button id="open-github" type="button" data-i18n-label="lite.settings.github" aria-label="打开 GitHub 仓库">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path></svg>
+          </button>
+          <span class="gh-tip">GitHub</span>
+        </div>
+        <button id="close" type="button" data-i18n-label="settings.close" aria-label="关闭设置">✕</button>
+      </div>
     </header>
 
     <section>
@@ -96,11 +104,18 @@
 
     <section id="heatmap">
       <h2 data-i18n="lite.heatmap.title">点击热力图</h2>
+      <div class="heatmap-bar">
+        <div class="heatmap-years">
+          <button id="heatmap-prev" type="button" data-i18n-label="lite.heatmap.prevYear" aria-label="上一年">‹</button>
+          <span id="heatmap-year" class="heatmap-year-number">2026</span>
+          <button id="heatmap-next" type="button" data-i18n-label="lite.heatmap.nextYear" aria-label="下一年">›</button>
+        </div>
+        <span id="heatmap-summary" class="note"></span>
+      </div>
       <div class="heatmap-scroll">
         <div id="heatmap-grid" class="heatmap-grid" role="img"></div>
       </div>
       <div class="heatmap-foot">
-        <span id="heatmap-summary" class="note"></span>
         <span class="heatmap-legend"><span data-i18n="lite.heatmap.less">少</span>
           <i class="heatmap-cell" data-level="0"></i><i class="heatmap-cell" data-level="1"></i><i class="heatmap-cell" data-level="2"></i><i class="heatmap-cell" data-level="3"></i><i class="heatmap-cell" data-level="4"></i>
           <span data-i18n="lite.heatmap.more">多</span></span>

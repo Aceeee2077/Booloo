@@ -12,6 +12,7 @@ mod cutout;
 mod custom;
 mod i18n;
 mod load;
+mod opener;
 mod tray;
 mod updater;
 mod window;
@@ -119,6 +120,10 @@ const LITE_SETTINGS_CHECK_JS: &str = r#"
     hasLoadToggle: !!document.getElementById('load-awareness'),
     hasHealth: !!document.getElementById('health') && !!document.getElementById('eye-rest'),
     hasHeatmap: !!document.getElementById('heatmap-grid'),
+    hasGithubButton: !!document.getElementById('open-github'),
+    // The button's label is translated markup, so the real window is the only
+    // place its aria-label can be checked.
+    githubLabel: document.getElementById('open-github')?.getAttribute('aria-label') ?? null,
     // 53 weeks + the weekday gutter, drawn by the settings page itself.
     heatmapCells: document.querySelectorAll('#heatmap-grid .heatmap-cell').length,
   };
@@ -327,6 +332,7 @@ pub fn run() {
             updater::update_install,
             updater::update_install_when_ready,
             load::system_load,
+            opener::open_project_page,
             custom::custom_get,
             custom::custom_pick_preview,
             custom::custom_mask_preview,

@@ -63,6 +63,8 @@ child.on('exit', code => {
     settings?.reminderRoundTrip === true && settings?.reminderCleared === true &&
     // Health plan and the click heatmap are rendered by the page from the config.
     settings?.hasHealth === true && settings?.hasHeatmap === true &&
+    settings?.hasGithubButton === true &&
+    ['在浏览器中打开 GitHub 仓库', 'Open the GitHub repository in your browser'].includes(settings?.githubLabel) &&
     typeof settings?.heatmapCells === 'number' && settings.heatmapCells > 300 &&
     close?.closed === true;
   // The mask editor is the third window: it proves the new capability entry works

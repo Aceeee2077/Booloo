@@ -17,7 +17,7 @@ const { zhDict, enDict } = require(join(process.cwd(), 'dist', 'shared', 'i18n.j
 const RELEASES = 'https://github.com/Aceeee2077/Prismoo/releases/latest';
 const events = new Map();
 const elements = new Map();
-const calls = { getState: 0, check: 0, download: 0, install: 0, patches: [] };
+const calls = { getState: 0, check: 0, download: 0, install: 0, openPage: 0, patches: [] };
 let locale = 'zh';
 let updateState = () => {};
 let configChanged = () => {};
@@ -84,6 +84,7 @@ const api = {
   },
   updateInstall: async () => { calls.install++; },
   closeSettings: () => {},
+  openProjectPage: () => { calls.openPage++; },
 };
 
 const browser = {
@@ -219,25 +220,38 @@ assert.equal(status.textContent, 'This build cannot update itself — download n
 console.log('Settings update panel: status machine, progress and preferences: passed');
 
 // ---------- click heatmap ----------
-// GitHub's shape: 53 week columns plus the weekday gutter and the month header,
-// with the thresholds that were asked for — 10 clicks is the first shade and 100
-// and up the darkest. Today sits in the last column, on its own weekday row.
-const grid = element('heatmap-grid');
-const columns = 54;
-assert.equal(grid.children.length, columns * 8, 'the grid should be 53 weeks plus the two label rows');
+// One whole calendar year: every day from January 1st to December 31st is on the
+// grid, days still to come stay blank, and today's square is marked. The
+// thresholds are the ones asked for — 10 clicks is the first shade, 100 the last.
 // The panel was switched to English above; the strings below are asserted in
 // Chinese, so put it back and let the dictionary reload finish.
 locale = 'zh';
 configChanged({ ...config, locale: 'zh' });
 await settle();
+const grid = element('heatmap-grid');
 const now = new Date();
-const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-const cellFor = () => element('heatmap-grid').children[((now.getDay() + 6) % 7 + 1) * columns + (columns - 1)];
+const year = now.getFullYear();
+const pad2 = (value) => String(value).padStart(2, '0');
+const keyOf = (date) => `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+const todayKey = keyOf(now);
+const first = new Date(year, 0, 1);
+const last = new Date(year, 11, 31);
+const dayOf = (date) => Math.round((new Date(date.getFullYear(), date.getMonth(), date.getDate()) - first) / 86_400_000);
+const lead = (first.getDay() + 6) % 7; // 0 = Monday
+const columns = Math.ceil((lead + dayOf(last) + 1) / 7);
+const cellAt = (dayIndex) => {
+  const column = 1 + Math.floor((lead + dayIndex) / 7);
+  const date = new Date(first.getFullYear(), first.getMonth(), first.getDate() + dayIndex);
+  const row = (date.getDay() + 6) % 7;
+  return element('heatmap-grid').children[(row + 1) * (columns + 1) + column];
+};
 const levelOf = (clicks) => {
   config.dailyStats = clicks === null ? {} : { [todayKey]: { clicks } };
   configChanged({ ...config });
-  return cellFor().attributes['data-level'];
+  return cellAt(dayOf(now)).attributes['data-level'];
 };
+assert.equal(grid.children.length, (columns + 1) * 8,
+  `the grid should cover the whole of ${year} (${columns} weeks) plus the labels`);
 assert.equal(levelOf(null), '0', 'a day without clicks is drawn as empty');
 assert.equal(levelOf(9), '0', '9 clicks is still below the first shade');
 assert.equal(levelOf(10), '1', '10 clicks is the lightest shade');
@@ -245,10 +259,41 @@ assert.equal(levelOf(45), '2');
 assert.equal(levelOf(80), '3');
 assert.equal(levelOf(100), '4', '100 clicks and up is the darkest shade');
 assert.equal(levelOf(400), '4');
+assert.equal(cellAt(dayOf(now)).attributes['data-today'], '1', 'today is the outlined square');
 levelOf(45);
-assert.match(element('heatmap-summary').textContent, /45/, 'the summary reports the last 30 days');
-assert.match(cellFor().title, /45/, 'a day cell carries its real count in the tooltip');
+assert.match(element('heatmap-summary').textContent, /45/, 'the summary totals the shown year');
+assert.match(cellAt(dayOf(now)).title, /45/, 'a day cell carries its real count in the tooltip');
 levelOf(null);
 assert.match(element('heatmap-summary').textContent, /还没有记录/, 'an empty year says so');
 
+// The rest of the year is already on the grid: later days blank, and the padding
+// that belongs to the neighbouring year not drawn as days at all.
+const tomorrow = new Date(year, now.getMonth(), now.getDate() + 1);
+if (tomorrow.getFullYear() === year) {
+  const cell = cellAt(dayOf(tomorrow));
+  assert.equal(cell.attributes['data-level'], '-1', 'a day still to come is blank');
+  assert.ok(!cell.title, 'and carries no tooltip');
+}
+if (lead > 0) {
+  const padding = element('heatmap-grid').children[1 * (columns + 1) + 1];
+  assert.equal(padding.attributes['data-level'], '-2', 'days before January 1st are not drawn');
+}
+
+// The arrows step the year, and never past the current one.
+const yearLabel = element('heatmap-year');
+assert.equal(yearLabel.textContent, String(year));
+assert.equal(element('heatmap-next').disabled, true, 'the future has no year to show');
+click('heatmap-prev');
+assert.equal(yearLabel.textContent, String(year - 1), 'the back arrow steps a year');
+assert.equal(element('heatmap-next').disabled, false);
+click('heatmap-next');
+assert.equal(yearLabel.textContent, String(year));
+
 console.log('Click heatmap shading, summary and empty state: passed');
+
+// The title bar's GitHub button opens the repository in the default browser; the
+// URL itself lives in src-tauri/src/opener.rs, so the page only has to ask.
+click('open-github');
+assert.equal(calls.openPage, 1, 'clicking the GitHub button opens the project page');
+
+console.log('GitHub button in the settings title bar: passed');
