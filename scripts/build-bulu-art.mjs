@@ -37,7 +37,7 @@ const actionPreview = path.join(sourceDir, 'bulu-actions-preview.png');
  * `actionRows` (rows 0-4) in src/renderer/lite-app.ts.
  */
 const ACTIONS = [
-  { id: 'wave', source: '挥爪子-修正版' },
+  { id: 'wave', source: '挥爪子-修正版2' },
   { id: 'groom', source: '舔爪子-修正版' },
   { id: 'stretch', source: '伸懒腰' },
   { id: 'yawn', source: '打哈欠' },
@@ -260,9 +260,9 @@ function keepLargestComponent(data, width, height) {
 }
 
 /**
- * The five JPEG action sheets have a near-black outline baked into the art.
- * Recolour only dark pixels next to the transparent silhouette, borrowing a
- * nearby colour from inside the cat. Facial details and fur shading stay put.
+ * Some action sheets, including transparent PNGs, have a near-black outline
+ * baked into the art. Recolour only dark pixels next to the silhouette,
+ * borrowing a nearby colour from inside the cat. Facial details stay put.
  */
 function softenActionOutline(data, width, height) {
   const count = width * height;
@@ -446,7 +446,7 @@ async function actionFrames(file, label) {
     // The model's own 4x4 layout drifts a little, so a cell can carry a piece of
     // the neighbouring pose; keep only the subject.
     keepLargestComponent(data, cellInfo.width, cellInfo.height);
-    if (keyed) softenActionOutline(data, cellInfo.width, cellInfo.height);
+    softenActionOutline(data, cellInfo.width, cellInfo.height);
     const visible = visibleBounds(data, cellInfo.width, cellInfo.height);
     if (visible.empty) { frames.push({ buffer: null, empty: true }); continue; }
     const right = visible.left + visible.width - 1;
