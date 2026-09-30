@@ -19,6 +19,14 @@ A small, transparent pet that lives on your desktop — it walks, naps, and chee
 
 ## Preview
 
+### 30 seconds with Bulu
+
+![Prismoo Bulu promo: desktop companionship, petting, wellness reminders and friendship growth](docs/screenshots/prismoo-promo.gif)
+
+*30-second looping preview (silent GIF; on-screen text is in Chinese).*
+
+### Desktop and settings
+
 The pet stays always-on-top, with no taskbar button and no Alt+Tab entry:
 
 ![The pet on a desktop](docs/screenshots/lightweight-pet-en.png)

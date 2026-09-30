@@ -19,6 +19,14 @@
 
 ## 预览
 
+### 布噜的 30 秒日常
+
+![Prismoo 布噜宣传短片：桌面陪伴、摸头互动、健康提醒与好感度成长](docs/screenshots/prismoo-promo.gif)
+
+*30 秒循环预览（GIF 无声）。*
+
+### 桌面与设置
+
 桌宠常驻在最上层，不占任务栏、不进 Alt+Tab：
 
 ![桌宠在桌面上](docs/screenshots/lightweight-pet.png)

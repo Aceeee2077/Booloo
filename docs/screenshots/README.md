@@ -1,18 +1,25 @@
 # Screenshots / 截图
 
-Only the lightweight edition's images are pushed with the repository, and each one
-exists once per language — `README.md` uses the plain names, `README-EN.md` the `-en`
-ones.
-只推送轻量版的配图，并且每种语言各一套：`README.md` 用无后缀文件，`README-EN.md` 用 `-en` 文件。
+Only the lightweight edition's images are pushed with the repository. Static
+screenshots exist once per language — `README.md` uses the plain names,
+`README-EN.md` the `-en` ones. Both READMEs share the promo GIF.
+只推送轻量版的配图。静态截图每种语言各一套：`README.md` 用无后缀文件，
+`README-EN.md` 用 `-en` 文件；两份 README 共用宣传 GIF。
 
 | File / 文件 | Size / 尺寸 | Content / 内容 | Used by / 用于 |
 | :--- | :--- | :--- | :--- |
+| `prismoo-promo.gif` | 800×450 | 30-second silent looping Bulu promo, Chinese on-screen text / 布噜 30 秒无声循环宣传片，中文画面文案 | Both READMEs / 中英文 README |
 | `lightweight-pet.png` | 900×520 | The pet on a simulated desktop, zh speech bubble / 桌宠在模拟桌面上，中文气泡 | `README.md` |
 | `lightweight-pet-en.png` | 900×520 | Same desktop, en speech bubble / 同一张桌面，英文气泡 | `README-EN.md` |
 | `lightweight-settings.png` | 680×936 | The settings panel, zh UI / 设置面板，中文界面 | `README.md` |
 | `lightweight-settings-en.png` | 680×936 | The settings panel, en UI / 设置面板，英文界面 | `README-EN.md` |
 
 ## Regenerating / 如何重新生成
+
+The promo GIF is exported from the local `Prismoo-promo.mp4`. The MP4 and its
+`promo-video/` production files are ignored; only the README GIF is committed.
+宣传 GIF 从本地 `Prismoo-promo.mp4` 导出；MP4 和 `promo-video/` 制作文件已加入
+`.gitignore`，仅 README 展示用 GIF 随仓库提交。
 
 ```bash
 npm run build                # the screenshots render dist/renderer

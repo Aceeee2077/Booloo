@@ -195,3 +195,9 @@ Thumbs.db
 # so git never sees it. These two rules only matter if it is ever copied back in.
 /Prismoo-backup/
 /full-version-src/
+
+# ---------- 11. Local promotional video production ----------
+# Keep the README GIF in docs/screenshots/; source, music, previews and MP4 stay local.
+/promo-video/
+/Prismoo-promo*.mp4
+/Prismoo-promo-music-credits.txt
