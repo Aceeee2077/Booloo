@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const binary = join(root, 'src-tauri', 'target', 'debug', 'prismoo.exe');
+const binary = join(root, 'src-tauri', 'target', 'debug', 'booloo.exe');
 const appVersion = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version;
 if (!existsSync(binary)) throw new Error(`Build the app first: ${binary}`);
 
@@ -16,7 +16,7 @@ if (!existsSync(binary)) throw new Error(`Build the app first: ${binary}`);
 const child = spawn(binary, [], {
   env: {
     ...process.env,
-    PRISMOO_SELFCHECK: '1',
+    BOOLOO_SELFCHECK: '1',
     WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS:
       process.env.WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS ?? '--force-device-scale-factor=1.5',
   },
@@ -25,7 +25,7 @@ const child = spawn(binary, [], {
 let output = '', errors = '';
 child.stdout.on('data', chunk => { output += chunk; });
 child.stderr.on('data', chunk => { errors += chunk; });
-const timeout = setTimeout(() => { child.kill(); console.error('Prismoo self-check timed out'); process.exitCode = 1; }, 60_000);
+const timeout = setTimeout(() => { child.kill(); console.error('Booloo self-check timed out'); process.exitCode = 1; }, 60_000);
 
 child.on('exit', code => {
   clearTimeout(timeout);

@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Prismoo",
+  "productName": "Booloo",
   "version": "0.6.12",
   "identifier": "com.petric.desktop-pet",
   "build": {
@@ -38,10 +38,16 @@
   },
   "bundle": {
     "active": true,
-    "publisher": "Prismoo",
+    "publisher": "Booloo",
     "targets": ["nsis"],
     "icon": ["icons/icon.icns", "icons/icon.ico", "icons/icon.png"],
     "createUpdaterArtifacts": true,
+    "windows": {
+      "nsis": {
+        "template": "windows/installer-template.nsi",
+        "installerHooks": "windows/installer-hooks.nsh"
+      }
+    },
     "macOS": {
       "minimumSystemVersion": "10.15"
     }

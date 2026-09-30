@@ -110,7 +110,7 @@ fn show_menu_at(app: &AppHandle, pointer: PhysicalPosition<f64>) -> Result<(), S
         existing
     } else {
         WebviewWindowBuilder::new(app, "pet-menu", WebviewUrl::App("renderer/menu.html".into()))
-            .title("Prismoo menu")
+            .title("Booloo menu")
             // Height matches html/body in src/renderer/lite-menu.css: the affinity
             // line, 5 actions, the reminder entry, reset and quit.
             .inner_size(188.0, 376.0)

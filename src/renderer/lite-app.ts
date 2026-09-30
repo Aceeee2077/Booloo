@@ -139,7 +139,7 @@ const BLINK_JITTER_MS = 5200;
   let lastEdgePoll = 0;
   let visibleRect: PetBox = { x: 86, y: 140, w: 128, h: 150 };
   let lastHover = false;
-  (window as unknown as Record<string, unknown>).__prismooLiteState = () => ({
+  (window as unknown as Record<string, unknown>).__boolooLiteState = () => ({
     skin: config?.skin ?? null,
     customReady: !!custom,
     cutoutRejected: !!custom?.cutoutRejected,
@@ -1021,8 +1021,8 @@ const BLINK_JITTER_MS = 5200;
     try { return ctx.getImageData(Math.round(px * dpr), Math.round(py * dpr), 1, 1).data[3] > 24; }
     catch { return px >= visibleRect.x && px <= visibleRect.x + visibleRect.w && py >= visibleRect.y && py <= visibleRect.y + visibleRect.h; }
   }
-  (window as unknown as { __prismooHitTest: (x: number, y: number) => boolean }).__prismooHitTest = hit;
-  (window as unknown as { __prismooVisualBounds: () => PetBox }).__prismooVisualBounds = () => visibleRect;
+  (window as unknown as { __boolooHitTest: (x: number, y: number) => boolean }).__boolooHitTest = hit;
+  (window as unknown as { __boolooVisualBounds: () => PetBox }).__boolooVisualBounds = () => visibleRect;
 
   window.api.onFileDrop(({ paths, position }) => {
     if (config?.fileDropReactions === false || !Array.isArray(paths) || paths.length === 0 ||

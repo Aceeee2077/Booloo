@@ -3,7 +3,7 @@
      macOS menu-bar icons are "template images": the system reads only the alpha
      channel and recolours the shape to match a light or dark menu bar, so this
      file is drawn as a flat silhouette with the eyes punched out. The colourful
-     prismoo-icon.svg stays the app/dock/README mark. -->
+     booloo-icon.svg stays the app/dock/README mark. -->
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
   <mask id="eyes">
     <rect width="512" height="512" fill="#ffffff"/>

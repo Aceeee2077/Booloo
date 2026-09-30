@@ -12,7 +12,7 @@
     void call(name, args).catch(error => console.error(`[lite-api] ${name}:`, error));
   };
   const urlOf = (path?: string) => path && tauri?.core?.convertFileSrc ? tauri.core.convertFileSrc(path) : undefined;
-  const bounds = () => (window as unknown as { __prismooVisualBounds?: () => PetBox }).__prismooVisualBounds?.();
+  const bounds = () => (window as unknown as { __boolooVisualBounds?: () => PetBox }).__boolooVisualBounds?.();
 
   function subscribe<T>(name: string, callback: (value: T) => void) {
     let stop: (() => void) | null = null;
@@ -46,7 +46,7 @@
     if (!enabled) return;
     let failures = 0;
     reentry = window.setInterval(() => {
-      const test = (window as unknown as { __prismooHitTest?: (x: number, y: number) => boolean }).__prismooHitTest;
+      const test = (window as unknown as { __boolooHitTest?: (x: number, y: number) => boolean }).__boolooHitTest;
       if (!test) return;
       void call<[number, number] | null>('cursor_in_window').then(point => {
         failures = 0;

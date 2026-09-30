@@ -178,7 +178,7 @@ Thumbs.db
 /scripts/test-petpack.mjs
 
 # npm run sprites / npm run brand-icons reproduce these from the tracked SVG
-# source (src/assets/brand/prismoo-icon.svg) and the procedural generator, so
+# source (src/assets/brand/booloo-icon.svg) and the procedural generator, so
 # they are build output that happens to live next to the source.
 #
 # src/assets/tray.png is deliberately NOT ignored: src-tauri/src/tray.rs embeds
@@ -201,3 +201,6 @@ Thumbs.db
 /promo-video/
 /Prismoo-promo*.mp4
 /Prismoo-promo-music-credits.txt
+
+/Booloo-promo*.mp4
+/Booloo-promo-music-credits.txt

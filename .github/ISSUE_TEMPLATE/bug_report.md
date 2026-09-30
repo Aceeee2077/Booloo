@@ -10,8 +10,8 @@ assignees: ''
 A clear and concise description of what the bug is. / 清晰简洁地描述这个 bug 是什么。
 
 **To reproduce / 复现步骤**
-1. Run `npm run tauri:build` and launch `src-tauri/target/debug/prismoo.exe`
-   / 运行 `npm run tauri:build`，然后启动 `src-tauri/target/debug/prismoo.exe`
+1. Run `npm run tauri:build` and launch `src-tauri/target/debug/booloo.exe`
+   / 运行 `npm run tauri:build`，然后启动 `src-tauri/target/debug/booloo.exe`
 2. Perform: ... / 执行操作：...
 3. Observed: ... / 观察现象：...
 

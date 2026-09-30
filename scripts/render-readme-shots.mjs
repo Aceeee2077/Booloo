@@ -14,7 +14,7 @@
 //   npm run screenshots -- zh      # Chinese only
 //
 // Needs `npm run build` first (it renders dist/renderer/*) and a local Chrome or
-// Edge; set PRISMOO_CHROME to point at one explicitly.
+// Edge; set BOOLOO_CHROME to point at one explicitly.
 // ============================================================================
 
 import { execFileSync } from 'node:child_process';
@@ -30,7 +30,7 @@ const OUT = join(ROOT, 'docs', 'screenshots');
 const I18N = join(ROOT, 'src-tauri', 'resources', 'i18n.json');
 
 const CANDIDATES = [
-  process.env.PRISMOO_CHROME,
+  process.env.BOOLOO_CHROME,
   'C:/Program Files/Google/Chrome/Application/chrome.exe',
   'C:/Program Files (x86)/Google/Chrome/Application/chrome.exe',
   'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
@@ -39,7 +39,7 @@ const CANDIDATES = [
 
 const browser = CANDIDATES.find((candidate) => existsSync(candidate));
 if (!browser) {
-  console.error('No Chrome or Edge found. Set PRISMOO_CHROME to the executable.');
+  console.error('No Chrome or Edge found. Set BOOLOO_CHROME to the executable.');
   process.exit(1);
 }
 if (!existsSync(join(RENDERER, 'settings.html'))) {
@@ -50,7 +50,7 @@ if (!existsSync(join(RENDERER, 'settings.html'))) {
 const requested = process.argv.slice(2).filter((arg) => arg === 'zh' || arg === 'en');
 const languages = requested.length ? requested : ['zh', 'en'];
 const dictionary = JSON.parse(readFileSync(I18N, 'utf8'));
-const scratch = mkdtempSync(join(tmpdir(), 'prismoo-shots-'));
+const scratch = mkdtempSync(join(tmpdir(), 'booloo-shots-'));
 
 /** A screenshot of `file` at exactly `width`x`height`, written to `target`. */
 function shoot(file, width, height, target) {
@@ -178,7 +178,7 @@ function settingsPage(locale) {
 
 /** A simulated desktop: wallpaper, a window, the taskbar and the pet on top. */
 function desktopPage(locale) {
-  const greeting = (dictionary[locale] || {})['bubble.greeting'] || 'Prismoo';
+  const greeting = (dictionary[locale] || {})['bubble.greeting'] || 'Bulu';
   const html = `<!doctype html>
 <html lang="${locale === 'en' ? 'en' : 'zh-CN'}"><head><meta charset="utf-8"><style>
   html, body { margin: 0; width: 900px; height: 520px; overflow: hidden;
@@ -268,7 +268,7 @@ async function layoutMetrics(file) {
   // metrics", which says nothing about what actually broke.
   const fail = (message) => {
     const out = document.createElement('pre');
-    out.id = 'prismoo-error';
+    out.id = 'booloo-error';
     out.textContent = String(message);
     document.body.append(out);
   };
@@ -293,7 +293,7 @@ async function layoutMetrics(file) {
       scrollWidth: scroll.scrollWidth,
     };
     const out = document.createElement('pre');
-    out.id = 'prismoo-metrics';
+    out.id = 'booloo-metrics';
     out.textContent = JSON.stringify(measured);
     document.body.append(out);
   };
@@ -311,9 +311,9 @@ async function layoutMetrics(file) {
     .replace('</body>', `  <script src="./probe-${suffix}.js"></script>\n</body>`);
   writeFileSync(probe, html, 'utf8');
   const dom = settledDom(probe);
-  const match = /<pre id="prismoo-metrics">([^<]*)<\/pre>/.exec(dom);
+  const match = /<pre id="booloo-metrics">([^<]*)<\/pre>/.exec(dom);
   if (!match) {
-    const error = /<pre id="prismoo-error">([^<]*)<\/pre>/.exec(dom);
+    const error = /<pre id="booloo-error">([^<]*)<\/pre>/.exec(dom);
     throw new Error(`the settings page did not report its layout metrics${error ? `: ${error[1]}` : ''}`);
   }
   return JSON.parse(match[1]);

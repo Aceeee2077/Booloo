@@ -1,7 +1,7 @@
 # Contributing / 贡献指南
 
-Thanks for considering contributing to Prismoo — code, art, or docs! 🎉
-感谢你愿意为 Prismoo 贡献代码、美术或文档！
+Thanks for considering contributing to Booloo — code, art, or docs! 🎉
+感谢你愿意为 Booloo 贡献代码、美术或文档！
 
 ## Development Environment / 开发环境
 
@@ -32,6 +32,19 @@ Only the `lite-*.ts` pages are loaded at runtime; the earlier full-featured sour
 locally and listed in `.gitignore`, so it is not pushed.
 运行时只会加载 `lite-*.ts` 这套页面；旧版完整功能（衣柜 / PetPack / AI 对话 / 天气 / 统计 / 动画调试）
 保留在本地并在 `.gitignore` 中列出，不随仓库推送。
+
+## Brand and Compatibility / 品牌与兼容性
+
+The app is Booloo; its default cat remains Bulu / 布噜. The GitHub repository
+address and `com.petric.desktop-pet` identifier stay unchanged to preserve user
+data and signed updates. Release builds transfer an enabled startup registration
+from the previous product name on first launch; debug builds do not alter it.
+The NSIS hooks retain the previous installation registry keys so upgrades replace
+the existing installation, and migrate its shortcuts to Booloo.
+应用名为 Booloo，默认猫咪角色仍叫布噜 / Bulu。仓库地址和应用标识保持原值，
+以沿用已有数据与签名更新；正式版首次启动时会迁移已开启的旧开机启动项，
+调试版不会修改这些启动注册项。
+NSIS 安装钩子保留旧的内部安装注册键，使新版能覆盖原有安装，并将快捷方式改为 Booloo。
 
 ## Commit Guidelines / 提交规范
 

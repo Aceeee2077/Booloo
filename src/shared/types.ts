@@ -1,5 +1,5 @@
 // ============================================================================
-// Petric shared type definitions
+// Booloo shared type definitions
 // This file contains only type declarations (no runtime exports). Compiled as
 // a "script file", these types are globally visible in the renderer without any
 // imports. Since the renderer files (lite-app.ts / lite-settings.ts) are single
@@ -93,7 +93,7 @@ type PetState = 'idle' | 'walking' | 'sleeping' | 'click';
  *
  * Used for everything that needs to point at the pet: its visible silhouette
  * (`petBox`), the rectangle its art was drawn into (`petDrawRect`), the opaque box
- * handed to the native window for edge snapping (`__prismooVisualBounds`), and the
+ * handed to the native window for edge snapping (`__boolooVisualBounds`), and the
  * anchor coordinate space the accessory system normalizes against.
  */
 interface PetBox {
@@ -119,7 +119,7 @@ interface I18nPayload {
 }
 
 /** Legacy shape of the renderer i18n handle (the lite pages use lite-i18n.ts globals). */
-interface PetricI18n {
+interface BoolooI18n {
   /** Translate a key; unknown keys fall back to the key itself. */
   t(key: string, params?: Record<string, string | number>): string;
   /** Translate an array-valued key (e.g. the click speech lines). */
@@ -691,5 +691,5 @@ interface PetApi {
 interface Window {
   api: PetApi;
   /** Legacy global from the pre-lite renderer; lite pages call liteT() instead. */
-  PetricI18n: PetricI18n;
+  BoolooI18n: BoolooI18n;
 }

@@ -1,4 +1,4 @@
-<!-- The xmlns declaration is required: this file is also referenced from the
+<!-- The xmlns declaration is required: this Booloo icon is also referenced from the
      READMEs and opened as a standalone image, and a strict XML parser (GitHub's
      image proxy included) rejects an SVG without a namespace. -->
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">

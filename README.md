@@ -1,10 +1,12 @@
 <div align="center">
 
-<img src="docs/brand/prismoo-icon.png" width="128" height="128" alt="Prismoo 桌宠图标" />
+<img src="docs/brand/booloo-icon.png" width="128" height="128" alt="Booloo 桌宠图标" />
 
-# Prismoo · 轻量桌宠
+# Booloo · 轻量桌宠
 
 **简体中文** ｜ [English](./README-EN.md)
+
+Booloo 的名字来自布噜（Bulu），这只猫也是应用的默认角色。
 
 一只常驻桌面的透明小宠物：会走动、会打瞌睡，也会因为你拖来一张照片而开心。
 
@@ -19,11 +21,8 @@
 
 ## 预览
 
-### 布噜的 30 秒日常
+![Booloo 布噜宣传短片：桌面陪伴、摸头互动、健康提醒与好感度成长](docs/screenshots/booloo-promo.gif)
 
-![Prismoo 布噜宣传短片：桌面陪伴、摸头互动、健康提醒与好感度成长](docs/screenshots/prismoo-promo.gif)
-
-*30 秒循环预览（GIF 无声）。*
 
 ### 桌面与设置
 
@@ -76,7 +75,7 @@
 **暂不提供 macOS 安装包。** 代码本身是跨平台的（差异只在 `tauri.conf.json` 和几处 `#[cfg(target_os = "macos")]`），只是官方没有构建和签名，想用只能自己编：
 
 - 在 Mac 上 `npm install && npm run dist:mac`；想一次产出 Intel 与 Apple Silicon 通用的单包，用 `npx tauri build --target universal-apple-darwin --bundles app,dmg`。
-- 产物未签名，第一次打开需「右键 → 打开」，或执行 `xattr -dr com.apple.quarantine Prismoo.app`。
+- 产物未签名，第一次打开需「右键 → 打开」，或执行 `xattr -dr com.apple.quarantine Booloo.app`。
 
 ## 技术栈
 

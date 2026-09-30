@@ -18,6 +18,10 @@ These are declared under `devDependencies` and are **not** bundled into the buil
   (`scripts/generate-brand-icons.mjs`). Distributed with libvips and its applicable third-party
   notices.
 - **@tauri-apps/cli** — MIT OR Apache-2.0 · builds and bundles the app.
+- **Tauri NSIS installer template** — the CLI v2.11.4 template is vendored in
+  `src-tauri/windows/installer-template.nsi` with two installation registry keys
+  kept stable across the Booloo rename. Used under the MIT license in
+  `src-tauri/windows/LICENSE-MIT`; copyright 2017–present, Tauri Apps Contributors.
 
 ## Artwork
 

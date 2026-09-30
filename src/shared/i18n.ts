@@ -1,13 +1,13 @@
 // ============================================================================
 // Single source of truth for the app's UI strings (zh / en).
 // Used by the main process (tray, context menu, dialogs, AI error messages) and
-// served to the renderer via the 'i18n:get' IPC so window.PetricI18n can translate.
+// served to the renderer via the 'i18n:get' IPC so window.BoolooI18n can translate.
 // Keys are flat. Values may be strings or arrays (e.g. the click speech lines).
 // ============================================================================
 
 export const zhDict: Record<string, I18nValue> = {
   // Pet window
-  'bubble.greeting': '喵～ 我是 Prismoo！',
+  'bubble.greeting': '喵～ 我是布噜！',
   'bubble.aiNotEnabled': 'AI 对话还没开启，去设置里配置一下吧 ✨',
   'bubble.noCustom': '没有找到自定义外观，去设置里选一张吧 🖼️',
   'bubble.imageLoadFail': '图片加载失败，已回退到猫 🐱',
@@ -16,7 +16,7 @@ export const zhDict: Record<string, I18nValue> = {
   // Chat window (ChatGPT-style standalone window; strings also used by the pet window hints)
   'chat.placeholder': '给宠物发消息…',
   'chat.send': '发送',
-  'chat.windowTitle': '和 Prismoo 对话',
+  'chat.windowTitle': '和 Booloo 对话',
   'chat.untitled': '新对话',
   'chat.newChat': '➕ 新的对话',
   'chat.archivedSection': '📁 已归档 ({n})',
@@ -28,7 +28,7 @@ export const zhDict: Record<string, I18nValue> = {
   'chat.renameHint': '回车保存 · Esc 取消',
   'chat.deleteTitle': '删除对话',
   'chat.deleteConfirm': '删除「{title}」？此操作无法恢复。',
-  'chat.welcomeTitle': '和 Prismoo 聊点什么吧 👋',
+  'chat.welcomeTitle': '和 Booloo 聊点什么吧 👋',
   'chat.welcomeSub': '我是你的桌面小伙伴～双击桌面上的我，或点左上角「新的对话」开始聊天。',
   'chat.emptyConversation': '这个对话还是空的，发第一条消息吧 ✨',
   'chat.thinking': '正在思考…',
@@ -55,8 +55,8 @@ export const zhDict: Record<string, I18nValue> = {
   'reminder.break': '站起来活动活动啊老板！',
 
   // Settings panel
-  'settings.windowTitle': 'Prismoo 设置',
-  'settings.title': '🐾 Prismoo 设置',
+  'settings.windowTitle': 'Booloo 设置',
+  'settings.title': '🐾 Booloo 设置',
   'settings.close': '关闭',
   'settings.language': '界面语言',
   'settings.zh': '中文',
@@ -211,7 +211,7 @@ export const zhDict: Record<string, I18nValue> = {
   'settings.focusMode': '站立提醒',
   'settings.focusInterval': '提醒间隔',
   'settings.focusMinute': '{n} 分钟',
-  'settings.focusHint': '开启后，Prismoo 每隔一段时间会提醒你站起来活动活动，久坐伤身哦 🪑 → 🧍',
+  'settings.focusHint': '开启后，Booloo 每隔一段时间会提醒你站起来活动活动，久坐伤身哦 🪑 → 🧍',
   'settings.assistantSection': '生活助手',
   'settings.greetEnabled': '主动搭话',
   'settings.weatherEnabled': '天气播报',
@@ -324,7 +324,7 @@ export const zhDict: Record<string, I18nValue> = {
   'update.delayHour': '{n} 小时',
   'update.busy': '正在检查更新，请稍候…',
   'update.readyTitle': '新版本已就绪',
-  'update.readyBody': 'Prismoo v{v} 已下载完成，重启后会自动完成更新。',
+  'update.readyBody': 'Booloo v{v} 已下载完成，重启后会自动完成更新。',
   'update.notesBlock': '📋 更新内容：\n{notes}',
   'update.restart': '🔄 立即重启更新',
   'update.later': '稍后再说',
@@ -332,7 +332,7 @@ export const zhDict: Record<string, I18nValue> = {
   'update.checkFailed': '检查更新失败，请稍后再试，或前往 GitHub Releases 手动下载',
   'update.devUnsupported': '当前是开发模式，无法在线更新。请先运行 npm run dist:win 打包安装。',
   'update.manualTitle': '发现新版本',
-  'update.manualBody': 'Prismoo v{v} 已发布。请打开下载页手动更新：',
+  'update.manualBody': 'Booloo v{v} 已发布。请打开下载页手动更新：',
   'update.open': '打开下载页',
   'update.cancel': '取消',
   'update.installingNotice': '🔄 正在更新到 v{v}，马上回来～',
@@ -344,7 +344,7 @@ export const zhDict: Record<string, I18nValue> = {
   'updateBadge.error': '⚠️ 更新出错了，点我重试',
   'updateBadge.manual': '✨ 发现新版本 v{v}，点我打开下载页',
   'updateBadge.queued': '✅ 收到！下载完成后我会自动重启更新～',
-  'tray.tooltip': 'Prismoo · 桌面宠物',
+  'tray.tooltip': 'Booloo · 桌面宠物',
   'dialog.pickTitle': '选择宠物外观（图片或 3D 模型）',
   'dialog.filterAll': '图片/模型',
   'dialog.filterModel': '3D 模型',
@@ -534,7 +534,7 @@ export const zhDict: Record<string, I18nValue> = {
 
 export const enDict: Record<string, I18nValue> = {
   // Pet window
-  'bubble.greeting': 'Meow~ I\'m Prismoo!',
+  'bubble.greeting': 'Meow~ I\'m Bulu!',
   'bubble.aiNotEnabled': 'AI chat is not enabled yet — set it up in Settings ✨',
   'bubble.noCustom': 'No custom appearance found — pick one in Settings 🖼️',
   'bubble.imageLoadFail': 'Failed to load the image, switched back to the cat 🐱',
@@ -543,7 +543,7 @@ export const enDict: Record<string, I18nValue> = {
   // Chat window (ChatGPT-style standalone window; strings also used by the pet window hints)
   'chat.placeholder': 'Message your pet…',
   'chat.send': 'Send',
-  'chat.windowTitle': 'Chat with Prismoo',
+  'chat.windowTitle': 'Chat with Booloo',
   'chat.untitled': 'New chat',
   'chat.newChat': '➕ New chat',
   'chat.archivedSection': '📁 Archived ({n})',
@@ -555,7 +555,7 @@ export const enDict: Record<string, I18nValue> = {
   'chat.renameHint': 'Enter to save · Esc to cancel',
   'chat.deleteTitle': 'Delete conversation',
   'chat.deleteConfirm': 'Delete "{title}"? This cannot be undone.',
-  'chat.welcomeTitle': 'Say hi to Prismoo 👋',
+  'chat.welcomeTitle': 'Say hi to Booloo 👋',
   'chat.welcomeSub': "I'm your desktop buddy~ Double-click me on the desktop, or hit \"New chat\" in the top-left corner to start.",
   'chat.emptyConversation': 'This conversation is empty — send the first message ✨',
   'chat.thinking': 'Thinking…',
@@ -582,8 +582,8 @@ export const enDict: Record<string, I18nValue> = {
   'reminder.break': 'Stand up and stretch, boss!',
 
   // Settings panel
-  'settings.windowTitle': 'Prismoo Settings',
-  'settings.title': '🐾 Prismoo Settings',
+  'settings.windowTitle': 'Booloo Settings',
+  'settings.title': '🐾 Booloo Settings',
   'settings.close': 'Close',
   'settings.language': 'Language',
   'settings.zh': '中文',
@@ -738,7 +738,7 @@ export const enDict: Record<string, I18nValue> = {
   'settings.focusMode': 'Break reminder',
   'settings.focusInterval': 'Reminder interval',
   'settings.focusMinute': '{n} min',
-  'settings.focusHint': 'When enabled, Prismoo reminds you to stand up and stretch regularly — sitting too long hurts 🪑 → 🧍',
+  'settings.focusHint': 'When enabled, Booloo reminds you to stand up and stretch regularly — sitting too long hurts 🪑 → 🧍',
   'settings.assistantSection': 'Life Assistant',
   'settings.greetEnabled': 'Proactive chat',
   'settings.weatherEnabled': 'Weather',
@@ -851,7 +851,7 @@ export const enDict: Record<string, I18nValue> = {
   'update.delayHour': '{n} hr',
   'update.busy': 'Checking for updates — one moment…',
   'update.readyTitle': 'Update ready',
-  'update.readyBody': 'Prismoo v{v} has been downloaded. It will finish installing after the app restarts.',
+  'update.readyBody': 'Booloo v{v} has been downloaded. It will finish installing after the app restarts.',
   'update.notesBlock': '📋 What\'s new:\n{notes}',
   'update.restart': '🔄 Restart & Update',
   'update.later': 'Later',
@@ -859,7 +859,7 @@ export const enDict: Record<string, I18nValue> = {
   'update.checkFailed': 'Update check failed — try again later, or download from GitHub Releases manually',
   'update.devUnsupported': 'Running in dev mode, online updates are unavailable. Package with npm run dist:win first.',
   'update.manualTitle': 'New version available',
-  'update.manualBody': 'Prismoo v{v} has been released. Open the download page to update:',
+  'update.manualBody': 'Booloo v{v} has been released. Open the download page to update:',
   'update.open': 'Open download page',
   'update.cancel': 'Cancel',
   'update.installingNotice': '🔄 Updating to v{v} — back in a moment~',
@@ -871,7 +871,7 @@ export const enDict: Record<string, I18nValue> = {
   'updateBadge.error': '⚠️ Update failed — click to retry',
   'updateBadge.manual': '✨ New version v{v} — click to open the download page',
   'updateBadge.queued': '✅ Got it! I will restart & update once the download finishes~',
-  'tray.tooltip': 'Prismoo · Desktop Pet',
+  'tray.tooltip': 'Booloo · Desktop Pet',
   'dialog.pickTitle': 'Choose a pet appearance (image or 3D model)',
   'dialog.filterAll': 'Images / Models',
   'dialog.filterModel': '3D Models',

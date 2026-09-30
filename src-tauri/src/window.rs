@@ -563,7 +563,7 @@ pub async fn open_mask_editor(app: AppHandle) -> Result<(), String> {
         "mask",
         tauri::WebviewUrl::App("renderer/mask.html".into()),
     )
-    .title("Prismoo")
+    .title("Booloo")
     .decorations(false)
     .inner_size(1080.0, 720.0)
     .min_inner_size(760.0, 520.0)
@@ -591,7 +591,7 @@ fn build_settings(app: &AppHandle, section: Option<String>) -> Result<(), String
         "settings",
         tauri::WebviewUrl::App("renderer/settings.html".into()),
     )
-    .title("Prismoo")
+    .title("Booloo")
     .decorations(false)
     // Wide enough for the 53-week click heatmap to show a whole year without a
     // horizontal scrollbar: the page needs ~660 px for the grid, and the panel
@@ -633,7 +633,7 @@ fn build_settings(app: &AppHandle, section: Option<String>) -> Result<(), String
     Ok(())
 }
 
-/// Whether Prismoo is registered to start with the OS session.
+/// Whether Booloo is registered to start with the OS session.
 #[tauri::command]
 pub fn autolaunch_get(app: AppHandle) -> bool {
     use tauri_plugin_autostart::ManagerExt;

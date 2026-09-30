@@ -1,5 +1,5 @@
 // ============================================================================
-// Prismoo (Tauri 2) — Rust backend entry point.
+// Booloo (Tauri 2) — Rust backend entry point.
 //
 // The lightweight renderer talks to this process through lite-api.ts.
 // ============================================================================
@@ -7,6 +7,7 @@
 // recursion headroom than the default 128 once the schema grows.
 #![recursion_limit = "512"]
 
+mod autostart;
 mod config;
 mod cutout;
 mod custom;
@@ -22,7 +23,7 @@ use std::io::Write;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-/// Reports collected by `probe_report` during a `PRISMOO_SELFCHECK` run.
+/// Reports collected by `probe_report` during a `BOOLOO_SELFCHECK` run.
 static PET_REPORT: Mutex<Option<String>> = Mutex::new(None);
 static SETTINGS_REPORT: Mutex<Option<String>> = Mutex::new(None);
 static MASK_REPORT: Mutex<Option<String>> = Mutex::new(None);
@@ -73,18 +74,18 @@ const LITE_CHECK_JS: &str = r#"
     let visible = 0;
     for (let i = 3; i < data.length; i += 16) if (data[i] > 24) visible++;
     out.drawnPixels = visible;
-    out.state = window.__prismooLiteState?.() ?? null;
-    out.hitTestCorner = window.__prismooHitTest?.(5, 5) ?? null;
+    out.state = window.__boolooLiteState?.() ?? null;
+    out.hitTestCorner = window.__boolooHitTest?.(5, 5) ?? null;
     out.i18nReady = typeof window.liteT === 'function' && window.liteT('lite.pet.petting') !== 'lite.pet.petting';
     out.petError = window.__petError ?? null;
     // The pet is click-through until this hit test says the cursor is over it, so
     // a broken hit test means "cannot drag, right-click does nothing" — and it
     // only breaks on displays with a device pixel ratio other than 1, which is
     // why the self-check is also run with a forced scale factor.
-    const bounds = window.__prismooVisualBounds?.();
+    const bounds = window.__boolooVisualBounds?.();
     out.devicePixelRatio = window.devicePixelRatio;
     out.hitTestPet = bounds
-      ? [0.5, 0.6, 0.7].map(part => window.__prismooHitTest?.(bounds.x + bounds.w / 2, bounds.y + bounds.h * part) ?? null)
+      ? [0.5, 0.6, 0.7].map(part => window.__boolooHitTest?.(bounds.x + bounds.w / 2, bounds.y + bounds.h * part) ?? null)
       : null;
     // The reminder sign and the load badge are part of the page's contract even
     // while they are hidden.
@@ -272,6 +273,13 @@ pub fn run() {
         // `plugins.updater`, and updater.rs exposes the renderer's commands.
         .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
+            // Never register the development/self-check executable as a login app.
+            #[cfg(not(debug_assertions))]
+            if std::env::var("BOOLOO_SELFCHECK").is_err() {
+                if let Err(error) = autostart::migrate(app.handle()) {
+                    eprintln!("Booloo startup migration: {error}");
+                }
+            }
             // macOS: a desktop pet must not claim a Dock / ⌘-Tab slot — the tray
             // icon is the only way in. Set before the first window is shown, or the
             // icon flashes in the Dock on launch.
@@ -298,7 +306,7 @@ pub fn run() {
                 }
             });
 
-            if std::env::var("PRISMOO_SELFCHECK").is_ok() {
+            if std::env::var("BOOLOO_SELFCHECK").is_ok() {
                 spawn_self_check(app.handle());
             }
             Ok(())
@@ -345,5 +353,5 @@ pub fn run() {
             window::show_pet_window,
         ])
         .run(tauri::generate_context!())
-        .expect("error while running Prismoo");
+        .expect("error while running Booloo");
 }

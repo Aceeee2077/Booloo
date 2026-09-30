@@ -1,13 +1,13 @@
 [package]
-name = "prismoo"
+name = "booloo"
 version = "0.6.12"
-description = "Prismoo · cross-platform desktop pet"
-authors = ["Prismoo Contributors"]
+description = "Booloo · cross-platform desktop pet"
+authors = ["Booloo Contributors"]
 edition = "2021"
 rust-version = "1.77.2"
 
 [lib]
-name = "prismoo_lib"
+name = "booloo_lib"
 # Desktop-only: the Tauri template also lists staticlib/cdylib for iOS/Android,
 # which makes MSVC emit .lib/.exp byproducts and the `linker_messages` warning.
 crate-type = ["rlib"]
@@ -22,6 +22,8 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = ["tray-icon", "image-png", "protocol-asset", "macos-private-api"] }
 tauri-plugin-dialog = "2"
 tauri-plugin-autostart = "2"
+# The same backend used by the plugin, for transferring an existing startup entry.
+auto-launch = "0.5"
 tauri-plugin-single-instance = "2"
 tauri-plugin-updater = "2"
 serde = { version = "1", features = ["derive"] }

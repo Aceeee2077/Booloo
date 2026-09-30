@@ -111,10 +111,10 @@ jobs:
           # APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         with:
           tagName: v__VERSION__
-          releaseName: 'Prismoo v__VERSION__'
+          releaseName: 'Booloo v__VERSION__'
           releaseBody: |
-            Windows: `Prismoo_x.y.z_x64-setup.exe`
-            macOS: `Prismoo_x.y.z_aarch64.dmg` (Apple Silicon) / `Prismoo_x.y.z_x64.dmg` (Intel) — unsigned builds need right-click → Open the first time.
+            Windows: `Booloo_x.y.z_x64-setup.exe`
+            macOS: `Booloo_x.y.z_aarch64.dmg` (Apple Silicon) / `Booloo_x.y.z_x64.dmg` (Intel) — unsigned builds need right-click → Open the first time.
             Auto-update is available from v0.5.1 onwards.
           releaseDraft: false
           prerelease: false

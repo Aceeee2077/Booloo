@@ -1,10 +1,12 @@
 <div align="center">
 
-<img src="docs/brand/prismoo-icon.png" width="128" height="128" alt="Prismoo icon" />
+<img src="docs/brand/booloo-icon.png" width="128" height="128" alt="Booloo icon" />
 
-# Prismoo · Lightweight Desktop Pet
+# Booloo · Lightweight Desktop Pet
 
 [中文](./README.md) ｜ **English**
+
+Booloo is named after Bulu, the cat who is also the app’s default character.
 
 A small, transparent pet that lives on your desktop — it walks, naps, and cheers when you drop a photo on it.
 
@@ -19,9 +21,8 @@ A small, transparent pet that lives on your desktop — it walks, naps, and chee
 
 ## Preview
 
-### 30 seconds with Bulu
 
-![Prismoo Bulu promo: desktop companionship, petting, wellness reminders and friendship growth](docs/screenshots/prismoo-promo.gif)
+![Booloo Bulu promo: desktop companionship, petting, wellness reminders and friendship growth](docs/screenshots/booloo-promo.gif)
 
 *30-second looping preview (silent GIF; on-screen text is in Chinese).*
 
@@ -38,9 +39,9 @@ Open Settings from the tray or the right-click menu to switch pets, import your 
 ## What it does
 
 - **Bulu, the built-in character** — Bulu is the only bundled look and the default one. Right-click for Wave, Groom, Stretch, Yawn and Scratch: each plays a real pose animation from a 4×5 atlas (`src/assets/animated-pets/bulu-actions.webp` — one action per row, four frames each), not a switched static frame.
-- **Bring your own picture** — Choose **Import my image** and the picture goes through a preview first. Background removal is intended for simple, solid backgrounds, and if it would erase the subject Prismoo keeps the original image.
+- **Bring your own picture** — Choose **Import my image** and the picture goes through a preview first. Background removal is intended for simple, solid backgrounds, and if it would erase the subject Booloo keeps the original image.
 - **Automatic cutout + manual touch-up** — **Refine the cutout…** opens a separate editor window: Rust builds the first mask locally, then the erase / restore brushes fix the edges, with brush size and edge hardness. Undo / redo (Ctrl+Z / Ctrl+Y), wheel zoom, panning, a side-by-side original and a **Run it again** pass (strength and feather) are all there. The picture is never uploaded and the result is saved as a transparent PNG.
-- **Drop a file on the pet** — It answers with a short animated line based on the file type: image, document, archive, audio, video, or a general response. Prismoo checks only the extension and never reads or modifies the file. File reactions can be disabled in Settings.
+- **Drop a file on the pet** — It answers with a short animated line based on the file type: image, document, archive, audio, video, or a general response. Booloo checks only the extension and never reads or modifies the file. File reactions can be disabled in Settings.
 - **Blinking** — While Bulu stands still, both eyes blink together, roughly every 3.2–8.4 seconds and held shut for about 150 ms. The closed-eye frame is painted by `scripts/build-bulu-blink.mjs` out of the resting pose, so it costs no extra atlas art.
 - **Touch means different things in different places** — Petting the head melts it into hearts; stroking its back makes it purr and groom; a single tap answers depending on what you poked; a quick double tap gets a happy wave and hearts; holding on too long makes it scratch its head and complain; waking it up with a poke earns a sleepy grumble first.
 - **Reminders** — Right-click and pick **Remind me…** (or use the Reminders section in Settings), type a line and a time — a time earlier than now means tomorrow. When it comes due, the pet runs to the middle of the screen and holds up a sign until you touch it. Anything missed by more than ten minutes is dropped rather than announced late.
@@ -61,7 +62,7 @@ A single image gets gentle breathing and click motion. It does not become a new 
 1. Open Settings from the tray menu.
 2. Keep the default Bulu, or choose **Import my image** to use your own picture.
 3. Check the preview before selecting **Use this image**. Canceling leaves the current pet untouched.
-4. Background removal is intended for simple, solid backgrounds. If it would erase the subject, Prismoo keeps the original image. Transparent PNGs are not processed again.
+4. Background removal is intended for simple, solid backgrounds. If it would erase the subject, Booloo keeps the original image. Transparent PNGs are not processed again.
 5. For cleaner edges choose **Refine the cutout…**: pick a brush on the left, drag on the canvas (right-drag or hold space to pan, wheel to zoom), compare the original and the cutout on the right, then press **Use this image**.
 
 ## Auto-update
@@ -76,7 +77,7 @@ A single image gets gentle breathing and click motion. It does not become a new 
 **There is no macOS installer for now.** The code itself is cross-platform — the differences live in `tauri.conf.json` and a few `#[cfg(target_os = "macos")]` blocks — but nothing is built or signed for it, so you would have to compile it yourself:
 
 - On a Mac: `npm install && npm run dist:mac`; for one binary covering both Intel and Apple Silicon, `npx tauri build --target universal-apple-darwin --bundles app,dmg`.
-- The result is unsigned, so the first launch needs right-click → Open, or `xattr -dr com.apple.quarantine Prismoo.app`.
+- The result is unsigned, so the first launch needs right-click → Open, or `xattr -dr com.apple.quarantine Booloo.app`.
 
 ## Tech stack
 

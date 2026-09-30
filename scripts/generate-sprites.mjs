@@ -1,5 +1,5 @@
 // ============================================================================
-// Petric pixel sprite generator (zero dependencies, pure Node implementation)
+// Booloo pixel sprite generator (zero dependencies, pure Node implementation)
 //
 // Run: npm run sprites
 // Output:

@@ -1,8 +1,8 @@
 {
-  "name": "prismoo",
+  "name": "booloo",
   "version": "0.6.12",
-  "description": "Prismoo · 跨平台透明桌面宠物 / Cross-platform desktop pet (Tauri 2 + Rust + TypeScript + Canvas)",
-  "author": "Prismoo Contributors",
+  "description": "Booloo · 跨平台透明桌面宠物 / Cross-platform desktop pet (Tauri 2 + Rust + TypeScript + Canvas)",
+  "author": "Booloo Contributors",
   "license": "MIT",
   "private": true,
   "scripts": {

@@ -201,13 +201,13 @@ clock += 100;
 tap(120, 175);
 assert.equal(speech.textContent, '嘿嘿，我也喜欢你！', 'two quick taps should be read as affection');
 assert.equal(hearts.hidden, false, 'a double tap should show hearts');
-assert.equal(browser.__prismooLiteState().action, 'wave', 'a double tap should wave');
+assert.equal(browser.__boolooLiteState().action, 'wave', 'a double tap should wave');
 frame(clock += 2600);
 
 canvasEvents.get('mousedown')({ button: 0, offsetX: 120, offsetY: 175, screenX: 100, screenY: 100 });
 frame(clock += 800);
 assert.equal(speech.textContent, '摸够了吗…爪子都麻了', 'holding the pet should make it complain');
-assert.equal(browser.__prismooLiteState().action, 'scratch', 'the hold reaction is the fifth pose row');
+assert.equal(browser.__boolooLiteState().action, 'scratch', 'the hold reaction is the fifth pose row');
 windowEvents.get('mouseup')();
 frame(clock += 2600);
 
@@ -219,7 +219,7 @@ for (const x of [110, 135, 115, 140]) {
   canvasEvents.get('mousemove')({ offsetX: x, offsetY: 270, buttons: 0 });
 }
 assert.equal(speech.textContent, '呼噜噜……背上也舒服～', 'stroking the back should purr');
-assert.equal(browser.__prismooLiteState().action, 'groom', 'a stroked back makes the pet groom');
+assert.equal(browser.__boolooLiteState().action, 'groom', 'a stroked back makes the pet groom');
 frame(clock += 2600);
 
 wallClock = 300_001;
@@ -292,9 +292,9 @@ actionReceived('scratch');
 frame(clock += 1100);
 assert.equal(lastDraw[2], 4 * 192, 'scratch should use the fifth pose row');
 actionReceived('unknown');
-assert.equal(browser.__prismooLiteState().action, 'scratch', 'unknown actions should be ignored');
+assert.equal(browser.__boolooLiteState().action, 'scratch', 'unknown actions should be ignored');
 frame(clock += 2600);
-assert.equal(browser.__prismooLiteState().action, null, 'action should return to normal playback');
+assert.equal(browser.__boolooLiteState().action, null, 'action should return to normal playback');
 
 canvasEvents.get('mousedown')({ button: 0, offsetX: 120, offsetY: 175, screenX: 100, screenY: 100 });
 canvasEvents.get('mousemove')({ offsetX: 140, offsetY: 175, screenX: 126, screenY: 100, buttons: 1 });

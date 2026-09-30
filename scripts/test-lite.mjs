@@ -10,6 +10,18 @@ const require = createRequire(import.meta.url);
 // The renderer translates through the dictionary the backend hands it, so the
 // tests build the same translations from the compiled src/shared/i18n.ts.
 const { zhDict, enDict } = require(join(process.cwd(), 'dist', 'shared', 'i18n.js'));
+// Rebranding must keep the existing data directory and signed update channel.
+const appConfig = JSON.parse(readFileSync(join(process.cwd(), 'src-tauri/tauri.conf.json'), 'utf8'));
+assert.equal(appConfig.productName, 'Booloo');
+assert.equal(appConfig.identifier, 'com.petric.desktop-pet');
+// Windows upgrades must find the previous installation despite its display name.
+const installer = readFileSync(join(process.cwd(), 'src-tauri', appConfig.bundle.windows.nsis.template), 'utf8');
+assert.ok(installer.includes('!define UNINSTKEY "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Prismoo"'));
+assert.ok(installer.includes('!define MANUPRODUCTKEY "Software\\Prismoo\\Prismoo"'));
+assert.deepEqual(appConfig.plugins.updater.endpoints,
+  ['https://github.com/Aceeee2077/Prismoo/releases/latest/download/latest.json']);
+assert.equal(zhDict['bubble.greeting'], '喵～ 我是布噜！');
+assert.equal(enDict['bubble.greeting'], "Meow~ I'm Bulu!");
 const makeTranslate = (dict) => (key, params) => {
   const value = dict[key];
   if (typeof value !== 'string') return key;
@@ -254,7 +266,7 @@ for (const [readme, expected, other] of [
   assert.ok(header.includes(`](${other})`),
     `${readme} should link to ${other} above the first section`);
   const images = [...markdown.matchAll(/!\[[^\]]*\]\((docs\/screenshots\/[^)]+)\)/g)].map(match => match[1]);
-  assert.deepEqual(images, ['docs/screenshots/prismoo-promo.gif', ...expected],
+  assert.deepEqual(images, ['docs/screenshots/booloo-promo.gif', ...expected],
     `${readme} should embed the shared promo GIF and the ${readme.includes('-EN') ? 'English' : 'Chinese'} screenshots`);
   for (const image of images) assert.ok(existsSync(join(process.cwd(), image)), `${image} is missing`);
 }

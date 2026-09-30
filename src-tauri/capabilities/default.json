@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Permissions used by the Prismoo pet, settings and mask-editor windows.",
+  "description": "Permissions used by the Booloo pet, settings and mask-editor windows.",
   "windows": ["pet", "settings", "mask", "pet-menu"],
   "permissions": [
     "core:default",

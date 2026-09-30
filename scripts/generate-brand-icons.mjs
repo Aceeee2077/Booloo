@@ -1,4 +1,4 @@
-// Prismoo brand icons: renders the candy-chrome cat once and writes all icon
+// Booloo brand icons: renders the candy-chrome cat once and writes all icon
 // sizes/formats the app needs. Run after `npm run sprites` so the deterministic
 // pixel-pet generator never overwrites the brand icon.
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -7,13 +7,13 @@ import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const SVG = path.join(ROOT, 'src', 'assets', 'brand', 'prismoo-icon.svg');
+const SVG = path.join(ROOT, 'src', 'assets', 'brand', 'booloo-icon.svg');
 // Monochrome silhouette used as the macOS menu-bar (template) icon.
-const TRAY_SVG = path.join(ROOT, 'src', 'assets', 'brand', 'prismoo-tray.svg');
+const TRAY_SVG = path.join(ROOT, 'src', 'assets', 'brand', 'booloo-tray.svg');
 const ASSET_DIR = path.join(ROOT, 'src', 'assets');
 // The READMEs embed a PNG: repo images are served through GitHub's image proxy,
 // which sanitises SVG and renders a namespace-less file as a broken image.
-const README_PNG = path.join(ROOT, 'docs', 'brand', 'prismoo-icon.png');
+const README_PNG = path.join(ROOT, 'docs', 'brand', 'booloo-icon.png');
 // The bundler reads the app / installer icons from src-tauri/icons (see
 // bundle.icon in tauri.conf.json). They are committed, so they have to be
 // regenerated here too — otherwise a redrawn brand mark would update the tray and
@@ -109,5 +109,5 @@ for (const size of [32, 128, 256]) {
   );
 }
 
-console.log('✓ Prismoo 品牌图标：src/assets/{icon.png,icon.ico,icon.icns,tray.png,tray-mac.png}、'
-  + 'docs/brand/prismoo-icon.png（README 用）、src-tauri/icons/*（含多尺寸 icon.icns）已生成');
+console.log('✓ Booloo 品牌图标：src/assets/{icon.png,icon.ico,icon.icns,tray.png,tray-mac.png}、'
+  + 'docs/brand/booloo-icon.png（README 用）、src-tauri/icons/*（含多尺寸 icon.icns）已生成');

@@ -8,17 +8,17 @@ screenshots exist once per language — `README.md` uses the plain names,
 
 | File / 文件 | Size / 尺寸 | Content / 内容 | Used by / 用于 |
 | :--- | :--- | :--- | :--- |
-| `prismoo-promo.gif` | 800×450 | 30-second silent looping Bulu promo, Chinese on-screen text / 布噜 30 秒无声循环宣传片，中文画面文案 | Both READMEs / 中英文 README |
+| `booloo-promo.gif` | 800×450 | 30-second silent looping Bulu promo, Chinese on-screen text / 布噜 30 秒无声循环宣传片，中文画面文案 | Both READMEs / 中英文 README |
 | `lightweight-pet.png` | 900×520 | The pet on a simulated desktop, zh speech bubble / 桌宠在模拟桌面上，中文气泡 | `README.md` |
 | `lightweight-pet-en.png` | 900×520 | Same desktop, en speech bubble / 同一张桌面，英文气泡 | `README-EN.md` |
-| `lightweight-settings.png` | 680×936 | The settings panel, zh UI / 设置面板，中文界面 | `README.md` |
-| `lightweight-settings-en.png` | 680×936 | The settings panel, en UI / 设置面板，英文界面 | `README-EN.md` |
+| `lightweight-settings.png` | 764×2236 | The settings panel, zh UI / 设置面板，中文界面 | `README.md` |
+| `lightweight-settings-en.png` | 764×2250 | The settings panel, en UI / 设置面板，英文界面 | `README-EN.md` |
 
 ## Regenerating / 如何重新生成
 
-The promo GIF is exported from the local `Prismoo-promo.mp4`. The MP4 and its
+The promo GIF is exported from the local `Booloo-promo.mp4`. The MP4 and its
 `promo-video/` production files are ignored; only the README GIF is committed.
-宣传 GIF 从本地 `Prismoo-promo.mp4` 导出；MP4 和 `promo-video/` 制作文件已加入
+宣传 GIF 从本地 `Booloo-promo.mp4` 导出；MP4 和 `promo-video/` 制作文件已加入
 `.gitignore`，仅 README 展示用 GIF 随仓库提交。
 
 ```bash
@@ -28,8 +28,8 @@ npm run screenshots -- en    # English only
 npm run screenshots -- zh    # Chinese only
 ```
 
-Needs a local Chrome or Edge (`PRISMOO_CHROME` overrides which one is used).
-需要本机装有 Chrome 或 Edge（可用环境变量 `PRISMOO_CHROME` 指定路径）。
+Needs a local Chrome or Edge (`BOOLOO_CHROME` overrides which one is used).
+需要本机装有 Chrome 或 Edge（可用环境变量 `BOOLOO_CHROME` 指定路径）。
 
 How the pictures are produced / 生成方式：
 
