@@ -241,8 +241,8 @@ assert.match(settingsCss, /header\s*\{[^}]*border-radius:\s*20px\s+20px\s+0\s+0;
 assert.match(settingsCss, /\.panel\s*\{[^}]*padding:\s*0\s+0\s+24px;/);
 assert.match(settingsCss, /\.panel\s*\{[^}]*margin:\s*0;/);
 
-// The two READMEs ship their own screenshots: the English one pointed at the
-// Chinese panel for a while, which is exactly what this guards against. Each of
+// The two READMEs share a promo GIF but ship their own static screenshots. The
+// English one pointed at the Chinese panel for a while, which this guards against. Each of
 // them also has to offer a way across to the other language up in the header,
 // where a reader actually lands — a footer link alone is easy to miss.
 for (const [readme, expected, other] of [
@@ -254,7 +254,8 @@ for (const [readme, expected, other] of [
   assert.ok(header.includes(`](${other})`),
     `${readme} should link to ${other} above the first section`);
   const images = [...markdown.matchAll(/!\[[^\]]*\]\((docs\/screenshots\/[^)]+)\)/g)].map(match => match[1]);
-  assert.deepEqual(images, expected, `${readme} should embed the ${readme.includes('-EN') ? 'English' : 'Chinese'} screenshots`);
+  assert.deepEqual(images, ['docs/screenshots/prismoo-promo.gif', ...expected],
+    `${readme} should embed the shared promo GIF and the ${readme.includes('-EN') ? 'English' : 'Chinese'} screenshots`);
   for (const image of images) assert.ok(existsSync(join(process.cwd(), image)), `${image} is missing`);
 }
 
