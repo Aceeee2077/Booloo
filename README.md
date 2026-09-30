@@ -10,7 +10,7 @@ Booloo 的名字来自布噜（Bulu），这只猫也是应用的默认角色。
 
 一只常驻桌面的透明小宠物：会走动、会打瞌睡，也会因为你拖来一张照片而开心。
 
-[![Release](https://img.shields.io/github/v/release/Aceeee2077/Prismoo?label=release&color=ff8fb0)](https://github.com/Aceeee2077/Prismoo/releases)
+[![Release](https://img.shields.io/github/v/release/Aceeee2077/Booloo?label=release&color=ff8fb0)](https://github.com/Aceeee2077/Booloo/releases)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS-4c8bf5)
 ![Tauri](https://img.shields.io/badge/Tauri-2-24c8db)
 ![Rust](https://img.shields.io/badge/Rust-1.77.2%2B-dea584)

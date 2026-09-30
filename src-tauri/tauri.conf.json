@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Booloo",
-  "version": "0.6.13",
+  "version": "0.6.14",
   "identifier": "com.petric.desktop-pet",
   "build": {
     "frontendDist": "../dist",
@@ -54,8 +54,8 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "RWT/YsdfZNqBA9Eq8QCWELWxQOvRJ267u5oFFmhcAaVVNBeNUfMefo7J",
-      "endpoints": ["https://github.com/Aceeee2077/Prismoo/releases/latest/download/latest.json"]
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDM4MURBNjQ1RkM3NjJGRgpSV1QvWXNkZlpOcUJBOUVxOFFDV0VMV3hRT3ZSSjI2N3U1b0ZGbWhjQWFWVk5CZU5VZk1lZm83Sgo=",
+      "endpoints": ["https://github.com/Aceeee2077/Booloo/releases/latest/download/latest.json"]
     }
   }
 }

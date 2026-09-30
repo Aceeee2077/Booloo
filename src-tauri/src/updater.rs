@@ -16,7 +16,7 @@ use tauri::{AppHandle, Emitter, State};
 use tauri_plugin_updater::UpdaterExt;
 
 /// Manual fallback URL, shown while the updater is not configured or a check fails.
-const RELEASES_URL: &str = "https://github.com/Aceeee2077/Prismoo/releases/latest";
+const RELEASES_URL: &str = "https://github.com/Aceeee2077/Booloo/releases/latest";
 
 /// Holds the verified installer bytes between `update_download` and `update_install`.
 #[derive(Default)]

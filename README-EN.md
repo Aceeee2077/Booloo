@@ -10,7 +10,7 @@ Booloo is named after Bulu, the cat who is also the app’s default character.
 
 A small, transparent pet that lives on your desktop — it walks, naps, and cheers when you drop a photo on it.
 
-[![Release](https://img.shields.io/github/v/release/Aceeee2077/Prismoo?label=release&color=ff8fb0)](https://github.com/Aceeee2077/Prismoo/releases)
+[![Release](https://img.shields.io/github/v/release/Aceeee2077/Booloo?label=release&color=ff8fb0)](https://github.com/Aceeee2077/Booloo/releases)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS-4c8bf5)
 ![Tauri](https://img.shields.io/badge/Tauri-2-24c8db)
 ![Rust](https://img.shields.io/badge/Rust-1.77.2%2B-dea584)

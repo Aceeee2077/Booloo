@@ -14,12 +14,20 @@ const { zhDict, enDict } = require(join(process.cwd(), 'dist', 'shared', 'i18n.j
 const appConfig = JSON.parse(readFileSync(join(process.cwd(), 'src-tauri/tauri.conf.json'), 'utf8'));
 assert.equal(appConfig.productName, 'Booloo');
 assert.equal(appConfig.identifier, 'com.petric.desktop-pet');
+// Tauri expects the base64-encoded .pub file, rather than the inner key alone.
+// Use the original identity so signed releases remain compatible with v0.5.1.
+const publicKeyLines = Buffer.from(appConfig.plugins.updater.pubkey, 'base64')
+  .toString('utf8').trim().split(/\r?\n/);
+assert.equal(publicKeyLines.length, 2);
+assert.match(publicKeyLines[0], /^untrusted comment:/);
+assert.equal(publicKeyLines[1], 'RWT/YsdfZNqBA9Eq8QCWELWxQOvRJ267u5oFFmhcAaVVNBeNUfMefo7J');
+assert.equal(Buffer.from(publicKeyLines[1], 'base64').length, 42);
 // Windows upgrades must find the previous installation despite its display name.
 const installer = readFileSync(join(process.cwd(), 'src-tauri', appConfig.bundle.windows.nsis.template), 'utf8');
 assert.ok(installer.includes('!define UNINSTKEY "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Prismoo"'));
 assert.ok(installer.includes('!define MANUPRODUCTKEY "Software\\Prismoo\\Prismoo"'));
 assert.deepEqual(appConfig.plugins.updater.endpoints,
-  ['https://github.com/Aceeee2077/Prismoo/releases/latest/download/latest.json']);
+  ['https://github.com/Aceeee2077/Booloo/releases/latest/download/latest.json']);
 assert.equal(zhDict['bubble.greeting'], '喵～ 我是布噜！');
 assert.equal(enDict['bubble.greeting'], "Meow~ I'm Bulu!");
 const makeTranslate = (dict) => (key, params) => {
@@ -186,8 +194,9 @@ for (const [file, pattern] of [
   ['src-tauri/src/lib.rs', /updater::update_check/],
   ['src-tauri/Cargo.toml', /tauri-plugin-updater/],
   ['src-tauri/tauri.conf.json', /"createUpdaterArtifacts": true/],
-  ['src-tauri/tauri.conf.json', /"pubkey": "RWT\//],
-  ['src-tauri/tauri.conf.json', /Aceeee2077\/Prismoo\/releases\/latest\/download\/latest\.json/],
+  // The decoded public-key file and original identity are validated above.
+  ['src-tauri/tauri.conf.json', /"pubkey": "[A-Za-z0-9+/]+={0,2}"/],
+  ['src-tauri/tauri.conf.json', /Aceeee2077\/Booloo\/releases\/latest\/download\/latest\.json/],
   ['.github/workflows/release.yml', /tauri-apps\/tauri-action@v1/],
 ]) {
   assert.match(readFileSync(join(process.cwd(), file), 'utf8'), pattern, `${file} lost its updater wiring`);
