@@ -19,6 +19,14 @@ A small, transparent pet that lives on your desktop — it walks, naps, and chee
 
 </div>
 
+## Download
+
+**Windows 10/11**: [⬇ Download the Booloo 0.6.15 installer](https://github.com/Aceeee2077/Booloo/releases/download/v0.6.15/Booloo_0.6.15_x64-setup.exe) · older builds are on [Releases](https://github.com/Aceeee2077/Booloo/releases)
+
+There is no macOS installer — build it from source instead, see [macOS](#macos).
+
+<!-- When a new installer is packaged, only this line changes: the version, the tag (vX.Y.Z) and the file name have to agree. -->
+
 ## Preview
 
 
@@ -67,10 +75,7 @@ A single image gets gentle breathing and click motion. It does not become a new 
 
 ## Auto-update
 
-- **Client** — `src-tauri/src/updater.rs` wraps `tauri-plugin-updater` into the `update_get_state / update_check / update_download / update_install / update_install_when_ready` commands. The **🔄 Update** section in Settings and the pet's update bubbles both call them. The feed URL and public key live in `src-tauri/tauri.conf.json` under `plugins.updater`.
-- **Release side** — `.github/workflows/release.yml` verifies the signing key on a `v*` tag (or a manual run), builds the NSIS installer with `tauri-action` and publishes the installer plus `latest.json` and `.sig` to Releases. The client's check reads that `latest.json`.
-- **Versions** — `package.json`, `src-tauri/Cargo.toml` and `src-tauri/tauri.conf.json` must agree, and a new tag has to be greater than the installed version or the client considers itself up to date.
-- **Local packaging** — With `createUpdaterArtifacts` enabled, `npm run dist:win` needs `TAURI_SIGNING_PRIVATE_KEY` / `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` (the same secrets CI uses) or the bundler fails at the signing step. To verify the app locally use `npm run tauri:check`, which needs no key.
+An installed build checks for and installs a new version a few seconds after start, and the **🔄 Update** section in Settings can check manually or turn it off. Packages come from this repository's GitHub Releases and are verified with a minisign signature (client `src-tauri/src/updater.rs`, release side `.github/workflows/release.yml`).
 
 ## macOS
 

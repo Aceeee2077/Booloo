@@ -19,6 +19,14 @@ Booloo 的名字来自布噜（Bulu），这只猫也是应用的默认角色。
 
 </div>
 
+## 下载
+
+**Windows 10/11**：[⬇ 下载 Booloo 0.6.15 安装包](https://github.com/Aceeee2077/Booloo/releases/download/v0.6.15/Booloo_0.6.15_x64-setup.exe) · 历史版本见 [Releases](https://github.com/Aceeee2077/Booloo/releases)
+
+macOS 暂不提供安装包，需要自行构建，见下方 [macOS](#macos)。
+
+<!-- 打包了新安装包之后只改上面那一行：版本号、tag 名（vX.Y.Z）、文件名三处保持一致。 -->
+
 ## 预览
 
 ![Booloo 布噜宣传短片：桌面陪伴、摸头互动、健康提醒与好感度成长](docs/screenshots/booloo-promo.gif)
@@ -65,10 +73,7 @@ Booloo 的名字来自布噜（Bulu），这只猫也是应用的默认角色。
 
 ## 自动更新
 
-- **客户端** — `src-tauri/src/updater.rs` 把 `tauri-plugin-updater` 包成 `update_get_state / update_check / update_download / update_install / update_install_when_ready` 几个命令：设置面板的「🔄 更新」区块和桌宠的更新气泡都调它们。更新地址与公钥写在 `src-tauri/tauri.conf.json` 的 `plugins.updater`。
-- **发布端** — `.github/workflows/release.yml` 在推送 `v*` 标签（或手动触发）时先校验签名密钥，再用 `tauri-action` 构建 NSIS 安装包，并把安装包 + `latest.json` + `.sig` 一起发到 Releases；客户端检查更新时读的就是那份 `latest.json`。
-- **版本号** — `package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json` 三处必须一致，且新 tag 要大于已安装版本，否则客户端会认为已是最新。
-- **本地打包** — 因为开了 `createUpdaterArtifacts`，`npm run dist:win` 需要 `TAURI_SIGNING_PRIVATE_KEY` / `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`（与 CI secret 相同），否则会在签名一步失败；只想本地验证功能用 `npm run tauri:check`，不需要密钥。
+安装版启动几秒后会自动检查并安装新版本，也可以在设置的「🔄 更新」里手动检查或关闭；安装包来自本仓库的 GitHub Releases，带 minisign 签名校验（客户端 `src-tauri/src/updater.rs`，发布端 `.github/workflows/release.yml`）。
 
 ## macOS
 
