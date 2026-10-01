@@ -1,6 +1,6 @@
 {
   "name": "booloo",
-  "version": "0.6.14",
+  "version": "0.6.15",
   "description": "Booloo · 跨平台透明桌面宠物 / Cross-platform desktop pet (Tauri 2 + Rust + TypeScript + Canvas)",
   "author": "Booloo Contributors",
   "license": "MIT",
@@ -8,7 +8,7 @@
   "scripts": {
     "sprites": "node scripts/generate-sprites.mjs",
     "brand-icons": "node scripts/generate-brand-icons.mjs",
-    "bulu-art": "node scripts/build-bulu-art.mjs",
+    "bulu-art": "node scripts/build-bulu-art.mjs && node scripts/build-bulu-blink.mjs",
     "bulu-blink": "node scripts/build-bulu-blink.mjs",
     "clean": "node scripts/clean-dist.mjs",
     "screenshots": "node scripts/render-readme-shots.mjs",
