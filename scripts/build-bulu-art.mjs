@@ -13,6 +13,11 @@
 // Sleep and click still use the old 64 px source because their complete frame
 // sequences have not been recovered.
 //
+// The five action sheets were drawn in a different pass than the default pose
+// and arrived with a heavy black contour, a darker palette and a hard alpha
+// edge, so the pet changed style the moment an action played. `cleanSilhouette`
+// and the tone match below put them back on the default pose's rendering.
+//
 // src/renderer/lite-app.ts derives everything from the image: the sheet cell is
 // `naturalWidth / 4`, and an atlas row is `ACTION_FRAMES` wide.
 //
@@ -260,66 +265,241 @@ function keepLargestComponent(data, width, height) {
 }
 
 /**
- * Some action sheets, including transparent PNGs, have a near-black outline
- * baked into the art. Recolour only dark pixels next to the silhouette,
- * borrowing a nearby colour from inside the cat. Facial details stay put.
+ * The action sheets were rendered in a different pass than the default pose and
+ * they show it: every one of them carries a heavy near-black contour stroked
+ * along the whole silhouette (20% of their pixels are near-black, against 1.1%
+ * for the default pose), a darker, more saturated palette, and a hard alpha
+ * edge whose un-premultiplied fringe reads as a grey halo on a desktop.
+ *
+ * This four-step pass makes them read like the default pose without touching
+ * the motion, so the pet keeps the same animation and the same size:
+ *
+ *   1. erode   — drop the contour band, which sits *on* the silhouette;
+ *   2. bleed   — push interior colour out into the alpha fringe, so no dark
+ *                rim survives compositing over a wallpaper;
+ *   3. feather — soften the cut edge the way the default pose's is soft;
+ *   4. match   — pull the tonal curve and saturation onto the default pose's.
+ *
+ * Steps 1-3 are local; step 4 is measured once per sheet so all 16 frames of an
+ * action move together instead of flickering.
  */
-function softenActionOutline(data, width, height) {
+
+/** Silhouette band to drop, as a share of the cell. Measured on the 1254 px sheets. */
+const CONTOUR_ERODE_RATIO = 0.024;
+/** Feather width on the cut edge, in cell pixels. */
+const CONTOUR_FEATHER = 2;
+/** The default pose's near-black share; the outline pass must land near it. */
+const DEFAULT_NEAR_BLACK = 0.011;
+/** Quantiles the tonal match pins together. */
+const TONE_ANCHORS = [0.02, 0.1, 0.25, 0.5, 0.75, 0.9, 0.98];
+/** How much of the measured tonal / saturation correction to apply. */
+const TONE_STRENGTH = 0.85;
+const SATURATION_STRENGTH = 0.7;
+
+const pixelLuma = (data, p) => {
+  const i = p * 4;
+  return data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
+};
+
+const pixelSaturation = (data, p) => {
+  const i = p * 4;
+  const max = Math.max(data[i], data[i + 1], data[i + 2]);
+  if (max === 0) return 0;
+  return (max - Math.min(data[i], data[i + 1], data[i + 2])) / max;
+};
+
+function quantile(sorted, q) {
+  if (sorted.length === 0) return 0;
+  const index = Math.min(sorted.length - 1, Math.max(0, Math.round((sorted.length - 1) * q)));
+  return sorted[index];
+}
+
+/** Distance from every pixel to the transparent region, capped at `cap`. */
+function edgeDepth(data, width, height, cap) {
   const count = width * height;
-  const original = Buffer.from(data);
-  const depth = new Uint8Array(count);
+  const depth = new Int16Array(count).fill(cap);
+  let frontier = [];
+  for (let p = 0; p < count; p++) {
+    if (data[p * 4 + 3] < 24) {
+      depth[p] = 0;
+      frontier.push(p);
+    }
+  }
+  for (let d = 1; d < cap && frontier.length; d++) {
+    const next = [];
+    for (const p of frontier) {
+      const x = p % width;
+      const y = (p - x) / width;
+      const visit = (n) => {
+        if (depth[n] === cap) {
+          depth[n] = d;
+          next.push(n);
+        }
+      };
+      if (x > 0) visit(p - 1);
+      if (x + 1 < width) visit(p + 1);
+      if (y > 0) visit(p - width);
+      if (y + 1 < height) visit(p + width);
+    }
+    frontier = next;
+  }
+  return depth;
+}
+
+/**
+ * Drop the stroked contour, soften the cut edge, and let the interior colour run
+ * out into the fringe. The order is what makes it work: the contour has to go
+ * before the bleed (or the bleed samples the contour), and the bleed has to come
+ * after the feather (or the pixels the feather uncovers — transparent black —
+ * composite as a dark rim).
+ */
+function cleanSilhouette(data, width, height, erode, feather) {
+  const count = width * height;
+  const depth = edgeDepth(data, width, height, erode + 2 + feather);
+  const opaque = new Float32Array(count);
+  for (let p = 0; p < count; p++) {
+    opaque[p] = depth[p] > erode ? 255 : 0;
+    if (opaque[p] === 0) data[p * 4 + 3] = 0;
+  }
+
+  // Blur the coverage mask, never the source alpha: blurring the original would
+  // smear the contour back across the silhouette we just cleaned.
+  const soft = boxBlur(opaque, width, height, feather);
+  for (let p = 0; p < count; p++) {
+    data[p * 4 + 3] = Math.max(0, Math.min(255, Math.round(Math.max(opaque[p], soft[p]))));
+  }
+
+  // Nearest fully opaque pixel, by BFS, for every partly transparent pixel.
+  const donor = new Int32Array(count).fill(-1);
   const queue = new Int32Array(count);
   let head = 0, tail = 0;
-  const opaque = (p) => data[p * 4 + 3] >= 24;
-  const brightness = (p) => {
-    const i = p * 4;
-    return (original[i] * 3 + original[i + 1] * 6 + original[i + 2]) / 10;
-  };
   for (let p = 0; p < count; p++) {
-    if (!opaque(p)) continue;
-    const x = p % width, y = (p - x) / width;
-    if (x === 0 || y === 0 || x === width - 1 || y === height - 1 ||
-        !opaque(p - 1) || !opaque(p + 1) || !opaque(p - width) || !opaque(p + width)) {
-      depth[p] = 1;
+    if (data[p * 4 + 3] >= 250) {
+      donor[p] = p;
       queue[tail++] = p;
     }
   }
   while (head < tail) {
     const p = queue[head++];
-    if (depth[p] >= 18) continue;
-    const x = p % width, y = (p - x) / width;
-    const visit = (n) => {
-      if (opaque(n) && depth[n] === 0) {
-        depth[n] = depth[p] + 1;
-        queue[tail++] = n;
-      }
+    const x = p % width;
+    const y = (p - x) / width;
+    const spread = (n) => {
+      if (donor[n] !== -1 || data[n * 4 + 3] === 0) return;
+      donor[n] = donor[p];
+      queue[tail++] = n;
     };
-    if (x > 0) visit(p - 1);
-    if (x + 1 < width) visit(p + 1);
-    if (y > 0) visit(p - width);
-    if (y + 1 < height) visit(p + width);
+    if (x > 0) spread(p - 1);
+    if (x + 1 < width) spread(p + 1);
+    if (y > 0) spread(p - width);
+    if (y + 1 < height) spread(p + width);
   }
   for (let p = 0; p < count; p++) {
-    if (!depth[p] || depth[p] > 15 || brightness(p) >= 95) continue;
-    const x = p % width, y = (p - x) / width;
-    let best = -1, bestDistance = Infinity;
-    for (let dy = -20; dy <= 20; dy++) {
-      const sy = y + dy;
-      if (sy < 0 || sy >= height) continue;
-      for (let dx = -20; dx <= 20; dx++) {
-        const sx = x + dx;
-        if (sx < 0 || sx >= width) continue;
-        const q = sy * width + sx;
-        if (!opaque(q) || (depth[q] && depth[q] <= depth[p]) || brightness(q) < 115) continue;
-        const distance = dx * dx + dy * dy;
-        if (distance < bestDistance) { best = q; bestDistance = distance; }
+    if (data[p * 4 + 3] === 0 || donor[p] < 0 || donor[p] === p) continue;
+    const from = donor[p] * 4;
+    const to = p * 4;
+    data[to] = data[from];
+    data[to + 1] = data[from + 1];
+    data[to + 2] = data[from + 2];
+  }
+
+  // The contour is thicker at the zig-zag vertices of the fur than the flat
+  // erode assumes, leaving dark flecks just inside the new edge. Anything this
+  // close to the silhouette that is far darker than its own neighbourhood is
+  // leftover outline, not fur.
+  const radius = Math.max(4, Math.round(erode * 0.8));
+  if (radius > 0) {
+    const planes = [0, 1, 2].map((channel) => {
+      const plane = new Float32Array(count);
+      for (let p = 0; p < count; p++) plane[p] = (data[p * 4 + channel] * data[p * 4 + 3]) / 255;
+      return boxBlur(plane, width, height, radius);
+    });
+    const coverage = new Float32Array(count);
+    for (let p = 0; p < count; p++) coverage[p] = data[p * 4 + 3] / 255;
+    const blurredCoverage = boxBlur(coverage, width, height, radius);
+    for (let p = 0; p < count; p++) {
+      if (data[p * 4 + 3] < 200) continue;
+      if (depth[p] > erode + radius) continue;
+      if (blurredCoverage[p] < 0.5) continue;
+      const local = planes.map((plane) => plane[p] / blurredCoverage[p]);
+      const localLuma = local[0] * 0.299 + local[1] * 0.587 + local[2] * 0.114;
+      if (pixelLuma(data, p) >= localLuma * 0.6) continue;
+      const to = p * 4;
+      for (let c = 0; c < 3; c++) {
+        data[to + c] = Math.max(0, Math.min(255, Math.round(local[c])));
       }
     }
-    if (best < 0) continue;
-    const from = best * 4, to = p * 4;
-    data[to] = original[from];
-    data[to + 1] = original[from + 1];
-    data[to + 2] = original[from + 2];
+  }
+}
+
+/**
+ * Measure the palette a sheet should read like. Run on the default pose, whose
+ * frame 0 is also the idle art, so "the style the pet rests in" is literally
+ * the target.
+ */
+async function measureStyle(file) {
+  const { data, info } = await sharp(file).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  const lumas = [];
+  const sats = [];
+  let nearBlack = 0;
+  let subject = 0;
+  for (let p = 0; p < info.width * info.height; p++) {
+    if (data[p * 4 + 3] < 64) continue;
+    subject++;
+    const luma = pixelLuma(data, p);
+    lumas.push(luma);
+    sats.push(pixelSaturation(data, p));
+    if (luma < 80) nearBlack++;
+  }
+  lumas.sort((a, b) => a - b);
+  sats.sort((a, b) => a - b);
+  return {
+    lumas,
+    meanSaturation: sats.reduce((sum, value) => sum + value, 0) / Math.max(1, sats.length),
+    nearBlackShare: nearBlack / Math.max(1, subject),
+  };
+}
+
+/** Piecewise-linear, monotone tone map from one sheet's quantiles to another's. */
+function toneLut(from, to, strength) {
+  const source = TONE_ANCHORS.map((q) => quantile(from.lumas, q));
+  const target = TONE_ANCHORS.map((q) => quantile(to.lumas, q));
+  const lut = new Uint8Array(256);
+  for (let value = 0; value < 256; value++) {
+    let mapped;
+    if (value <= source[0]) {
+      mapped = target[0] + (value - source[0]);
+    } else if (value >= source[source.length - 1]) {
+      mapped = target[target.length - 1] + (value - source[source.length - 1]);
+    } else {
+      let i = 0;
+      while (i < source.length - 2 && value > source[i + 1]) i++;
+      const span = Math.max(1, source[i + 1] - source[i]);
+      const t = (value - source[i]) / span;
+      mapped = target[i] + (target[i + 1] - target[i]) * t;
+    }
+    lut[value] = Math.max(0, Math.min(255, Math.round(value + (mapped - value) * strength)));
+  }
+  return lut;
+}
+
+/** Apply one sheet's tone map + saturation, so all 16 frames move together. */
+function applyStyle(cells, lut, saturationGain) {
+  for (const cell of cells) {
+    if (!cell) continue;
+    const { data } = cell;
+    for (let p = 0; p < data.length / 4; p++) {
+      const i = p * 4;
+      if (data[i + 3] === 0) continue;
+      const luma = pixelLuma(data, p);
+      if (luma <= 0.5) continue;
+      const target = lut[Math.min(255, Math.round(luma))];
+      const scale = target / luma;
+      const grey = target;
+      for (let c = 0; c < 3; c++) {
+        const lifted = data[i + c] * scale;
+        data[i + c] = Math.max(0, Math.min(255, Math.round(grey + (lifted - grey) * saturationGain)));
+      }
+    }
   }
 }
 
@@ -422,7 +602,7 @@ function resolveActionSource(name) {
   return path.join(actionSourceDir, hit);
 }
 
-async function actionFrames(file, label) {
+async function actionFrames(file, label, reference) {
   const { data: raw, info } = await sharp(file).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
   const opaqueShare = visibleBounds(raw, info.width, info.height).opaque / (info.width * info.height);
   const keyed = opaqueShare > 0.97;
@@ -437,6 +617,8 @@ async function actionFrames(file, label) {
   }
 
   const cells = gridCells(info.width, info.height, COLS, ROWS);
+  const erode = Math.max(3, Math.round(Math.min(...cells.map((cell) => cell.width)) * CONTOUR_ERODE_RATIO));
+  const staged = [];
   const frames = [];
   let union = null;
   for (const box of cells) {
@@ -446,9 +628,9 @@ async function actionFrames(file, label) {
     // The model's own 4x4 layout drifts a little, so a cell can carry a piece of
     // the neighbouring pose; keep only the subject.
     keepLargestComponent(data, cellInfo.width, cellInfo.height);
-    softenActionOutline(data, cellInfo.width, cellInfo.height);
+    cleanSilhouette(data, cellInfo.width, cellInfo.height, erode, CONTOUR_FEATHER);
     const visible = visibleBounds(data, cellInfo.width, cellInfo.height);
-    if (visible.empty) { frames.push({ buffer: null, empty: true }); continue; }
+    if (visible.empty) { staged.push(null); continue; }
     const right = visible.left + visible.width - 1;
     const bottom = visible.top + visible.height - 1;
     union = {
@@ -457,7 +639,7 @@ async function actionFrames(file, label) {
       right: Math.max(union?.right ?? right, right),
       bottom: Math.max(union?.bottom ?? bottom, bottom),
     };
-    frames.push({ buffer: await sharp(data, { raw: cellInfo }).png().toBuffer(), empty: false });
+    staged.push({ data, info: cellInfo });
   }
   if (!union) throw new Error(`${label}: every cell of the sheet is transparent`);
 
@@ -472,27 +654,52 @@ async function actionFrames(file, label) {
   crop.width = Math.max(1, Math.min(union.right - crop.left + 1, cellWidth - crop.left));
   crop.height = Math.max(1, Math.min(union.bottom - crop.top + 1, cellHeight - crop.top));
 
-  const prepared = [];
-  for (const frame of frames) {
-    if (frame.empty) {
-      prepared.push(await sharp({ create: { width: 1, height: 1, channels: 4, background: '#00000000' } }).png().toBuffer());
+  // Every frame uses the same crop and scale, so the motion inside the loop is
+  // preserved instead of being re-centred frame by frame.
+  for (const cell of staged) {
+    if (!cell) {
+      frames.push(null);
       continue;
     }
-    // Every frame uses the same crop and scale, so the motion inside the loop is
-    // preserved instead of being re-centred frame by frame.
-    prepared.push(await sharp(frame.buffer).extract(crop)
+    frames.push(await sharp(cell.data, { raw: cell.info }).extract(crop)
       .resize({ width: ACTION_ART_WIDTH, height: ACTION_ART_HEIGHT, fit: 'inside', kernel: sharp.kernel.lanczos3 })
-      .png().toBuffer());
+      .sharpen({ sigma: 0.7, m1: 0.4, m2: 1.5, x1: 2, y2: 12, y3: 20 })
+      .raw().toBuffer({ resolveWithObject: true }));
   }
-  return { frames: prepared, keyed, crop };
+
+  // One tone map and one saturation gain for the whole sheet, measured after the
+  // contour is gone, so the match sees the art the user will actually get.
+  const live = frames.filter(Boolean);
+  const lumas = [];
+  const sats = [];
+  for (const { data } of live) {
+    for (let p = 0; p < data.length / 4; p++) {
+      if (data[p * 4 + 3] < 64) continue;
+      lumas.push(pixelLuma(data, p));
+      sats.push(pixelSaturation(data, p));
+    }
+  }
+  lumas.sort((a, b) => a - b);
+  const meanSaturation = sats.reduce((sum, value) => sum + value, 0) / Math.max(1, sats.length);
+  const lut = toneLut({ lumas }, reference, TONE_STRENGTH);
+  const saturationGain = 1 + (reference.meanSaturation / Math.max(1e-3, meanSaturation) - 1) * SATURATION_STRENGTH;
+  applyStyle(live, lut, saturationGain);
+
+  const prepared = [];
+  for (const cell of frames) {
+    prepared.push(cell
+      ? await sharp(cell.data, { raw: cell.info }).png().toBuffer()
+      : await sharp({ create: { width: 1, height: 1, channels: 4, background: '#00000000' } }).png().toBuffer());
+  }
+  return { frames: prepared, keyed, crop, erode };
 }
 
-async function buildActions() {
+async function buildActions(reference) {
   if (!existsSync(actionSourceDir)) throw new Error(`Missing ${actionSourceDir}`);
   const rows = [];
   for (const action of ACTIONS) {
     const file = resolveActionSource(action.source);
-    rows.push({ action, file, ...await actionFrames(file, action.id) });
+    rows.push({ action, file, ...await actionFrames(file, action.id, reference) });
   }
 
   const pieces = [];
@@ -508,8 +715,10 @@ async function buildActions() {
   }
 
   mkdirSync(path.dirname(actionOutput), { recursive: true });
+  // Quality 94 rather than the old 88: the art is already soft from the source
+  // renders, and lossy WebP on top of a dark contour was what read as "糊".
   await sharp({ create: { width: CELL * FRAMES, height: CELL * rows.length, channels: 4, background: '#00000000' } })
-    .composite(pieces).webp({ quality: 88, effort: 5 }).toFile(actionOutput);
+    .composite(pieces).webp({ quality: 94, effort: 6 }).toFile(actionOutput);
 
   const meta = await sharp(actionOutput).metadata();
   if (meta.width !== CELL * FRAMES || meta.height !== CELL * rows.length || !meta.hasAlpha) {
@@ -544,11 +753,15 @@ async function buildActions() {
   console.log(`✓ ${path.relative(root, actionOutput)}  (${meta.width}x${meta.height}, ` +
     `${FRAMES} 帧/动作, ${rows.length} 个动作, ${statSync(actionOutput).size} bytes)`);
   console.log(`  预览: ${path.relative(root, actionPreview)}  （每行一块 4x4，行顺序: ${ACTIONS.map((a) => a.id).join(' / ')}）`);
-  for (const [row, { action, file, keyed, crop }] of rows.entries()) {
+  console.log(`  基准风格: ${reference.source}  近黑占比 ${(reference.nearBlackShare * 100).toFixed(1)}%  ` +
+    `平均饱和度 ${reference.meanSaturation.toFixed(3)}`);
+  for (const [row, { action, file, keyed, crop, erode }] of rows.entries()) {
     console.log(`  row ${row} ${action.id.padEnd(8)} ${path.basename(file).padEnd(12)} ` +
-      `抠图=${keyed ? 'yes' : 'no '}  裁切框 ${crop.width}x${crop.height}`);
+      `抠图=${keyed ? 'yes' : 'no '}  裁切框 ${crop.width}x${crop.height}  削边 ${erode}px`);
   }
 }
 
 await buildSheet();
-await buildActions();
+// The default pose doubles as the idle art, so it *is* the style to match.
+const reference = { ...await measureStyle(resolveActionSource(IDLE_SHEET)), source: `${IDLE_SHEET}（默认状态）` };
+await buildActions(reference);
