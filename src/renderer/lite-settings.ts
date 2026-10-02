@@ -48,6 +48,10 @@
   const affinityDays = $<HTMLElement>('affinity-days');
   const affinityFirst = $<HTMLElement>('affinity-first');
   const affinityClicks = $<HTMLElement>('affinity-clicks');
+  const careFill = $<HTMLElement>('care-fill');
+  const careStatus = $<HTMLParagraphElement>('care-status');
+  const careFoods = $<HTMLElement>('care-foods');
+  const careMessage = $<HTMLParagraphElement>('care-message');
   const updateVersion = $<HTMLSpanElement>('update-version');
   const updateStatus = $<HTMLSpanElement>('update-status');
   const updateProgressRow = $<HTMLElement>('update-progress-row');
@@ -233,6 +237,51 @@
     affinityFirst.textContent = cfg.statsFirstSeen || '—';
     affinityClicks.textContent = String(Number(cfg.statsClicks) || 0);
   }
+
+  // ---------- feeding ----------
+  /**
+   * The same hunger the pet window drifts and the same three treats, built from
+   * the shared CARE_FOODS table (lite-care.ts) so a food can never have one
+   * effect on the button and another in the tray.
+   */
+  function paintCare(cfg: AppConfig) {
+    const hunger = careStat(cfg.petStats?.hunger, CARE_NEEDS_DEFAULT.hunger);
+    const level = careHungerLevel(hunger);
+    careFill.style.width = `${Math.round(hunger)}%`;
+    careFill.classList.toggle('hungry', level === 'hungry');
+    careFill.classList.toggle('starving', level === 'starving');
+    careStatus.textContent = liteT(`lite.care.level.${level}`, { p: Math.round(hunger) });
+  }
+
+  /** One button per treat; the click goes through the same relay the menu uses. */
+  function buildCareFoods() {
+    careFoods.textContent = '';
+    for (const food of CARE_FOODS) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.dataset.food = food.id;
+      button.title = liteT('lite.care.foodEffect', {
+        hunger: food.hunger, mood: food.mood, energy: food.energy,
+      });
+      const icon = document.createElement('span');
+      icon.textContent = food.icon;
+      const name = document.createElement('small');
+      name.textContent = liteT(food.nameKey);
+      button.append(icon, name);
+      button.addEventListener('click', () => {
+        const before = current ? careStat(current.petStats?.hunger, CARE_NEEDS_DEFAULT.hunger) : 0;
+        if (!careWillEat(before)) {
+          careMessage.textContent = liteT('lite.care.full');
+          return;
+        }
+        careMessage.textContent = liteT('lite.care.sent', { name: liteT(food.nameKey) });
+        window.api.care(`feed:${food.id}`);
+      });
+      careFoods.append(button);
+    }
+  }
+  /** Which locale the treat buttons were labelled in, so they are rebuilt once. */
+  let careLocale = '';
 
   /** Intervals offered for the two new habits (the standing one keeps its own list). */
   const EYE_PRESETS = [20, 30, 60];
@@ -610,6 +659,15 @@
     hourlyChime.checked = cfg.hourlyChime !== false;
     loadAwareness.checked = cfg.loadAwareness !== false;
     paintAffinity(cfg);
+    // The treat buttons carry translated names, so they follow the *loaded*
+    // dictionary rather than config.locale: the switch to a new dictionary is
+    // asynchronous, and building them from the language picker would label them
+    // in the previous language until the next unrelated repaint.
+    if (careLocale !== liteCurrentLocale()) {
+      careLocale = liteCurrentLocale();
+      buildCareFoods();
+    }
+    paintCare(cfg);
     paintHealth(cfg);
     paintHeatmap(cfg);
     paintReminders(cfg);

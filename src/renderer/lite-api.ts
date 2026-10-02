@@ -64,6 +64,8 @@
     getSystemLoad: () => call<SystemLoad>('system_load'),
     onFileDrop: (callback: (drop: PetFileDrop) => void) => subscribe<PetFileDrop>('tauri://drag-drop', callback),
     onPetAction: (callback: (action: string) => void) => subscribe<string>('pet-action', callback),
+    onPetCare: (callback: (action: string) => void) => subscribe<string>('pet-care', callback),
+    care: (action: 'tray' | 'toy' | `feed:${string}`) => send('pet_care', { action }),
     getCustomImage: async () => {
       const result = await call<CustomImageResult>('custom_get');
       return { ...result, url: result.url ?? urlOf(result.path) };

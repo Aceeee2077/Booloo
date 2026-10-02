@@ -512,6 +512,11 @@ interface PetApi {
   onFileDrop(cb: (drop: PetFileDrop) => void): () => void;
   /** Play an action chosen from the pet's context menu. */
   onPetAction(cb: (action: string) => void): () => void;
+  /** Feeding tray / cat teaser chosen from the pet's context menu. */
+  onPetCare(cb: (action: string) => void): () => void;
+  /** Ask the pet window to open the tray, start the teaser or eat one treat
+   *  ("tray" | "toy" | "feed:<id>"); the settings panel feeds through this too. */
+  care(action: string): void;
   listPets(): Promise<PetDefinition[]>;
   importPet(folder: boolean, replace: boolean): Promise<PetDefinition | null>;
   removePet(id: string): Promise<void>;
@@ -549,7 +554,8 @@ interface PetApi {
   quitApp(): void;
   /** Show the context menu */
   showContextMenu(): void;
-  /** Run an entry of the right-click menu ('settings' | 'reminders' | 'reset' | 'quit' | 'action:<name>') */
+  /** Run an entry of the right-click menu
+   *  ('settings' | 'reminders' | 'reset' | 'quit' | 'action:<name>' | 'care:<action>') */
   petMenuAction(action: string): void;
   /** Dismiss the right-click menu window */
   closePetMenu(): void;

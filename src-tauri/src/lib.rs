@@ -317,6 +317,7 @@ pub fn run() {
             tray::show_pet_menu,
             tray::close_pet_menu,
             tray::pet_menu_action,
+            tray::pet_care,
             window::window_move,
             window::window_move_to,
             window::window_center_target,

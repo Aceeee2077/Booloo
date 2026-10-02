@@ -112,8 +112,8 @@ fn show_menu_at(app: &AppHandle, pointer: PhysicalPosition<f64>) -> Result<(), S
         WebviewWindowBuilder::new(app, "pet-menu", WebviewUrl::App("renderer/menu.html".into()))
             .title("Booloo menu")
             // Height matches html/body in src/renderer/lite-menu.css: the affinity
-            // line, 5 actions, the reminder entry, reset and quit.
-            .inner_size(188.0, 376.0)
+            // line, 5 actions, the feeding/toy pair, the reminder entry, reset and quit.
+            .inner_size(188.0, 464.0)
             .decorations(false)
             .resizable(false)
             .transparent(true)
@@ -164,6 +164,11 @@ pub fn close_pet_menu(app: AppHandle) -> Result<(), String> {
 #[tauri::command]
 pub async fn pet_menu_action(app: AppHandle, action: String) -> Result<(), String> {
     let _ = close_pet_menu(app.clone());
+    // The feeding tray and the cat teaser are opened from settings as well as
+    // from the menu, so they share one forwarder with the `pet_care` command.
+    if let Some(care) = action.strip_prefix("care:") {
+        return pet_care(app, care.to_string());
+    }
     if let Some(name) = action.strip_prefix("action:") {
         if matches!(name, "wave" | "groom" | "stretch" | "yawn" | "scratch") {
             return app.emit_to("pet", "pet-action", name).map_err(|e| e.to_string());
@@ -178,4 +183,17 @@ pub async fn pet_menu_action(app: AppHandle, action: String) -> Result<(), Strin
         "quit" => { app.exit(0); Ok(()) },
         _ => Err("unknown menu action".into()),
     }
+}
+
+/// Hand the pet window one care request: open the tray, start the teaser, or eat
+/// a named treat ("tray" | "toy" | "feed:<id>").
+///
+/// The pet window owns the animation and the hunger bookkeeping, so this is only
+/// a validated relay — nothing about the interaction is decided in Rust.
+#[tauri::command]
+pub fn pet_care(app: AppHandle, action: String) -> Result<(), String> {
+    if !matches!(action.as_str(), "tray" | "toy") && !action.starts_with("feed:") {
+        return Err("unknown care action".into());
+    }
+    app.emit_to("pet", "pet-care", action).map_err(|e| e.to_string())
 }

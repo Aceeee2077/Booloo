@@ -106,6 +106,14 @@ header button { border: 0; background: transparent; }
 .affinity-bar { height: 10px; border-radius: 5px; background: #f6e3ec; overflow: hidden; }
 .affinity-fill { width: 0; height: 100%; border-radius: 5px; background: linear-gradient(90deg, #ffb3c9, #e56a97); transition: width .3s ease; }
 #affinity-next { min-height: 18px; }
+/* Treats: the hunger bar grows with hunger (0 = full), so the fill colour
+   shifts from calm to hungry as it fills up. */
+.care-fill { width: 0; height: 100%; border-radius: 5px; background: linear-gradient(90deg, #ffd9a8, #ea9b4b); transition: width .3s ease; }
+.care-fill.hungry { background: linear-gradient(90deg, #ffc08a, #e2622f); }
+.care-fill.starving { background: linear-gradient(90deg, #ff9d8a, #c62f2f); }
+.care-foods { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
+.care-foods button { min-height: 58px; font-size: 22px; line-height: 1.2; }
+.care-foods button small { display: block; margin-top: 2px; font-size: 11px; color: #886c5b; }
 /* Health plan: one row per habit — its switch on the left, its interval beside it. */
 .health-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 14px; }
 .health-row .check { margin: 8px 0; }

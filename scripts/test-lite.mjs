@@ -91,7 +91,7 @@ context.liteT = makeTranslate(zhDict);
 
 const renderer = join(process.cwd(), 'dist', 'renderer');
 const shippedScripts = readdirSync(renderer).filter(name => name.endsWith('.js')).sort();
-assert.deepEqual(shippedScripts, ['lite-affinity.js', 'lite-api.js', 'lite-app.js', 'lite-day.js',
+assert.deepEqual(shippedScripts, ['lite-affinity.js', 'lite-api.js', 'lite-app.js', 'lite-care.js', 'lite-day.js',
   'lite-file-reaction.js', 'lite-i18n.js', 'lite-image.js', 'lite-mask.js', 'lite-menu.js', 'lite-settings.js']);
 const fileReaction = { liteT: makeTranslate(zhDict) };
 vm.createContext(fileReaction);
@@ -139,6 +139,100 @@ assert.equal(affinityConst('AFFINITY_DAILY_CAP'), 40, 'a day is capped so it can
 assert.equal(affinityConst('AFFINITY_FIRST_HELLO'), 5);
 affinity.liteT = makeTranslate(enDict);
 assert.equal(affinity.affinityLevelName(4), 'Best Friend');
+
+// The care model: hunger drift, the three treats, the tray geometry and the
+// wand. The pet window, the settings panel and the tests all read this one
+// script, so a food cannot have one effect on a button and another in the tray.
+const care = {};
+vm.createContext(care);
+vm.runInContext(readFileSync(join(renderer, 'lite-care.js'), 'utf8'), care);
+const careConst = (name) => vm.runInContext(name, care);
+const careJson = (expression) => JSON.parse(JSON.stringify(vm.runInContext(expression, care)));
+const foods = careJson('CARE_FOODS');
+assert.deepEqual(foods.map(food => food.id), ['fish', 'can', 'milk']);
+for (const food of foods) {
+  assert.ok(food.icon.length > 0, `${food.id} needs an icon`);
+  assert.ok(food.hunger > 0, `${food.id} must actually feed the pet`);
+  assert.ok(food.affinity > 0, `${food.id} must be worth affection`);
+  for (const key of [food.nameKey, food.lineKey]) {
+    for (const dict of [zhDict, enDict]) assert.equal(typeof dict[key], 'string', `missing ${key}`);
+  }
+}
+// A point every four minutes, clamped at both ends of the 0…100 scale.
+assert.equal(care.careAdvanceHunger(0, 4), 1);
+assert.equal(care.careAdvanceHunger(0, 400), 100, 'a long stretch without food fills the meter');
+assert.equal(care.careAdvanceHunger(90, 0), 90);
+assert.equal(care.careIsHungry(74), false);
+assert.equal(care.careIsHungry(75), true, 'the pet mentions hunger from 75 up');
+assert.equal(care.careHungerLevel(0), 'full');
+assert.equal(care.careHungerLevel(40), 'ok');
+assert.equal(care.careHungerLevel(75), 'hungry');
+assert.equal(care.careHungerLevel(100), 'starving');
+assert.equal(care.careWillEat(12), false, 'a full pet turns a treat down');
+assert.equal(care.careWillEat(13), true);
+assert.equal(care.careEat(foods[1], 60), 15, 'the can takes 45 points off');
+assert.equal(care.careEat(foods[1], 20), 0, 'and never goes below zero');
+assert.equal(care.careFoodById('can').id, 'can');
+assert.equal(care.careFoodById('pizza'), null);
+
+// The tray sits above the pet's head, inside the 300 px canvas, and only the
+// three bubbles are clickable.
+const slots = careJson('careTraySlots()');
+assert.equal(slots.length, 3);
+for (const slot of slots) {
+  assert.ok(slot.x - slot.r > 0 && slot.x + slot.r < 300, 'the tray must fit the canvas width');
+  assert.ok(slot.y - slot.r > 0 && slot.y + slot.r < 150, 'the tray stays above the pet');
+}
+assert.equal(careJson('careFoodAt(150, 48).id'), 'can');
+assert.equal(careJson('careFoodAt(78, 48).id'), 'fish');
+assert.equal(care.careFoodAt(150, 200), null, 'the middle of the pet is not a treat');
+// The treat lands in front of the chest, so the pet can reach it without moving.
+const spot = careJson("careEatSpot(careFoodById('can'))");
+assert.ok(spot.y > 200 && spot.y < 293 && Math.abs(spot.x - 150) < 40);
+assert.equal(care.careEatDrop(0), 0);
+assert.equal(care.careEatDrop(careConst('CARE_EAT_DROP_MS')), 1);
+assert.equal(care.careEatBite(0), 1, 'the treat is whole while it falls');
+assert.equal(care.careEatBite(careConst('CARE_EAT_DURATION_MS')), 0, 'and gone when the meal ends');
+assert.ok(care.careEatBite(careConst('CARE_EAT_DURATION_MS') / 2) < 1);
+assert.equal(care.careChewDip(0), 0, 'the pet does not dip while the treat is still falling');
+assert.ok(care.careChewDip(careConst('CARE_EAT_DURATION_MS') / 2) > 0, 'chewing moves the head');
+
+// The wand stays in the upper band, so the pet's lunge always reads as a reach
+// and never needs the window to move. The feather is part of the hit test only
+// as "not the pet": the window must stay click-through over it.
+for (let t = 0; t < 20_000; t += 250) {
+  const head = careJson(`careToySwing(${t})`);
+  assert.ok(head.x > 60 && head.x < 240, `wand x out of band at ${t}ms`);
+  assert.ok(head.y + careConst('CARE_TOY_HEAD_RADIUS') < 160, `wand dipped onto the pet at ${t}ms`);
+}
+const firstHead = careJson('careToySwing(0)');
+assert.equal(care.careToyHits(firstHead.x, firstHead.y, firstHead), true);
+assert.equal(care.careToyHits(20, 260, firstHead), false);
+const grip = careJson('CARE_TOY_GRIP');
+assert.equal(care.careToyHits((grip.x + firstHead.x) / 2, (grip.y + firstHead.y) / 2, firstHead), true,
+  'the string counts as the wand so it never traps the cursor');
+assert.equal(care.carePounceAmount(0, null), 0);
+const window0 = { startedAt: 0, until: careConst('CARE_TOY_POUNCE_MS'), at: { x: 150, y: 76 } };
+assert.ok(care.carePounceAmount(0, window0) < 1e-9, 'the lunge starts at rest');
+assert.ok(care.carePounceAmount(careConst('CARE_TOY_POUNCE_MS'), window0) < 1e-9,
+  'and settles back down at the end');
+assert.ok(care.carePounceAmount(careConst('CARE_TOY_POUNCE_MS') / 2, window0) > 0.9,
+  'the lunge peaks in the middle of the pounce');
+
+// The wire-up: the caretakers are exactly the two menu entries plus the command
+// the settings panel calls, and the window that hosts the menu has to be tall
+// enough for them (the generic height check above only sees the total).
+const careMarkup = readFileSync(join(renderer, 'menu.html'), 'utf8');
+assert.match(careMarkup, /data-action="care:tray"/);
+assert.match(careMarkup, /data-action="care:toy"/);
+for (const page of ['index.html', 'settings.html']) {
+  assert.match(readFileSync(join(renderer, page), 'utf8'), /lite-care\.js/,
+    `${page} must load the shared care model`);
+}
+assert.match(readFileSync(join(process.cwd(), 'src-tauri', 'src', 'tray.rs'), 'utf8'), /pet_care/);
+assert.match(readFileSync(join(process.cwd(), 'src-tauri', 'src', 'tray.rs'), 'utf8'), /pet-care/);
+assert.match(readFileSync(join(process.cwd(), 'src-tauri', 'src', 'lib.rs'), 'utf8'), /tray::pet_care/);
+assert.match(readFileSync(join(process.cwd(), 'src', 'renderer', 'lite-app.ts'), 'utf8'), /onPetCare/);
 
 for (const page of ['index.html', 'settings.html', 'mask.html']) {
   const html = readFileSync(join(renderer, page), 'utf8');

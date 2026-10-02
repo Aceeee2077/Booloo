@@ -139,12 +139,32 @@ const BLINK_JITTER_MS = 5200;
   let lastEdgePoll = 0;
   let visibleRect: PetBox = { x: 86, y: 140, w: 128, h: 150 };
   let lastHover = false;
+  // Feeding and the cat teaser (see lite-care.ts for the model). The tray is
+  // open or it is not, at most one treat is being eaten at a time, and the toy
+  // session carries its own clock so a pounce can be interrupted cleanly.
+  let tray: CareTray | null = null;
+  let eating: CareEating | null = null;
+  let toy: CareToySession | null = null;
+  /** The pet's needs, mirrored into `config.petStats`. */
+  let needs: CareNeeds = { ...CARE_NEEDS_DEFAULT };
+  /** Seeded once, from the first config the window sees: a later broadcast carries
+   *  the value this window itself just wrote, and reading it back would undo the
+   *  drift that happened in between. */
+  let needsSeeded = false;
+  let needsDirty = false;
+  /** `performance.now()` of the last whole minute of hunger drift. */
+  let hungerAt = 0;
+  /** Wall clock of the last "I am hungry" line, so it cannot nag. */
+  let lastHungryAt = Number.NEGATIVE_INFINITY;
   (window as unknown as Record<string, unknown>).__boolooLiteState = () => ({
     skin: config?.skin ?? null,
     customReady: !!custom,
     cutoutRejected: !!custom?.cutoutRejected,
     bounds: visibleRect,
     action: activeAction?.kind ?? null,
+    // The care loop: hunger (0 = full, 100 = starving) and what is on screen.
+    hunger: needs.hunger,
+    care: tray ? 'tray' : eating ? 'eating' : toy ? 'toy' : null,
     // The self-check reads these to prove the affinity model is live in a real
     // window: the score is a number and the level is one of the five.
     affinity: affinityTotal >= 0 ? affinityTotal : Number(config?.affinity) || 0,
@@ -167,6 +187,10 @@ const BLINK_JITTER_MS = 5200;
     dreamUntil = 0;
     hideSign();
     if (walkUntil) stopWalking();
+    // A treat that is halfway down the throat still counts: the needs were
+    // consumed when it was picked, so the animation is only dropped here.
+    if (eating) finishEating(true);
+    if (tray) tray = null;
   }
 
   function say(line: string, duration = 3600) {
@@ -303,7 +327,7 @@ const BLINK_JITTER_MS = 5200;
    */
   function petStrokeMove(x: number, y: number, buttons: number) {
     const now = performance.now();
-    const region = buttons || pressed || dragging || reminderRunning || now < pettingCooldownUntil
+    const region = buttons || pressed || dragging || reminderRunning || tray || now < pettingCooldownUntil
       ? null
       : regionAt(x, y);
     if (!region) {
@@ -455,7 +479,7 @@ const BLINK_JITTER_MS = 5200;
   /** How many days of affinity growth the history keeps (one point per day). */
   const AFFINITY_HISTORY_DAYS = 180;
   /** What each kind of interaction is worth. See lite-affinity.ts for the levels. */
-  const AFFINITY_GAINS = { tap: 1, doubleTap: 2, petHead: 2, petBody: 3, fileDrop: 2 } as const;
+  const AFFINITY_GAINS = { tap: 1, doubleTap: 2, petHead: 2, petBody: 3, fileDrop: 2, feed: 2, play: 1 } as const;
 
   function clampMinutes(value: unknown, fallback: number) {
     const minutes = Number(value);
@@ -498,12 +522,14 @@ const BLINK_JITTER_MS = 5200;
    * pays extra and says so; crossing a level is the only other thing worth a
    * bubble, and everything else is just the small floating chip.
    */
-  function awardAffinity(reason: keyof typeof AFFINITY_GAINS | 'firstHello') {
+  function awardAffinity(reason: keyof typeof AFFINITY_GAINS | 'firstHello', amount?: number) {
     if (!config) return 0;
     const today = liteDayKey();
     const earned = (Number(config.dailyStats?.[today]?.affinity) || 0) +
       (Number(pendingStats[today]?.affinity) || 0);
-    const wanted = reason === 'firstHello' ? AFFINITY_FIRST_HELLO : AFFINITY_GAINS[reason];
+    // `amount` is how the care loop pays per treat rather than per interaction
+    // kind: a can of food is worth more than a sip of milk.
+    const wanted = amount ?? (reason === 'firstHello' ? AFFINITY_FIRST_HELLO : AFFINITY_GAINS[reason]);
     const gain = Math.min(wanted, Math.max(0, AFFINITY_DAILY_CAP - earned));
     if (gain <= 0) return 0;
 
@@ -569,7 +595,7 @@ const BLINK_JITTER_MS = 5200;
   function flushStats() {
     if (!config) return;
     const days = Object.keys(pendingStats);
-    if (!days.length && !daysToAdd.size && affinityTotal < 0) return;
+    if (!days.length && !daysToAdd.size && affinityTotal < 0 && !needsDirty) return;
     const patch: Partial<AppConfig> = {};
     const merged: Record<string, DailyStat> = { ...(config.dailyStats ?? {}) };
     for (const day of days) {
@@ -589,6 +615,13 @@ const BLINK_JITTER_MS = 5200;
       patch.affinityHistory = history.slice(-AFFINITY_HISTORY_DAYS);
     }
     if (clicksTotal >= 0) patch.statsClicks = clicksTotal;
+    // The pet is the only writer of its own needs, and it only writes them when
+    // hunger has actually drifted (or a treat changed them), so this stays a
+    // once-a-minute write rather than a per-frame one.
+    if (needsDirty) {
+      patch.petStats = { ...needs };
+      needsDirty = false;
+    }
     if (daysToAdd.size) {
       const known = new Set(config.statsDays ?? []);
       for (const day of daysToAdd) known.add(day);
@@ -598,6 +631,229 @@ const BLINK_JITTER_MS = 5200;
     if (!config.statsFirstSeen) patch.statsFirstSeen = liteDayKey();
     void window.api.setConfig(patch)
       .catch(error => console.error('[lite-app] stats:', error));
+  }
+
+  // ---------- feeding and the cat teaser ----------
+  /**
+   * The pet owns two small loops here. Hunger drifts up while the app runs and a
+   * treat takes it back down; the wand gives it something to jump at. Everything
+   * that can be shared — the food table, the tray layout, the timelines — lives in
+   * lite-care.ts so the settings panel prints exactly these numbers.
+   *
+   * A treat is only eaten when the pet is actually hungry, which is also what
+   * keeps feeding from being a way to grind affection: only a handful land before
+   * it is full again.
+   */
+  function markNeedsDirty(now: number) {
+    needsDirty = true;
+    const at = now + STATS_FLUSH_MS;
+    statsFlushAt = statsFlushAt ? Math.min(statsFlushAt, at) : at;
+  }
+
+  /** One whole minute of hunger at a time, so the number creeps instead of jumping. */
+  function driftHunger(now: number) {
+    if (!needsSeeded) return;
+    if (!hungerAt) { hungerAt = now; return; }
+    const minutes = (now - hungerAt) / 60_000;
+    if (minutes < 1) return;
+    hungerAt = now;
+    needs.hunger = careAdvanceHunger(needs.hunger, minutes);
+    markNeedsDirty(now);
+  }
+
+  /** Show the tray above the pet's head. */
+  function openTray() {
+    if (!config || pressed || dragging || reminderRunning || eating || toy) return;
+    activity();
+    // A treat is also how you wake a sleeping cat up.
+    sleepUntil = 0;
+    nextSleep = performance.now() + 120_000;
+    tray = { openedAt: performance.now() };
+    say(liteT('lite.care.trayHint'), CARE_TRAY_LIFETIME_MS);
+  }
+
+  /** Eat one treat: it falls from the tray to the pet's paws, then disappears. */
+  function startEating(food: CareFood) {
+    if (!config || eating) return;
+    const now = performance.now();
+    if (!careWillEat(needs.hunger)) {
+      activity();
+      say(liteT('lite.care.full'), 2600);
+      return;
+    }
+    const slot = careTraySlots().find(item => item.food.id === food.id);
+    const from = slot ? { x: slot.x, y: slot.y } : { x: 150, y: CARE_TRAY_Y };
+    activity();
+    sleepUntil = 0;
+    nextSleep = now + 120_000;
+    tray = null;
+    eating = { food, from, startedAt: now };
+    // Consumed up front: dragging the pet away halfway through the animation is
+    // not a reason to waste the treat.
+    needs.hunger = careEat(food, needs.hunger);
+    needs.mood = careClamp(needs.mood + food.mood);
+    needs.energy = careClamp(needs.energy + food.energy);
+    markNeedsDirty(now);
+  }
+
+  /**
+   * End the meal: hearts, affection, and the line. `quiet` is for an interaction
+   * that interrupted it — the points still land, the bubble belongs to whatever
+   * the user just did.
+   */
+  function finishEating(quiet = false) {
+    const done = eating;
+    if (!done) return;
+    eating = null;
+    showHearts();
+    const spent = performance.now();
+    awardAffinity('feed', done.food.affinity);
+    // A level-up bubble from that award outranks "yum"; leave it alone.
+    if (!quiet && spent - affinitySpokeAt >= 600) say(liteT(done.food.lineKey), 3200);
+  }
+
+  /** Start a play session: the wand swings, the pet lunges, catches pay off. */
+  function startToy() {
+    if (!config || pressed || dragging || reminderRunning || eating || tray || toy) return;
+    const now = performance.now();
+    activity();
+    sleepUntil = 0;
+    nextSleep = now + 120_000;
+    toy = {
+      startedAt: now,
+      endsAt: now + CARE_TOY_SESSION_MS,
+      nextPounceAt: now + CARE_TOY_FIRST_POUNCE_MS,
+      catches: 0,
+      pounce: null,
+    };
+    say(liteT('lite.care.toy.start'), 4200);
+  }
+
+  function endToy(quiet = false) {
+    const session = toy;
+    if (!session) return;
+    // Cleared before the summary is built: a frame and a tap can both notice the
+    // session is over in the same tick, and it must only end once.
+    toy = null;
+    if (quiet) return;
+    say(session.catches > 0
+      ? liteT('lite.care.toy.end', { n: session.catches })
+      : liteT('lite.care.toy.endEarly'), 3600);
+  }
+
+  /** Per-frame half of the care loop (the hunger nudge runs on the 1 s timer). */
+  function checkCare(now: number) {
+    if (!config) return;
+    driftHunger(now);
+    if (tray && now - tray.openedAt >= CARE_TRAY_LIFETIME_MS) tray = null;
+    if (eating && now - eating.startedAt >= CARE_EAT_DURATION_MS) finishEating();
+    if (!toy) return;
+    // Being carried, or held back by a reminder, is no time to chase a feather.
+    if (dragging || reminderRunning) { endToy(true); return; }
+    if (now >= toy.endsAt || toy.catches >= CARE_TOY_CATCH_LIMIT) { endToy(); return; }
+    if (toy.pounce) {
+      if (now < toy.pounce.until) return;
+      toy.catches++;
+      toy.pounce = null;
+      toy.nextPounceAt = now + CARE_TOY_GAP_MIN_MS +
+        Math.random() * (CARE_TOY_GAP_MAX_MS - CARE_TOY_GAP_MIN_MS);
+      showHearts();
+      awardAffinity('play');
+      if (toy.catches === 1 && performance.now() - affinitySpokeAt >= 600) {
+        say(liteT('lite.care.toy.catch'), 1600);
+      }
+      return;
+    }
+    if (pressed || signVisible() || now < toy.nextPounceAt) return;
+    const at = careToySwing(now - toy.startedAt);
+    toy.pounce = { startedAt: now, until: now + CARE_TOY_POUNCE_MS, at };
+    // Swat left, swat right: alternating keeps both paw poses in use.
+    activeAction = {
+      kind: toy.catches % 2 === 0 ? 'wave' : 'scratch',
+      started: now,
+      duration: CARE_TOY_POUNCE_MS,
+    };
+  }
+
+  /** The pet mentions being hungry at most once every 25 minutes. */
+  function checkHunger() {
+    if (!config || !needsSeeded || !careIsHungry(needs.hunger)) return;
+    if (pressed || dragging || reminderRunning || eating || toy || tray || signVisible()) return;
+    const now = Date.now();
+    if (now - lastHungryAt < CARE_HUNGRY_GAP_MS) return;
+    lastHungryAt = now;
+    say(liteT(careHungerLevel(needs.hunger) === 'starving' ? 'lite.care.starving' : 'lite.care.hungry'), 3600);
+  }
+
+  /**
+   * What the care loop draws on top of the pet: the wand, the treat on its way
+   * down, and the tray. Keeping all three here means the pet's own sprite is the
+   * only thing the drawing branches have to worry about.
+   */
+  function drawCare(now: number) {
+    if (toy) {
+      const elapsed = now - toy.startedAt;
+      const head = careToySwing(elapsed);
+      // The feather dips towards the pet while it lunges, so the swat reads as
+      // contact even though the wand never enters the pet's own box.
+      const tip = { x: head.x, y: head.y + carePounceAmount(now, toy.pounce) * 26 };
+      ctx.save();
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = '#c98a5b';
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(CARE_TOY_GRIP.x, CARE_TOY_GRIP.y);
+      ctx.quadraticCurveTo((CARE_TOY_GRIP.x + tip.x) / 2 + 8, (CARE_TOY_GRIP.y + tip.y) / 2, tip.x, tip.y);
+      ctx.stroke();
+      ctx.translate(tip.x, tip.y);
+      ctx.rotate(Math.sin(elapsed / 260) * 0.35);
+      ctx.fillStyle = '#ff8fb0';
+      ctx.beginPath();
+      ctx.ellipse(0, -7, 9, 18, 0.3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#ffc2d4';
+      ctx.beginPath();
+      ctx.ellipse(-7, -2, 6, 13, -0.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#f2b24a';
+      ctx.beginPath();
+      ctx.arc(0, 9, 3.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+    if (eating) {
+      const elapsed = now - eating.startedAt;
+      const at = careEatPosition(eating, elapsed);
+      const bite = Math.max(0, Math.min(1, careEatBite(elapsed)));
+      const size = Math.round(24 * (0.7 + 0.3 * Math.min(1, elapsed / CARE_EAT_DROP_MS)) * (0.55 + 0.45 * bite));
+      ctx.save();
+      ctx.globalAlpha = Math.min(1, bite * 1.8);
+      ctx.font = `${Math.max(10, size)}px "Segoe UI Emoji", "Apple Color Emoji", "Microsoft YaHei", sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(eating.food.icon, at.x, at.y);
+      ctx.restore();
+    }
+    if (!tray) return;
+    const willing = careWillEat(needs.hunger);
+    for (const slot of careTraySlots()) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(slot.x, slot.y, slot.r, 0, Math.PI * 2);
+      ctx.fillStyle = '#fffaf2f5';
+      ctx.fill();
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = willing ? '#e9cbb6' : '#ddd3ca';
+      ctx.stroke();
+      // A pet that has just eaten still shows the tray, greyed out, so the
+      // picture explains the refusal before the bubble says it.
+      ctx.globalAlpha = willing ? 1 : 0.45;
+      ctx.font = '24px "Segoe UI Emoji", "Apple Color Emoji", "Microsoft YaHei", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(slot.food.icon, slot.x, slot.y + 1);
+      ctx.restore();
+    }
   }
 
   // ---------- the health plan ----------
@@ -747,6 +1003,7 @@ const BLINK_JITTER_MS = 5200;
     checkHealthPlan();
     checkHourlyChime();
     checkReminders();
+    checkHunger();
     const now = performance.now();
     if (statsFlushAt && now >= statsFlushAt) {
       statsFlushAt = 0;
@@ -795,6 +1052,19 @@ const BLINK_JITTER_MS = 5200;
     // that already carries more (an older pet window, a hand-edited file) wins.
     affinityTotal = Math.max(affinityTotal < 0 ? 0 : affinityTotal, Number(next.affinity) || 0);
     clicksTotal = Math.max(clicksTotal < 0 ? 0 : clicksTotal, Number(next.statsClicks) || 0);
+    // The needs are taken from the config exactly once. From then on this window
+    // owns them; a broadcast carrying the value it wrote a moment ago must not
+    // roll the drift back.
+    if (!needsSeeded) {
+      const stats = next.petStats;
+      needs = {
+        mood: careStat(stats?.mood, CARE_NEEDS_DEFAULT.mood),
+        energy: careStat(stats?.energy, CARE_NEEDS_DEFAULT.energy),
+        hunger: careStat(stats?.hunger, CARE_NEEDS_DEFAULT.hunger),
+      };
+      needsSeeded = true;
+      hungerAt = performance.now();
+    }
     document.body.style.opacity = String(Math.max(0.5, Math.min(1, Number(next.opacity) || 1)));
     if (!next.autoMove) stopWalking();
     if (localeChanged) void liteLoadDictionary().catch(error => console.error('[lite-app] i18n:', error));
@@ -839,9 +1109,16 @@ const BLINK_JITTER_MS = 5200;
   /** Keep the load badge pinned above the pet's left shoulder while it is up. */
   function updateMood(now: number) {
     if (!mood) return;
-    const visible = moodIcon !== '' && now < moodUntil;
-    mood.hidden = !visible;
-    if (!visible) return;
+    // Hunger shares this badge with the machine readings. A busy CPU or a dying
+    // battery speaks first; an empty tummy shows whenever the load badge is quiet
+    // — except while the pet is being fed, where the tray already says it and the
+    // badge would sit half-hidden behind the speech bubble.
+    const loadVisible = moodIcon !== '' && now < moodUntil;
+    const hungry = careIsHungry(needs.hunger) && !tray && !eating;
+    const icon = loadVisible ? moodIcon : hungry ? '🍽️' : '';
+    mood.hidden = icon === '';
+    if (!icon) return;
+    mood.textContent = icon;
     mood.style.left = `${Math.max(6, visibleRect.x + visibleRect.w * 0.08)}px`;
     mood.style.top = `${Math.max(14, visibleRect.y - 28)}px`;
   }
@@ -853,6 +1130,10 @@ const BLINK_JITTER_MS = 5200;
 
   function currentState(now: number): 'idle' | 'walk' | 'sleep' | 'click' {
     if (reminderRunning) return 'walk';
+    // A meal and a pounce are both "busy" states: they hold the pet in place and
+    // keep it from falling asleep halfway through.
+    if (eating || (toy && toy.pounce)) return 'click';
+    if (tray || toy) return 'idle';
     if (activeAction && now < activeAction.started + activeAction.duration) return 'click';
     if (clickUntil > now) return 'click';
     if (walkUntil > now) return 'walk';
@@ -875,6 +1156,9 @@ const BLINK_JITTER_MS = 5200;
       activeAction = null;
     }
     if (walkUntil && now >= walkUntil) stopWalking();
+    // The pet stands still for a meal, the tray and the whole play session; the
+    // hunger clock and the wand keep running from `checkCare`.
+    if (eating || tray || toy) return;
     // A pet holding up a reminder stays where the user can read it.
     if (!config.autoMove || walkUntil || now < nextWalk || signVisible() || currentState(now) === 'sleep') return;
     facing = Math.random() < 0.5 ? -1 : 1;
@@ -891,6 +1175,13 @@ const BLINK_JITTER_MS = 5200;
     // The resting state is deliberately motionless: the pet only animates while it
     // walks (auto-walk or dragging), clicks or sleeps.
     const bob = action ? 0 : state === 'walk' ? Math.sin(now / 100) * 2.5 : state === 'click' ? -Math.abs(Math.sin(now / 90)) * 3 : 0;
+    // The care loop moves the whole pet instead of the sprite frames: up and
+    // towards the wand during a lunge, down towards the treat while chewing. The
+    // offset is folded into `x`/`y` so `visibleRect` keeps describing where the
+    // pet actually ended up.
+    const pounce = toy ? carePounceAmount(now, toy.pounce) : 0;
+    const shiftX = toy?.pounce ? (toy.pounce.at.x - 150) * 0.12 * pounce : 0;
+    const shiftY = -20 * pounce + (eating ? careChewDip(now - eating.startedAt) : 0);
     // An unknown skin (an install from before the line-up was trimmed) rides the
     // Bulu art rather than leaving the window blank.
     const target = config?.skin === 'custom' && custom ? 'custom' : config?.skin && sheets[config.skin] ? config.skin : 'bulu';
@@ -902,7 +1193,7 @@ const BLINK_JITTER_MS = 5200;
       const progress = (now - action.started) / action.duration;
       const column = Math.min(ACTION_FRAMES - 1, Math.max(0, Math.floor(progress * ACTION_FRAMES)));
       const size = 132 * sizeScale;
-      const x = 150 - size / 2, y = 293 - size;
+      const x = 150 - size / 2 + shiftX, y = 293 - size + shiftY;
       ctx.imageSmoothingEnabled = true;
       ctx.drawImage(buluActions, column * cell, actionRows[action.kind] * cell, cell, cell, x, y, size, size);
       visibleRect = { x, y, w: size, h: size };
@@ -914,7 +1205,7 @@ const BLINK_JITTER_MS = 5200;
       const heightScale = action?.kind === 'stretch' ? 1 + pulse * 0.08 : action?.kind === 'yawn' ? 1 - pulse * 0.05 : 1;
       const lift = action?.kind === 'wave' || action?.kind === 'groom' ? Math.abs(Math.sin(progress * Math.PI * 4)) * 3 : 0;
       const width = bounds.width * fit, height = bounds.height * fit * heightScale;
-      const x = 150 - width / 2, y = 293 - height + bob - lift;
+      const x = 150 - width / 2 + shiftX, y = 293 - height + bob - lift + shiftY;
       ctx.imageSmoothingEnabled = true;
       ctx.drawImage(custom.canvas, bounds.x, bounds.y, bounds.width, bounds.height, x, y, width, height);
       visibleRect = { x, y, w: width, h: height };
@@ -930,7 +1221,7 @@ const BLINK_JITTER_MS = 5200;
         const column = target === 'bulu' && state === 'idle' ? blink : frame;
         const row = action ? action.kind === 'yawn' ? 2 : 3 : state === 'walk' ? 1 : state === 'sleep' ? 2 : state === 'click' ? 3 : 0;
         const size = 132 * sizeScale;
-        const x = 150 - size / 2, y = 293 - size + bob;
+        const x = 150 - size / 2 + shiftX, y = 293 - size + bob + shiftY;
         // Bulu is a drawn illustration: smoothing preserves the fur details
         // when the 192 px poses are scaled to the on-screen size.
         ctx.imageSmoothingEnabled = true;
@@ -944,6 +1235,7 @@ const BLINK_JITTER_MS = 5200;
       }
     }
     ctx.restore();
+    drawCare(now);
     updateDream(state, now);
     updateMood(now);
     // The sign follows the pet instead of being pinned to wherever it arrived.
@@ -961,6 +1253,7 @@ const BLINK_JITTER_MS = 5200;
   function frame(now: number) {
     try {
       checkLongPress(now);
+      checkCare(now);
       update(now);
       void pollEdge(now);
       draw(now);
@@ -981,6 +1274,8 @@ const BLINK_JITTER_MS = 5200;
 
   /** One tap: a word from the spot that was touched, or a sleepy complaint. */
   function tapReaction(region: PetRegion, now: number) {
+    // Touching the pet ends a play session, with a summary of how it went.
+    if (toy) { endToy(); return; }
     // A level-up (or the first hello of the day) says something worth more than
     // the poke line, and it came from this very tap.
     if (now - affinitySpokeAt < 600) return;
@@ -1013,6 +1308,12 @@ const BLINK_JITTER_MS = 5200;
   function hit(x: number, y: number) {
     const px = Math.floor(x), py = Math.floor(y);
     if (px < 0 || py < 0 || px >= 300 || py >= 300) return false;
+    // Care props live on the same canvas, so they are part of the hit test by
+    // default. The tray is meant to be clicked; the wand is only there to look
+    // at, and letting it capture the cursor would swallow clicks aimed at the
+    // desktop wherever the feather happens to be.
+    if (tray && careFoodAt(x, y)) return true;
+    if (toy && careToyHits(x, y, careToySwing(performance.now() - toy.startedAt))) return false;
     // `getImageData` reads backing-store pixels and ignores the context transform,
     // while every caller here passes CSS (0-300) coordinates — so the lookup has
     // to move with the pixel ratio. Reading CSS pixels straight was what made the
@@ -1039,6 +1340,16 @@ const BLINK_JITTER_MS = 5200;
     say(liteFileReaction(paths));
   });
   window.api.onPetAction(playAction);
+  // The right-click menu and the settings panel both reach the pet through this
+  // one event; the payload is "tray", "toy" or "feed:<id>".
+  window.api.onPetCare((action) => {
+    if (action === 'tray') { openTray(); return; }
+    if (action === 'toy') { startToy(); return; }
+    if (action.startsWith('feed:')) {
+      const food = careFoodById(action.slice(5));
+      if (food) startEating(food);
+    }
+  });
 
   canvas.addEventListener('mousemove', (event) => {
     petStrokeMove(event.offsetX, event.offsetY, event.buttons);
@@ -1065,6 +1376,18 @@ const BLINK_JITTER_MS = 5200;
   });
   canvas.addEventListener('mousedown', (event) => {
     if (event.button !== 0 || !hit(event.offsetX, event.offsetY)) return;
+    // A tap on a treat feeds it; a tap anywhere else on the pet while the tray is
+    // up puts the tray away and falls through to the normal tap reaction.
+    if (tray) {
+      const food = careFoodAt(event.offsetX, event.offsetY);
+      if (food) {
+        event.preventDefault();
+        tray = null;
+        startEating(food);
+        return;
+      }
+      tray = null;
+    }
     reminderRunId++;
     reminderRunning = false;
     resetPetting();
@@ -1094,7 +1417,9 @@ const BLINK_JITTER_MS = 5200;
     activity();
     const double = now - lastTapAt < DOUBLE_TAP_MS;
     lastTapAt = now;
-    if (!double) {
+    // A tap during a play session always goes to the toy, so the session ends
+    // with its own summary instead of being read as a second pat.
+    if (!double || toy) {
       tapReaction(pressRegion, now);
       return;
     }

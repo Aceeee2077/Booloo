@@ -12,6 +12,7 @@ let wallClock = 0;
 let locale = 'zh';
 let configChanged;
 let actionReceived;
+let careReceived;
 let updateState;
 let frame;
 let lastDraw;
@@ -50,6 +51,10 @@ const drawing = {
   clearRect() {}, save() {}, restore() {}, translate() {}, scale(...args) { transforms.push(args); },
   drawImage(...args) { lastDraw = args; drawHistory.push(args); },
   getImageData: (x, y) => { hitSamples.push([x, y]); return { data: [0, 0, 0, 255] }; },
+  // The care props: the tray bubbles, the falling treat and the wand. None of
+  // them is asserted through the canvas, so the stubs only have to not throw.
+  beginPath() {}, moveTo() {}, quadraticCurveTo() {}, arc() {}, ellipse() {},
+  fill() {}, stroke() {}, rotate() {}, fillText() {},
 };
 const canvas = {
   style: {}, getContext: () => drawing,
@@ -64,6 +69,7 @@ const api = {
     configChanged = (cfg) => { currentConfig = { ...cfg }; callback(cfg); };
   },
   onPetAction: callback => { actionReceived = callback; },
+  onPetCare: callback => { careReceived = callback; },
   onFileDrop: () => () => {},
   setClickThrough() {}, autoMoveStop() {}, autoMoveStart() {},
   dragBegin() {}, dragMove() {}, dragEnd() {},
@@ -118,6 +124,7 @@ vm.createContext(context);
 vm.runInContext(readFileSync(join(process.cwd(), 'dist/renderer/lite-i18n.js'), 'utf8'), context);
 vm.runInContext(readFileSync(join(process.cwd(), 'dist/renderer/lite-day.js'), 'utf8'), context);
 vm.runInContext(readFileSync(join(process.cwd(), 'dist/renderer/lite-affinity.js'), 'utf8'), context);
+vm.runInContext(readFileSync(join(process.cwd(), 'dist/renderer/lite-care.js'), 'utf8'), context);
 vm.runInContext(readFileSync(join(process.cwd(), 'dist/renderer/lite-app.js'), 'utf8'), context);
 await new Promise(resolve => setImmediate(resolve));
 
@@ -538,5 +545,99 @@ await tick();
 assert.equal(configPatches.filter(patch => patch.affinity).at(-1).affinity, beforeCap + 40,
   'one day stops at 40 points, however many taps arrive');
 
+// ---------- feeding and the cat teaser ----------
+// Hunger is the pet's own counter: it drifts up while the app runs, a treat takes
+// it back down, and the tray is clicked where it is drawn. The wand pays
+// affection per catch, and it must never capture the cursor on the way.
+const careState = () => browser.__boolooLiteState().care;
+const careHunger = () => browser.__boolooLiteState().hunger;
+/** A left press, with the `preventDefault` the tray click handler calls. */
+const careDown = (x, y) => canvasEvents.get('mousedown')({
+  button: 0, offsetX: x, offsetY: y, screenX: 100, screenY: 100, preventDefault() {},
+});
+config({ ...quiet, dailyStats: {}, statsDays: [dayKeyOf(wallClock)], statsClicks: 0 });
+windowEvents.get('mouseup')();
+frame(clock += 16);
+
+// Six hours of company: the meter fills up and the pet says so.
+const hungerStart = careHunger();
+clock += 6 * 60 * 60_000;
+frame(clock);
+assert.equal(careHunger(), 100, 'a long stretch between meals fills the hunger meter');
+assert.ok(careHunger() > hungerStart, 'and it can only climb');
+wallClock += 1000;
+intervals[0]();
+assert.equal(speech.textContent, '饿扁了…有吃的吗？', 'a starving pet asks for food');
+
+// Right-click → 喂食… opens the tray above the pet's head.
+careReceived('tray');
+frame(clock += 16);
+assert.equal(careState(), 'tray');
+assert.equal(speech.textContent, '点一个喂给我吧～');
+assert.equal(browser.__boolooHitTest(150, 48), true, 'the treat bubbles are clickable');
+
+// Clicking the can eats it: 45 points off, the meal plays out, and the treat is
+// paid for in affection once the chewing ends.
+const affinityBeforeMeal = browser.__boolooLiteState().affinity;
+careDown(150, 48);
+assert.equal(careState(), 'eating', 'the click on the can starts a meal');
+assert.equal(careHunger(), 55, 'the can takes 45 points off a full meter');
+canvasEvents.get('mousemove')({ button: 0, offsetX: 150, offsetY: 48, screenX: 100, screenY: 100, buttons: 0 });
+windowEvents.get('mouseup')();
+clock += 6000;
+intervals[0]();
+await tick();
+assert.equal(configPatches.filter(patch => patch.petStats).at(-1).petStats.hunger, 55,
+  'the hunger the pet drifted and the meal changed is written back to the config');
+assert.equal(configPatches.filter(patch => patch.petStats).at(-1).petStats.mood, 78,
+  'a can is also worth eight points of mood');
+frame(clock += 2500);
+assert.equal(careState(), null, 'the meal is over');
+assert.equal(browser.__boolooLiteState().affinity, affinityBeforeMeal + 2, 'the can is worth two points');
+assert.equal(hearts.hidden, false, 'a finished meal makes the pet happy');
+assert.equal(speech.textContent, '罐头！今天是大餐 🥫');
+
+// Settings feeds through the same relay, and a pet that has just eaten refuses
+// the next treat instead of eating indefinitely.
+careReceived('feed:can');
+assert.equal(careState(), 'eating');
+assert.equal(careHunger(), 10);
+frame(clock += 2500);
+careReceived('feed:fish');
+frame(clock += 16);
+assert.equal(careState(), null, 'a full pet does not start another meal');
+assert.equal(careHunger(), 10, 'and the refused treat changes nothing');
+assert.equal(speech.textContent, '我刚吃饱啦，先存着好不好～');
+
+// The cat teaser: the wand swings over the pet, the pet lunges, and each catch
+// is worth a point.
+careReceived('toy');
+frame(clock += 16);
+assert.equal(careState(), 'toy');
+assert.equal(speech.textContent, '陪我玩一会儿逗猫棒！再点我一下就收起来～');
+// The wand lives on the same canvas as the pet, so it is part of the hit test by
+// default — it has to be carved out or the window swallows desktop clicks.
+const wandHead = context.careToySwing(16);
+assert.equal(browser.__boolooHitTest(wandHead.x, wandHead.y), false,
+  'the wand must stay click-through');
+assert.equal(browser.__boolooHitTest(150, 175), true, 'the pet itself is still clickable');
+
+const affectionBeforeCatch = browser.__boolooLiteState().affinity;
+clock += 1000;
+frame(clock);
+assert.equal(browser.__boolooLiteState().action, 'wave', 'the first lunge swats with a paw');
+clock += 800;
+frame(clock);
+assert.equal(browser.__boolooLiteState().affinity, affectionBeforeCatch + 1, 'a catch is worth one point');
+assert.equal(speech.textContent, '抓到了！');
+
+// Touching the pet stops the session, with a summary of how it went.
+careDown(150, 175);
+canvasEvents.get('mousemove')({ button: 0, offsetX: 150, offsetY: 175, screenX: 100, screenY: 100, buttons: 0 });
+windowEvents.get('mouseup')();
+assert.equal(careState(), null, 'a tap ends the play session');
+assert.equal(speech.textContent, '玩够啦，谢谢陪我～ 抓到 1 次');
+
 console.log('Petting, taps, holds, blinking, affinity, reminders, load reactions, daily ' +
-  'counters, health plan, dreams, actions, language switch and update notice: passed');
+  'counters, health plan, dreams, actions, language switch, update notice, feeding and ' +
+  'the cat teaser: passed');

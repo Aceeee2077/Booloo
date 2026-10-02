@@ -17,7 +17,7 @@ const { zhDict, enDict } = require(join(process.cwd(), 'dist', 'shared', 'i18n.j
 const RELEASES = 'https://github.com/Aceeee2077/Booloo/releases/latest';
 const events = new Map();
 const elements = new Map();
-const calls = { getState: 0, check: 0, download: 0, install: 0, openPage: 0, patches: [] };
+const calls = { getState: 0, check: 0, download: 0, install: 0, openPage: 0, patches: [], care: [] };
 let locale = 'zh';
 let updateState = () => {};
 let configChanged = () => {};
@@ -83,6 +83,7 @@ const api = {
       autoCheck: true, autoDownload: false, channel: 'stable' };
   },
   updateInstall: async () => { calls.install++; },
+  care: (action) => { calls.care.push(action); },
   closeSettings: () => {},
   openProjectPage: () => { calls.openPage++; },
 };
@@ -107,6 +108,7 @@ vm.createContext(context);
 vm.runInContext(readFileSync(join(process.cwd(), 'dist', 'renderer', 'lite-i18n.js'), 'utf8'), context);
 vm.runInContext(readFileSync(join(process.cwd(), 'dist', 'renderer', 'lite-day.js'), 'utf8'), context);
 vm.runInContext(readFileSync(join(process.cwd(), 'dist', 'renderer', 'lite-affinity.js'), 'utf8'), context);
+vm.runInContext(readFileSync(join(process.cwd(), 'dist', 'renderer', 'lite-care.js'), 'utf8'), context);
 vm.runInContext(readFileSync(join(process.cwd(), 'dist', 'renderer', 'lite-settings.js'), 'utf8'), context);
 const settle = async () => { await new Promise(resolve => setImmediate(resolve)); await new Promise(resolve => setImmediate(resolve)); };
 await settle();
@@ -363,6 +365,24 @@ assert.equal(element('affinity-fill').style.width, '100%');
 assert.match(element('affinity-next').textContent, /最高等级/, 'and there is nothing left to earn');
 
 console.log('Affinity panel: level, bar, next level and lifetime stats: passed');
+
+// ---------- treats ----------
+// Settings → 投喂 is built from the same food table the pet window uses: three
+// buttons labelled from the dictionary, a meter driven by `config.petStats`, and
+// a click that asks the pet window (through `care`) to eat it.
+const treatButtons = element('care-foods').children;
+assert.equal(treatButtons.length, 3, 'one button per food in CARE_FOODS');
+assert.equal(treatButtons[0].children[1].textContent, zhDict['lite.care.food.fish']);
+assert.equal(treatButtons[2].children[1].textContent, zhDict['lite.care.food.milk']);
+// The config carries no petStats yet, so the meter shows the documented default.
+assert.equal(element('care-fill').style.width, '20%');
+assert.match(element('care-status').textContent, /20/, 'the status line prints the meter');
+// The harness gives every created element the same fake id, so the listener it
+// kept is the last treat's — enough to prove the relay reaches `api.care`.
+events.get('button:click')();
+assert.deepEqual(calls.care, ['feed:milk'], 'the button asks the pet window to eat that treat');
+assert.match(element('care-message').textContent, /牛奶/);
+console.log('Treat section: meter, buttons and the feeding relay: passed');
 
 // The title bar's GitHub button opens the repository in the default browser; the
 // URL itself lives in src-tauri/src/opener.rs, so the page only has to ask.
