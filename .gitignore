@@ -132,6 +132,9 @@ Thumbs.db
 /docs/PETPACK.md
 /docs/accessory-system.md
 /docs/animation-system.md
+# Launch and promo copy is written for posting elsewhere, not for the product
+# repo. It stays on disk so it can be reused, but it is not part of the project.
+/docs/launch/
 /legacy/
 /examples/
 /actions.json
