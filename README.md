@@ -36,7 +36,7 @@ Petting it, poking it and dropping files on it raise affinity through five level
 | :--- | :--- |
 | **Windows 10/11** | [⬇ Download the latest installer](https://github.com/Aceeee2077/Booloo/releases/latest) — an NSIS `.exe`. Needs the WebView2 runtime (built into Windows 11, a one-time install on 10). |
 | **macOS 10.15+** | `Booloo_<version>_aarch64.dmg` (Apple Silicon) or `_x64.dmg` (Intel) from [Releases](https://github.com/Aceeee2077/Booloo/releases/latest). They are **not signed or notarised**, so the first launch needs right-click → Open in Applications, or `xattr -dr com.apple.quarantine /Applications/Booloo.app`. |
-| **Linux** | No published bundle yet. Build from source below; the *Build check* workflow also produces AppImage and deb artifacts as downloadable run artifacts. |
+| **Linux** | No published bundle yet. The **Build** workflow produces AppImage and deb artifacts on every run (Actions → Build → Artifacts), or build from source below. Heads-up: the CPU / memory / battery awareness is not implemented on Linux yet, so the pet simply stays quiet there. |
 | **From source** | `npm install && npm run tauri:dev` — see [Build from source](#build-from-source). |
 
 Nothing else is required: no runtime to install on macOS (it uses the system WebView), no account, no sign-in.
@@ -138,7 +138,7 @@ xattr -dr com.apple.quarantine /Applications/Booloo.app
 | Rendering | **Canvas 2D** | Frame-by-frame sprite sheets and pose atlases, the import preview, the mask editor (`destination-out` erase plus a feathered brush), and hit-testing by pixel alpha |
 | Asset generation | **Node.js scripts + sharp** | Procedurally generates the pixel sprite sheets and brand icons (PNG / ICO / ICNS), and exports `src/shared/i18n.ts` into the JSON the Rust side reads |
 | Packaging | **Tauri CLI** | `npm run dist:win` produces the Windows NSIS installer, `dist:mac` the `.app` / `.dmg`, `dist:linux` the AppImage / deb; every icon is generated from one vector source |
-| CI | **GitHub Actions** | Tests on Windows and macOS for every push and pull request; a `v*` tag builds Windows and macOS, verifies the signing key, and publishes the installers with the `latest.json` / `.sig` files the updater reads |
+| CI | **GitHub Actions** | Tests on Windows and macOS for every push and pull request; a **Build** workflow packages Windows, macOS and Linux on every pull request and uploads them as artifacts; a `v*` tag builds Windows and macOS, verifies the signing key, and publishes the installers with the `latest.json` / `.sig` files the updater reads |
 
 ## Development
 

@@ -36,7 +36,7 @@ Booloo 会读 CPU、内存和电池。处理器持续吃紧它会出汗并嘟囔
 | :--- | :--- |
 | **Windows 10/11** | [⬇ 到 Releases 下载最新安装包](https://github.com/Aceeee2077/Booloo/releases/latest)（NSIS `.exe`）。需要 WebView2 运行时（Win11 自带，Win10 需装一次） |
 | **macOS 10.15+** | Releases 里有 `Booloo_<版本>_aarch64.dmg`（Apple Silicon）和 `_x64.dmg`（Intel）。**未签名也未公证**，首次打开需在「应用程序」里**右键 → 打开**，或执行 `xattr -dr com.apple.quarantine /Applications/Booloo.app` |
-| **Linux** | 暂未提供正式包，先按下文源码构建；*Build check* workflow 也会产出 AppImage / deb 作为可下载的构建产物 |
+| **Linux** | 暂未提供正式包。**Build** workflow 每次运行都会产出 AppImage / deb（Actions → Build → Artifacts），也可以按下文源码构建。注意：CPU / 内存 / 电量感知在 Linux 上尚未实现，桌宠在那边会保持安静 |
 | **从源码构建** | `npm install && npm run tauri:dev`，见[源码构建](#源码构建) |
 
 除此之外没有别的前置条件：macOS 用系统 WebView 无需额外运行时，不用注册账号，也不用登录。
@@ -138,7 +138,7 @@ xattr -dr com.apple.quarantine /Applications/Booloo.app
 | 渲染 | **Canvas 2D** | 逐帧播放精灵表与姿势图集、图片导入预览、抠图蒙版编辑（`destination-out` 擦除 + 羽化笔刷），并按像素透明度做命中检测 |
 | 资源生成 | **Node.js 脚本 + sharp** | 程序化生成像素精灵表与品牌图标（PNG / ICO / ICNS），并把 `src/shared/i18n.ts` 导出成 Rust 侧读取的 JSON |
 | 打包 | **Tauri CLI** | `npm run dist:win` 产出 Windows NSIS 安装包，`dist:mac` 产出 `.app` / `.dmg`，`dist:linux` 产出 AppImage / deb；图标由同一份矢量源生成 |
-| 持续集成 | **GitHub Actions** | 每次 push 与 PR 在 Windows、macOS 上跑测试；推送 `v*` 标签后并行构建 Windows 与 macOS，校验签名密钥，并发布安装包与自动更新用的 `latest.json` / `.sig` |
+| 持续集成 | **GitHub Actions** | 每次 push 与 PR 在 Windows、macOS 上跑测试；**Build** workflow 会在每个 PR 上打包 Windows / macOS / Linux 并作为 artifact 上传；推送 `v*` 标签后并行构建 Windows 与 macOS，校验签名密钥，并发布安装包与自动更新用的 `latest.json` / `.sig` |
 
 ## 开发
 
