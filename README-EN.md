@@ -21,11 +21,11 @@ A small, transparent pet that lives on your desktop — it walks, naps, and chee
 
 ## Download
 
-**Windows 10/11**: [⬇ Download the Booloo 0.6.16 installer](https://github.com/Aceeee2077/Booloo/releases/download/v0.6.16/Booloo_0.6.16_x64-setup.exe) · older builds are on [Releases](https://github.com/Aceeee2077/Booloo/releases)
+**Windows 10/11**: [⬇ Download the latest installer](https://github.com/Aceeee2077/Booloo/releases/latest) · NSIS; needs the WebView2 runtime (built into Windows 11)
 
-There is no macOS installer — build it from source instead, see [macOS](#macos).
+**macOS 10.15+**: Releases carries official `.dmg` builds (one for Apple Silicon, one for Intel). They are **unsigned**, so the first launch needs right-click → Open — see [macOS](#macos).
 
-<!-- When a new installer is packaged, only this line changes: the version, the tag (vX.Y.Z) and the file name have to agree. -->
+<!-- The link points at releases/latest instead of a pinned version, so packaging a release no longer edits this line. -->
 
 ## Preview
 
@@ -40,9 +40,12 @@ The pet stays always-on-top, with no taskbar button and no Alt+Tab entry:
 
 ![The pet on a desktop](docs/screenshots/lightweight-pet-en.png)
 
-Open Settings from the tray or the right-click menu to switch pets, import your own picture, tune size and opacity, and pick the interface language (the panel below is the English UI):
+<details>
+<summary>Open Settings from the tray or the right-click menu to switch pets, import your own picture, tune size and opacity, and pick the language (click to open the full panel)</summary>
 
 ![Settings panel](docs/screenshots/lightweight-settings-en.png)
+
+</details>
 
 ## What it does
 
@@ -80,10 +83,18 @@ An installed build checks for and installs a new version a few seconds after sta
 
 ## macOS
 
-**There is no macOS installer for now.** The code itself is cross-platform — the differences live in `tauri.conf.json` and a few `#[cfg(target_os = "macos")]` blocks — but nothing is built or signed for it, so you would have to compile it yourself:
+macOS 10.15+ uses the system WebView, so there is nothing else to install. Official `.dmg` builds live on [Releases](https://github.com/Aceeee2077/Booloo/releases/latest):
 
-- On a Mac: `npm install && npm run dist:mac`; for one binary covering both Intel and Apple Silicon, `npx tauri build --target universal-apple-darwin --bundles app,dmg`.
-- The result is unsigned, so the first launch needs right-click → Open, or `xattr -dr com.apple.quarantine Booloo.app`.
+- `Booloo_<version>_aarch64.dmg` — Apple Silicon
+- `Booloo_<version>_x64.dmg` — Intel
+
+**They are not signed or notarised with an Apple developer certificate**, so Gatekeeper blocks the first launch. Right-click → Open from Applications, or:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/Booloo.app
+```
+
+To build it yourself on a Mac: `npm install && npm run dist:mac`, or `npx tauri build --target universal-apple-darwin --bundles app,dmg` for one binary covering both architectures. The result is unsigned too, and needs the same first-launch step.
 
 ## Tech stack
 

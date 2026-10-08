@@ -21,11 +21,11 @@ Booloo 的名字来自布噜（Bulu），这只猫也是应用的默认角色。
 
 ## 下载
 
-**Windows 10/11**：[⬇ 下载 Booloo 0.6.16 安装包](https://github.com/Aceeee2077/Booloo/releases/download/v0.6.16/Booloo_0.6.16_x64-setup.exe) · 历史版本见 [Releases](https://github.com/Aceeee2077/Booloo/releases)
+**Windows 10/11**：[⬇ 到 Releases 下载最新安装包](https://github.com/Aceeee2077/Booloo/releases/latest) · NSIS，需要 WebView2 运行时（Win11 自带）
 
-macOS 暂不提供安装包，需要自行构建，见下方 [macOS](#macos)。
+**macOS 10.15+**：Releases 里提供官方 `.dmg`（Apple Silicon 与 Intel 各一份），**未签名**，首次打开需「右键 → 打开」，详见 [macOS](#macos)。
 
-<!-- 打包了新安装包之后只改上面那一行：版本号、tag 名（vX.Y.Z）、文件名三处保持一致。 -->
+<!-- 链接指向 releases/latest，不写死版本号，所以发新版时这里不用改。 -->
 
 ## 预览
 
@@ -38,9 +38,12 @@ macOS 暂不提供安装包，需要自行构建，见下方 [macOS](#macos)。
 
 ![桌宠在桌面上](docs/screenshots/lightweight-pet.png)
 
-从托盘菜单或右键菜单打开设置，换宠物、导入自己的图片、调大小与透明度：
+<details>
+<summary>从托盘菜单或右键菜单打开设置，换宠物、导入自己的图片、调大小与透明度（点开看完整面板）</summary>
 
 ![设置面板](docs/screenshots/lightweight-settings.png)
+
+</details>
 
 ## 功能
 
@@ -78,10 +81,18 @@ macOS 暂不提供安装包，需要自行构建，见下方 [macOS](#macos)。
 
 ## macOS
 
-**暂不提供 macOS 安装包。** 代码本身是跨平台的（差异只在 `tauri.conf.json` 和几处 `#[cfg(target_os = "macos")]`），只是官方没有构建和签名，想用只能自己编：
+macOS 10.15+ 用系统 WebView，不需要额外运行时。官方在 [Releases](https://github.com/Aceeee2077/Booloo/releases/latest) 里提供 `.dmg`：
 
-- 在 Mac 上 `npm install && npm run dist:mac`；想一次产出 Intel 与 Apple Silicon 通用的单包，用 `npx tauri build --target universal-apple-darwin --bundles app,dmg`。
-- 产物未签名，第一次打开需「右键 → 打开」，或执行 `xattr -dr com.apple.quarantine Booloo.app`。
+- `Booloo_<版本>_aarch64.dmg` — Apple Silicon（M 系列）
+- `Booloo_<版本>_x64.dmg` — Intel
+
+**这些包没有 Apple 开发者签名和公证**，所以第一次打开会被 Gatekeeper 拦下。在「应用程序」里**右键 → 打开**，或执行：
+
+```bash
+xattr -dr com.apple.quarantine /Applications/Booloo.app
+```
+
+想自己构建：在 Mac 上 `npm install && npm run dist:mac`；想一次产出 Intel 与 Apple Silicon 通用的单包，用 `npx tauri build --target universal-apple-darwin --bundles app,dmg`。产物同样未签名，首次打开需要上面这一步。
 
 ## 技术栈
 
