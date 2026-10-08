@@ -24,10 +24,11 @@ What actually happened? (Screenshots / terminal logs / `npm run tauri:check` out
 
 **Environment / 环境信息**
 - OS: Windows / macOS / Linux (with version) / 操作系统（附版本）
+- Booloo version (Settings → 🔄 Update shows it) / Booloo 版本（设置 → 🔄 更新 里能看到）
 - Run mode: dev build (`npm run tauri:build`) / packaged installer / 运行方式：开发构建 / 打包安装包
 - Runtime versions: output of `rustc --version` and (Windows) the WebView2 runtime version
   / 运行时版本：`rustc --version` 的输出，以及（Windows）WebView2 运行时版本
-- Custom appearance / AI chat in use: yes / no / 是否使用了自定义外观 / AI 对话：是 / 否
+- Using an imported picture as the pet: yes / no / 是否用导入的图片当桌宠：是 / 否
 
 **Additional context / 其他**
 Anything else that might help. Redact config file contents — never paste API keys.

@@ -60,14 +60,58 @@ NSIS 安装钩子保留旧的内部安装注册键，使新版能覆盖原有安
 
 ## Ideas to Contribute / 可以贡献的方向
 
-- 🎨 **New skins**: sprite sheets follow 4 rows × 4 columns (idle / walking / sleeping / click),
-  32×32 frames, placed in `src/assets/sprites/`; or extend the generator in
-  `scripts/generate-sprites.mjs` (procedural pixel art is a project highlight — new animal designs are welcome)
-  / **新皮肤**：精灵表遵循 4 行 × 4 列、帧 32×32 的规范放入 `src/assets/sprites/`；或扩展生成器
+- 🎨 **Art for Bulu**: the shipped atlas is `src/assets/animated-pets/bulu.png`
+  (4 × 4 cells of 192 px: idle / walking / sleeping / click) plus
+  `bulu-actions.webp` (16 × 5, one right-click action per row). Both are
+  assembled by `scripts/build-bulu-art.mjs` from the authoring sheets in
+  `docs/pet-sources/bulu-actions/`, which are **not** in the repository — so a new
+  character or a new pose means producing those source sheets first. Open an issue
+  before investing in art, so we can agree on the layout.
+  / **布噜的美术**：随包图集是 `src/assets/animated-pets/bulu.png`（4 × 4、每格 192 px，
+  依次是待机 / 走路 / 睡觉 / 点击）和 `bulu-actions.webp`（16 × 5，每行一个右键动作），
+  两者都由 `scripts/build-bulu-art.mjs` 从 `docs/pet-sources/bulu-actions/` 里的原始
+  素材表合成，而那些素材表**不在仓库里**。所以要做新角色或新姿势，得先产出这些素材表——
+  动手前请先开 issue 对齐规格。
+- 🖼 **Imported-picture path**: improving the cutout (`src-tauri/src/cutout.rs`, one
+  `segment()` function) or the brush editor helps every user who brings their own
+  pet. / **导入图片这条路**：改进抠图（`src-tauri/src/cutout.rs`，只有 `segment()`
+  一个入口）或笔刷编辑器，受益的是所有导入自家宠物的用户。
 - ✨ **New features**: small, self-contained additions win — see the issue tracker for open requests
   / **新功能**：最欢迎小而自洽的改动，可以到 issue 列表里找找已有需求
 - 🐛 **Bug fixes**: include reproduction steps and impact / **Bug 修复**：提交时说明复现步骤与影响
 - 📖 **Docs**: README, tutorials, screenshots & demo GIFs / **文档**：README、教程、截图与演示 GIF
+
+## Releases / 发布流程
+
+Releases are cut from a tag; nobody uploads installers by hand.
+发版完全由 tag 驱动，不需要手动上传安装包。
+
+1. Bump the version in **all three** places, which have to agree:
+   `package.json`, `src-tauri/tauri.conf.json` and `src-tauri/Cargo.toml`
+   (plus the two `version` fields in `package-lock.json`).
+   / 把版本号在**三处**同步改掉：`package.json`、`src-tauri/tauri.conf.json`、
+   `src-tauri/Cargo.toml`（以及 `package-lock.json` 里的两个 `version` 字段）。
+2. Add an entry to `CHANGELOG.md`. / 在 `CHANGELOG.md` 里补一条。
+3. Commit, push, then tag and push the tag:
+   / 提交并推送，然后打 tag 并推送：
+
+   ```bash
+   git tag v0.7.0 && git push origin v0.7.0
+   ```
+
+4. `.github/workflows/release.yml` builds Windows and macOS, signs the updater
+   artifacts, and publishes the release with `latest.json` and the `.sig` files —
+   so the in-app updater picks it up on its own. Signing needs the
+   `TAURI_SIGNING_PRIVATE_KEY` / `..._PASSWORD` secrets; the workflow fails early
+   with a clear message if either is missing.
+   / `.github/workflows/release.yml` 会构建 Windows 与 macOS、签名更新包，并把
+   `latest.json` 与 `.sig` 一起发布，应用内的自动更新会自动接上。签名需要
+   `TAURI_SIGNING_PRIVATE_KEY` 与对应密码两个 secret，缺失时 workflow 会在前期
+   直接报错说明。
+5. Linux has no published bundle yet — the **Build** workflow uploads AppImage and
+   deb artifacts on every run instead.
+   / Linux 目前没有正式发布包，改由 **Build** workflow 在每次运行时上传
+   AppImage / deb 构建产物。
 
 ## Code of Conduct / 行为准则
 

@@ -9,7 +9,7 @@ assignees: ''
 **What is your feature request related to? / 你的功能建议与什么相关？**
 - [ ] New interaction / animation / 新的交互 / 动画
 - [ ] New skin / art / 新的皮肤 / 美术
-- [ ] AI related / AI 相关
+- [ ] Health plan / reminders / 健康计划 / 提醒
 - [ ] Packaging / release / CI / 打包 / 发布 / CI
 - [ ] Docs / 文档
 - [ ] Other / 其他
