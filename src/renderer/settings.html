@@ -51,11 +51,16 @@
       <label class="check"><input id="remove-background" type="checkbox" /><span data-i18n="lite.settings.removeBackground">去掉纯色背景</span></label>
       <p id="preview-note" class="note"></p>
       <div class="actions">
-        <button id="refine-image" type="button" data-i18n="lite.settings.refineCutout">手动微调抠图…</button>
         <button id="confirm-image" class="primary" type="button" data-i18n="lite.settings.useImage">使用这张图片</button>
         <button id="cancel-image" type="button" data-i18n="lite.settings.cancel">取消</button>
       </div>
-      <p class="note" data-i18n="lite.settings.refineHint"></p>
+      <!-- The brush editor is a power tool: still here, just folded away, so the
+           default path stays "does this look right? then use it". -->
+      <details class="advanced">
+        <summary data-i18n="lite.settings.advanced">高级</summary>
+        <button id="refine-image" type="button" data-i18n="lite.settings.refineCutout">手动微调抠图…</button>
+        <p class="note" data-i18n="lite.settings.refineHint"></p>
+      </details>
     </section>
 
     <section id="affinity">
@@ -167,6 +172,7 @@
       <label class="setting" for="pet-size"><span><span data-i18n="lite.settings.petSize">宠物大小</span> <output id="size-value"></output></span><input id="pet-size" type="range" min="0.75" max="1.5" step="0.05" /></label>
       <label class="setting" for="opacity"><span><span data-i18n="lite.settings.opacity">透明度</span> <output id="opacity-value"></output></span><input id="opacity" type="range" min="0.5" max="1" step="0.05" /></label>
       <label class="check"><input id="auto-move" type="checkbox" /><span data-i18n="lite.settings.autoMove">自主走动</span></label>
+      <label class="check"><input id="custom-outline" type="checkbox" /><span data-i18n="lite.settings.customOutline">给图片宠物描一圈白边</span></label>
       <label class="check"><input id="file-drop-reactions" type="checkbox" /><span data-i18n="lite.settings.fileDrop">拖文件给桌宠时显示互动气泡</span></label>
       <label class="check"><input id="hourly-chime" type="checkbox" /><span data-i18n="lite.settings.hourlyChime">整点轻报时</span></label>
       <label class="check"><input id="load-awareness" type="checkbox" /><span data-i18n="lite.settings.loadAwareness">根据电脑状态做反应</span></label>

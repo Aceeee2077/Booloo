@@ -122,6 +122,10 @@ const LITE_SETTINGS_CHECK_JS: &str = r#"
     hasAffinity: !!document.getElementById('affinity') && !!document.getElementById('affinity-fill'),
     hasHealth: !!document.getElementById('health') && !!document.getElementById('eye-rest'),
     hasHeatmap: !!document.getElementById('heatmap-grid'),
+    hasCustomOutline: !!document.getElementById('custom-outline'),
+    // The cutout preview is answered by Rust (custom_cutout_preview), so the
+    // renderer no longer keys the photo itself; prove the call is wired.
+    hasCutoutPreviewApi: typeof window.api.cutoutPreview === 'function',
     hasGithubButton: !!document.getElementById('open-github'),
     // The button's label is translated markup, so the real window is the only
     // place its aria-label can be checked.
@@ -345,6 +349,7 @@ pub fn run() {
             opener::open_project_page,
             custom::custom_get,
             custom::custom_pick_preview,
+            custom::custom_cutout_preview,
             custom::custom_mask_preview,
             custom::custom_commit,
             custom::custom_discard,

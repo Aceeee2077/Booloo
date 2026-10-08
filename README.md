@@ -21,7 +21,7 @@ Booloo 的名字来自布噜（Bulu），这只猫也是应用的默认角色。
 
 ## 下载
 
-**Windows 10/11**：[⬇ 下载 Booloo 0.6.15 安装包](https://github.com/Aceeee2077/Booloo/releases/download/v0.6.15/Booloo_0.6.15_x64-setup.exe) · 历史版本见 [Releases](https://github.com/Aceeee2077/Booloo/releases)
+**Windows 10/11**：[⬇ 下载 Booloo 0.6.16 安装包](https://github.com/Aceeee2077/Booloo/releases/download/v0.6.16/Booloo_0.6.16_x64-setup.exe) · 历史版本见 [Releases](https://github.com/Aceeee2077/Booloo/releases)
 
 macOS 暂不提供安装包，需要自行构建，见下方 [macOS](#macos)。
 

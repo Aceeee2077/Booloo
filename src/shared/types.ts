@@ -272,6 +272,29 @@ interface MaskPreviewResult {
   error?: string;
 }
 
+/**
+ * The settings panel's cutout preview.
+ *
+ * `url` is the staged picture composited with the keep-mask by the same Rust pass
+ * `custom_commit` uses, so the panel never keys the photo itself and the preview
+ * cannot disagree with the saved result.
+ */
+interface CutoutPreviewResult {
+  ok: boolean;
+  /** The composited picture as a data URL (PNG, alpha already applied). */
+  url?: string;
+  width?: number;
+  height?: number;
+  /** Kept pixels / total, 0..1. */
+  subject?: number;
+  /** The pass removed a usable amount of background. */
+  applied?: boolean;
+  /** Nothing to remove (or the subject would have been eaten): original kept. */
+  rejected?: boolean;
+  tolerance?: number;
+  error?: string;
+}
+
 /** App configuration (persisted to userData/config.json) */
 interface AppConfig {
   /** Show a short pet reaction when files are dropped onto its visible body. */
@@ -341,10 +364,10 @@ interface AppConfig {
   customImagePath: string;
   /** Changes after a confirmed import, even when the saved filename is reused. */
   customImageRevision?: number;
-  /** Auto-cutout: remove the solid / simple background from imported images (single & billboard modes) */
-  autoCutout: boolean;
   /** Cutout color tolerance 8 ~ 60 (higher = more aggressive background removal) */
   cutoutTolerance: number;
+  /** Trace the imported picture with a white silhouette (see lite-app.ts). */
+  customOutline?: boolean;
   /** UI language */
   locale: Locale;
   /** UI theme: light = orange-white gradient, dark = the original purple tone */
@@ -640,6 +663,12 @@ interface PetApi {
   closeMaskEditor(): void;
   /** Fired when the mask window is asked to reload (a second import while it is open). */
   onMaskReload(cb: () => void): () => void;
+  /**
+   * Settings preview of the automatic cutout: the staged picture composited by
+   * the Rust pass. Sent instead of keying the photo in the renderer so both
+   * paths share one implementation and one tolerance.
+   */
+  cutoutPreview(tolerance?: number): Promise<CutoutPreviewResult>;
   /** Fired after any confirmed custom-image change, from either window. */
   onCustomImageChanged(cb: () => void): () => void;
   /** Delete the custom image in the app data directory */

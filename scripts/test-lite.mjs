@@ -64,29 +64,26 @@ const fill = (rgb, alpha = 255) => {
   for (let y = 0; y < 100; y++) for (let x = 0; x < 100; x++) pixel(x, y, rgb, alpha);
 };
 
+// The renderer no longer keys anything: the automatic cutout is one Rust pass
+// (custom.rs), so this only draws the picture, measures what is visible and
+// guards the picture that would render as an empty canvas.
 fill([255, 255, 255]);
 for (let y = 30; y < 70; y++) for (let x = 30; x < 70; x++) pixel(x, y, [220, 90, 110]);
-let result = context.litePrepareImage(image, true);
-assert.equal(result.cutoutApplied, true);
-assert.equal(result.visiblePixels, 1600);
-assert.deepEqual(JSON.parse(JSON.stringify(result.bounds)), { x: 30, y: 30, width: 40, height: 40 });
-
-fill([255, 255, 255]);
-result = context.litePrepareImage(image, true);
-assert.equal(result.cutoutRejected, true);
-assert.equal(result.visiblePixels, 10000, 'a rejected cutout must leave the original visible');
+let result = context.litePrepareImage(image);
+assert.equal(result.visiblePixels, 10000, 'nothing is keyed in the renderer any more');
+assert.deepEqual(JSON.parse(JSON.stringify(result.bounds)), { x: 0, y: 0, width: 100, height: 100 });
 
 fill([0, 0, 0], 0);
 for (let y = 20; y < 80; y++) for (let x = 20; x < 80; x++) pixel(x, y, [40, 50, 60]);
-result = context.litePrepareImage(image, true);
-assert.equal(result.cutoutApplied, false, 'already transparent art must not be keyed again');
+result = context.litePrepareImage(image);
 assert.equal(result.visiblePixels, 3600);
+assert.deepEqual(JSON.parse(JSON.stringify(result.bounds)), { x: 20, y: 20, width: 60, height: 60 });
 
 fill([0, 0, 0], 0);
-assert.throws(() => context.litePrepareImage(image, false), /完全透明/);
+assert.throws(() => context.litePrepareImage(image), /完全透明/);
 // Same failure, English dictionary: the messages follow config.locale.
 context.liteT = makeTranslate(enDict);
-assert.throws(() => context.litePrepareImage(image, false), /fully transparent/);
+assert.throws(() => context.litePrepareImage(image), /fully transparent/);
 context.liteT = makeTranslate(zhDict);
 
 const renderer = join(process.cwd(), 'dist', 'renderer');
@@ -484,7 +481,7 @@ assert.equal(textNode.textContent, enDict['lite.pet.petting']);
 assert.equal(labelNode.attributes['aria-label'], enDict['lite.pet.canvas']);
 assert.equal(i18n.liteT('lite.drop.multiple', { n: 3 }), 'Whoa, 3 paychecks? I am rich!');
 
-console.log('Lightweight image validation and cutout fallback: passed');
+console.log('Lightweight image validation (cutout lives in Rust): passed');
 console.log('Lightweight package contents: passed');
 console.log('File-drop reactions by type: passed');
 console.log('Language switching (zh / en): passed');

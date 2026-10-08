@@ -13,6 +13,7 @@
   const size = $<HTMLInputElement>('pet-size');
   const opacity = $<HTMLInputElement>('opacity');
   const autoMove = $<HTMLInputElement>('auto-move');
+  const customOutline = $<HTMLInputElement>('custom-outline');
   const fileDropReactions = $<HTMLInputElement>('file-drop-reactions');
   const standReminder = $<HTMLInputElement>('stand-reminder');
   const standInterval = $<HTMLSelectElement>('stand-interval');
@@ -84,21 +85,56 @@
       (canvas.width - w) / 2, (canvas.height - h) / 2, w, h);
   }
 
-  function updatePreview() {
+  /** Guards against a slow cutout answer painting over a newer choice. */
+  let previewSerial = 0;
+
+  /**
+   * Paint the "what it will look like" column.
+   *
+   * With the checkbox off the picture is shown as it is. With it on the Rust pass
+   * composites the staged photo — the very pass that bakes the saved PNG — so the
+   * preview and the pet can never disagree about the tolerance.
+   */
+  async function updatePreview(): Promise<void> {
     if (!candidate) return;
+    const serial = ++previewSerial;
+    let original: LitePreparedImage;
     try {
-      const original = litePrepareImage(candidate, false);
-      const result = litePrepareImage(candidate, cutout.checked);
-      paintCanvas(originalCanvas, original.canvas, { x: 0, y: 0, width: candidate.naturalWidth, height: candidate.naturalHeight });
-      paintCanvas(resultCanvas, result.canvas, result.bounds);
-      note.textContent = result.cutoutRejected
-        ? liteT('lite.image.cutoutRejected')
-        : result.cutoutApplied ? liteT('lite.image.confirmHint') : liteT('lite.image.transparentNote');
-      confirm.disabled = result.visiblePixels === 0;
+      original = litePrepareImage(candidate);
     } catch (error) {
       confirm.disabled = true;
       note.textContent = String(error);
+      return;
     }
+    paintCanvas(originalCanvas, original.canvas, { x: 0, y: 0, width: candidate.naturalWidth, height: candidate.naturalHeight });
+    if (!cutout.checked) {
+      paintCanvas(resultCanvas, original.canvas, original.bounds);
+      note.textContent = liteT('lite.image.transparentNote');
+      confirm.disabled = original.visiblePixels === 0;
+      return;
+    }
+    try {
+      const preview = await window.api.cutoutPreview();
+      if (serial !== previewSerial) return;
+      if (preview.ok && preview.url) {
+        const image = await liteLoadImage(preview.url);
+        if (serial !== previewSerial) return;
+        const prepared = litePrepareImage(image);
+        paintCanvas(resultCanvas, prepared.canvas, prepared.bounds);
+        note.textContent = preview.rejected
+          ? liteT('lite.image.cutoutRejected')
+          : preview.applied ? liteT('lite.image.confirmHint') : liteT('lite.image.transparentNote');
+        confirm.disabled = prepared.visiblePixels === 0;
+        return;
+      }
+      note.textContent = preview.error || liteT('lite.image.cutoutRejected');
+    } catch (error) {
+      note.textContent = String(error);
+    }
+    // The pass could not run: show the picture untouched rather than an empty frame.
+    if (serial !== previewSerial) return;
+    paintCanvas(resultCanvas, original.canvas, original.bounds);
+    confirm.disabled = original.visiblePixels === 0;
   }
 
   /**
@@ -173,7 +209,7 @@
       candidate = await liteLoadImage(selected.url);
       cutout.checked = false;
       preview.hidden = false;
-      updatePreview();
+      await updatePreview();
       message(liteT('lite.image.previewHint'));
     } catch (error) {
       candidate = null;
@@ -649,6 +685,7 @@
     $<HTMLOutputElement>('size-value').textContent = `${Math.round(Number(size.value) * 100)}%`;
     $<HTMLOutputElement>('opacity-value').textContent = `${Math.round(Number(opacity.value) * 100)}%`;
     autoMove.checked = !!cfg.autoMove;
+    customOutline.checked = cfg.customOutline === true;
     fileDropReactions.checked = cfg.fileDropReactions !== false;
     const minutes = reminderMinutes(cfg);
     standReminder.checked = cfg.standReminderEnabled !== false;
@@ -712,7 +749,7 @@
     message(liteT('lite.image.applied'));
   });
   confirm.addEventListener('click', () => void confirmImage());
-  cutout.addEventListener('change', updatePreview);
+  cutout.addEventListener('change', () => void updatePreview());
   $<HTMLButtonElement>('reset-position').addEventListener('click', () => window.api.resetPosition());
   for (const button of Array.from(document.querySelectorAll<HTMLButtonElement>('#skins button'))) {
     button.addEventListener('click', async () => {
@@ -730,6 +767,7 @@
   opacity.addEventListener('change', () => void window.api.setConfig({ opacity: Number(opacity.value) }));
   language.addEventListener('change', () => void window.api.setConfig({ locale: language.value === 'en' ? 'en' : 'zh' }));
   autoMove.addEventListener('change', () => void window.api.setConfig({ autoMove: autoMove.checked }));
+  customOutline.addEventListener('change', () => void window.api.setConfig({ customOutline: customOutline.checked }));
   fileDropReactions.addEventListener('change', () => void window.api.setConfig({ fileDropReactions: fileDropReactions.checked }));
   standReminder.addEventListener('change', saveStandReminder);
   standInterval.addEventListener('change', () => {

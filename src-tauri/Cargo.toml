@@ -1,6 +1,6 @@
 [package]
 name = "booloo"
-version = "0.6.15"
+version = "0.6.16"
 description = "Booloo · cross-platform desktop pet"
 authors = ["Booloo Contributors"]
 edition = "2021"

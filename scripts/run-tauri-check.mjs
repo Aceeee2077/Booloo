@@ -69,6 +69,7 @@ child.on('exit', code => {
     // Health plan and the click heatmap are rendered by the page from the config.
     settings?.hasHealth === true && settings?.hasHeatmap === true &&
     settings?.hasAffinity === true &&
+    settings?.hasCustomOutline === true && settings?.hasCutoutPreviewApi === true &&
     settings?.hasGithubButton === true &&
     ['在浏览器中打开 GitHub 仓库', 'Open the GitHub repository in your browser'].includes(settings?.githubLabel) &&
     typeof settings?.heatmapCells === 'number' && settings.heatmapCells > 300 &&

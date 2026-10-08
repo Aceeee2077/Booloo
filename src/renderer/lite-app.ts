@@ -57,9 +57,23 @@ const BLINK_COLUMN = 3;
 const BLINK_MS = 150;
 const BLINK_GAP_MS = 3200;
 const BLINK_JITTER_MS = 5200;
+/**
+ * How long one walking frame is on screen. The walk row is four frames, so a
+ * full stride is four of these; anything that has to stay in step with the legs
+ * (the body bob) has to be measured in this unit, not in wall-clock seconds.
+ */
+const WALK_FRAME_MS = 125;
+/**
+ * Directions the sticker outline is stamped in. Diagonals are in the list so a
+ * rounded silhouette has no gap at the corners.
+ */
+const OUTLINE_OFFSETS: ReadonlyArray<readonly [number, number]> =
+  [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, -1], [-1, 1], [1, 1]];
   let activeAction: { kind: PetAction; started: number; duration: number } | null = null;
   let config: AppConfig | null = null;
   let custom: LitePreparedImage | null = null;
+  /** White silhouette of `custom`, drawn under it when the outline is on. */
+  let customOutline: HTMLCanvasElement | null = null;
   let loadSerial = 0;
   let facing: -1 | 1 = 1;
   let dragging = false;
@@ -159,7 +173,6 @@ const BLINK_JITTER_MS = 5200;
   (window as unknown as Record<string, unknown>).__boolooLiteState = () => ({
     skin: config?.skin ?? null,
     customReady: !!custom,
-    cutoutRejected: !!custom?.cutoutRejected,
     bounds: visibleRect,
     action: activeAction?.kind ?? null,
     // The care loop: hunger (0 = full, 100 = starving) and what is on screen.
@@ -1015,18 +1028,43 @@ const BLINK_JITTER_MS = 5200;
     }
   }, 1000);
 
+  /**
+   * A white silhouette of the picture, stamped around it as a sticker outline.
+   *
+   * An imperfect cutout reads as ragged on a busy desktop; tracing it makes the
+   * edge look deliberate instead of accidental. Opt-in via `config.customOutline`.
+   */
+  function buildPetOutline(source: HTMLCanvasElement): HTMLCanvasElement {
+    const outline = document.createElement('canvas');
+    outline.width = source.width;
+    outline.height = source.height;
+    const ctx = outline.getContext('2d');
+    if (ctx) {
+      ctx.drawImage(source, 0, 0);
+      // Keep the picture's own silhouette and recolour it.
+      ctx.globalCompositeOperation = 'source-in';
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, outline.width, outline.height);
+    }
+    return outline;
+  }
+
   async function loadCustom() {
     const serial = ++loadSerial;
     custom = null;
+    customOutline = null;
     if (config?.skin !== 'custom') return;
     try {
       const record = await window.api.getCustomImage();
       if (!record.ok || !record.url) throw new Error(liteT('lite.image.missing'));
       const image = await liteLoadImage(record.url);
-      const prepared = litePrepareImage(image, !!config?.autoCutout);
+      // The automatic cutout already happened in Rust when the picture was
+      // imported, so whatever is on disk is drawn as it is.
+      const prepared = litePrepareImage(image);
       if (serial !== loadSerial) return;
       custom = prepared;
-      (window as unknown as Record<string, unknown>).__petError = prepared.cutoutRejected ? 'cutout rejected; original shown' : null;
+      customOutline = config?.customOutline ? buildPetOutline(prepared.canvas) : null;
+      (window as unknown as Record<string, unknown>).__petError = null;
     } catch (error) {
       if (serial !== loadSerial) return;
       // Always show the built-in cat if the custom image cannot be decoded.
@@ -1037,7 +1075,7 @@ const BLINK_JITTER_MS = 5200;
   function applyConfig(next: AppConfig) {
     const reload = !config || config.skin !== next.skin || config.customImagePath !== next.customImagePath ||
       config.customImageRevision !== next.customImageRevision ||
-      config.autoCutout !== next.autoCutout;
+      config.customOutline !== next.customOutline;
     const reminderChanged = !config || config.standReminderEnabled !== next.standReminderEnabled ||
       config.standReminderMinutes !== next.standReminderMinutes;
     const chimeChanged = !config || config.hourlyChime !== next.hourlyChime;
@@ -1174,7 +1212,17 @@ const BLINK_JITTER_MS = 5200;
     const sizeScale = Math.max(0.65, Math.min(1.6, Number(config?.petScale) || 1));
     // The resting state is deliberately motionless: the pet only animates while it
     // walks (auto-walk or dragging), clicks or sleeps.
-    const bob = action ? 0 : state === 'walk' ? Math.sin(now / 100) * 2.5 : state === 'click' ? -Math.abs(Math.sin(now / 90)) * 3 : 0;
+    //
+    // The walking bob is locked to the *leg clock*: two dips per four-frame
+    // stride, one per diagonal step. It used to be `Math.sin(now / 100)`, a
+    // 628 ms period against a 500 ms cycle, so it drifted through the legs
+    // instead of punctuating them and the pet read as floating rather than
+    // walking.
+    const walkPhase = now / WALK_FRAME_MS;
+    const bob = action ? 0
+      : state === 'walk' ? (0.5 - Math.abs(Math.sin((Math.PI * walkPhase) / 2))) * 5
+      : state === 'click' ? -Math.abs(Math.sin(now / 90)) * 3
+      : 0;
     // The care loop moves the whole pet instead of the sprite frames: up and
     // towards the wand during a lunge, down towards the treat while chewing. The
     // offset is folded into `x`/`y` so `visibleRect` keeps describing where the
@@ -1207,13 +1255,23 @@ const BLINK_JITTER_MS = 5200;
       const width = bounds.width * fit, height = bounds.height * fit * heightScale;
       const x = 150 - width / 2 + shiftX, y = 293 - height + bob - lift + shiftY;
       ctx.imageSmoothingEnabled = true;
+      if (customOutline) {
+        // Stamp the silhouette around the picture for a sticker edge. The
+        // thickness tracks the on-screen size, so it looks the same at any
+        // petScale.
+        const edge = Math.max(1, Math.round(width * 0.012));
+        for (const [dx, dy] of OUTLINE_OFFSETS) {
+          ctx.drawImage(customOutline, bounds.x, bounds.y, bounds.width, bounds.height,
+            x + dx * edge, y + dy * edge, width, height);
+        }
+      }
       ctx.drawImage(custom.canvas, bounds.x, bounds.y, bounds.width, bounds.height, x, y, width, height);
       visibleRect = { x, y, w: width, h: height };
     } else {
       const image = sheets[target];
       if (image?.complete && image.naturalWidth) {
         const cell = image.naturalWidth / 4;
-        const frame = Math.floor(now / (state === 'walk' ? 125 : 220)) % 4;
+        const frame = Math.floor(now / (state === 'walk' ? WALK_FRAME_MS : 220)) % 4;
         // Bulu's resting pose blinks; walking, sleeping and the click answer play
         // their own frames. The blink cell only exists in the bundled sheet, so an
         // imported picture is never asked for one.

@@ -77,6 +77,11 @@ header button { border: 0; background: transparent; }
 .preview-row small { display: block; margin: 6px 0; }
 .note { margin: 8px 0; min-height: 18px; color: #a65a37; font-size: 12px; }
 .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+/* The brush editor is parked behind a <details>: the summary reads as a quiet
+   link so the default import path stays "look, then use". */
+.advanced { margin-top: 4px; }
+.advanced > summary { cursor: pointer; color: #a65a37; font-size: 12px; }
+.advanced > button { margin-top: 8px; }
 .setting { display: block; margin: 12px 0; }
 .setting span { display: flex; justify-content: space-between; margin-bottom: 6px; }
 .setting input { display: block; width: 100%; accent-color: #ea773b; }

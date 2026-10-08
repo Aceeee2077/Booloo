@@ -42,8 +42,11 @@ pub fn defaults() -> Value {
         "customImageMode": "single",
         "customImagePath": "",
         "customImageRevision": 0,
-        "autoCutout": true,
         "cutoutTolerance": 25,
+        // Trace the imported picture with a white silhouette. A cutout that is not
+        // pixel-perfect reads as ragged on a busy desktop; the outline makes the
+        // edge look deliberate. Off by default — Bulu needs no help.
+        "customOutline": false,
         "locale": "zh",
         "theme": "light",
         // The wardrobe's saved equipment: slot -> accessory id (see

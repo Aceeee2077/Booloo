@@ -21,7 +21,7 @@ A small, transparent pet that lives on your desktop — it walks, naps, and chee
 
 ## Download
 
-**Windows 10/11**: [⬇ Download the Booloo 0.6.15 installer](https://github.com/Aceeee2077/Booloo/releases/download/v0.6.15/Booloo_0.6.15_x64-setup.exe) · older builds are on [Releases](https://github.com/Aceeee2077/Booloo/releases)
+**Windows 10/11**: [⬇ Download the Booloo 0.6.16 installer](https://github.com/Aceeee2077/Booloo/releases/download/v0.6.16/Booloo_0.6.16_x64-setup.exe) · older builds are on [Releases](https://github.com/Aceeee2077/Booloo/releases)
 
 There is no macOS installer — build it from source instead, see [macOS](#macos).
 

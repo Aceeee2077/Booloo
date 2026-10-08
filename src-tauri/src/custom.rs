@@ -102,6 +102,19 @@ fn config_tolerance(app: &AppHandle) -> u8 {
         .unwrap_or(cutout::DEFAULT_TOLERANCE)
 }
 
+/// Move the staged file into place untouched (the "use it as it is" path).
+fn install_pending(dir: &Path, pending: &Path) -> Result<PathBuf, String> {
+    let extension = pending
+        .extension()
+        .and_then(|value| value.to_str())
+        .ok_or_else(|| "Invalid image extension".to_string())?;
+    let target = dir.join(format!("custom.{extension}"));
+    install_custom(dir, &target, |path| {
+        fs::rename(pending, path).map_err(|_| "Could not save image".to_string())
+    })?;
+    Ok(target)
+}
+
 fn locale(app: &AppHandle) -> String {
     app.try_state::<crate::config::ConfigState>()
         .and_then(|state| state.get("locale").as_str().map(str::to_string))
@@ -233,6 +246,29 @@ pub async fn custom_mask_preview(
     }
 }
 
+/// Decode a picture and scale it down to the working resolution.
+///
+/// The brush mask, the composited preview and the saved cutout are all built from
+/// this one buffer, so a photo is decoded and resized exactly once whatever ends
+/// up being done with it.
+fn decode_work(bytes: &[u8]) -> Result<image::RgbaImage, &'static str> {
+    let decoded = image::load_from_memory(bytes).map_err(|_| "dialog.unsupportedFormat")?;
+    // Working smaller matters: decoding a 16 MP photo into a second full-size
+    // buffer just to throw 80 % of it away costs a second and a lot of memory.
+    let rgba = decoded.to_rgba8();
+    let (full_w, full_h) = (rgba.width(), rgba.height());
+    let scale = (cutout::WORK_MAX_EDGE as f32 / full_w.max(full_h) as f32).min(1.0);
+    let (width, height) = (
+        ((full_w as f32 * scale).round() as u32).max(1),
+        ((full_h as f32 * scale).round() as u32).max(1),
+    );
+    Ok(if width == full_w && height == full_h {
+        rgba
+    } else {
+        image::imageops::resize(&rgba, width, height, image::imageops::FilterType::Lanczos3)
+    })
+}
+
 /// Decode → segment → encode. Split out of the command so the payload contract
 /// with the editor can be tested without an `AppHandle`.
 fn mask_preview_payload(
@@ -241,23 +277,8 @@ fn mask_preview_payload(
     tolerance: u8,
     feather: u8,
 ) -> Result<Value, &'static str> {
-    let decoded = image::load_from_memory(bytes).map_err(|_| "dialog.unsupportedFormat")?;
-
-    // Segment at the working resolution: the mask is only ever used to composite
-    // the pet, and decoding a 16 MP photo into a second full-size buffer just to
-    // throw 80 % of it away costs a second and a lot of memory.
-    let rgba = decoded.to_rgba8();
-    let (full_w, full_h) = (rgba.width(), rgba.height());
-    let scale = (cutout::WORK_MAX_EDGE as f32 / full_w.max(full_h) as f32).min(1.0);
-    let (width, height) = (
-        ((full_w as f32 * scale).round() as u32).max(1),
-        ((full_h as f32 * scale).round() as u32).max(1),
-    );
-    let work = if width == full_w && height == full_h {
-        rgba
-    } else {
-        image::imageops::resize(&rgba, width, height, image::imageops::FilterType::Lanczos3)
-    };
+    let work = decode_work(bytes)?;
+    let (width, height) = (work.width(), work.height());
     let cut = cutout::segment(work.as_raw(), width, height, tolerance, feather);
     // The mask travels as white RGBA with the keep factor in the alpha channel, so
     // the renderer can stamp it straight into its mask canvas.
@@ -281,15 +302,91 @@ fn mask_preview_payload(
     }))
 }
 
+/// One picture after the single cutout pass: the composited RGBA plus what the
+/// pass decided.
+struct BakedCutout {
+    rgba: Vec<u8>,
+    width: u32,
+    height: u32,
+    applied: bool,
+    rejected: bool,
+    subject: f32,
+}
+
+/// Decode → segment → composite, at the working resolution.
+///
+/// This is the *only* place a photo is keyed for display: the settings preview
+/// and `custom_commit` both go through it, so `cutoutTolerance` in config.json is
+/// the one and only knob and what the preview shows is exactly what gets saved.
+/// A rejected pass hands the picture back completely untouched.
+fn bake_cutout(bytes: &[u8], tolerance: u8, feather: u8) -> Result<BakedCutout, &'static str> {
+    let work = decode_work(bytes)?;
+    let (width, height) = (work.width(), work.height());
+    let cut = cutout::segment(work.as_raw(), width, height, tolerance, feather);
+    let mut rgba = work.into_raw();
+    if cut.applied {
+        // The mask is a keep factor; folding it into the picture's own alpha is
+        // what turns "0 = removed" into a transparent PNG.
+        for (index, keep) in cut.alpha.iter().enumerate() {
+            let alpha = index * 4 + 3;
+            rgba[alpha] = ((rgba[alpha] as u16 * *keep as u16) / 255) as u8;
+        }
+    }
+    Ok(BakedCutout {
+        rgba,
+        width,
+        height,
+        applied: cut.applied,
+        rejected: cut.rejected,
+        subject: cut.subject_ratio,
+    })
+}
+
+/// Live cutout preview for the settings panel.
+///
+/// Runs the very same pass `custom_commit` runs, on the staged picture, and hands
+/// back the composited PNG as a data URL. The panel keys nothing itself, so there
+/// is one segmentation implementation rather than two that can disagree.
 #[tauri::command]
-pub fn custom_commit(app: AppHandle, remove_background: Option<bool>, png: Option<String>) -> Value {
+pub async fn custom_cutout_preview(app: AppHandle, tolerance: Option<u8>) -> Value {
+    let locale = locale(&app);
+    let dir = custom_dir(&app);
+    let Some(pending) = find_pending(&dir) else {
+        return json!({ "ok": false, "error": translate(&locale, "lite.mask.noImage") });
+    };
+    let Ok(bytes) = fs::read(&pending) else {
+        return json!({ "ok": false, "error": translate(&locale, "dialog.readFailed") });
+    };
+    let tolerance = tolerance.map(|value| value.clamp(4, 96)).unwrap_or_else(|| config_tolerance(&app));
+    match bake_cutout(&bytes, tolerance, cutout::DEFAULT_FEATHER) {
+        Ok(baked) => json!({
+            "ok": true,
+            "url": data_url("image/png", &encode_png(&baked.rgba, baked.width, baked.height)),
+            "width": baked.width,
+            "height": baked.height,
+            "subject": baked.subject,
+            "applied": baked.applied,
+            "rejected": baked.rejected,
+            "tolerance": tolerance,
+        }),
+        Err(key) => json!({ "ok": false, "error": translate(&locale, key) }),
+    }
+}
+
+/// `async` on purpose: the "remove the background" path decodes, segments and
+/// re-encodes the picture, and a synchronous command would do that on the main
+/// thread and freeze the panel while a large import is baked.
+#[tauri::command]
+pub async fn custom_commit(app: AppHandle, remove_background: Option<bool>, png: Option<String>) -> Value {
     let dir = custom_dir(&app);
     let remove_background = remove_background.unwrap_or(false);
     let pending = find_pending(&dir);
-    let baked = png.is_some();
+    // What the auto pass actually did, reported back so the panel can say whether
+    // the background came off or the picture was kept whole.
+    let mut cutout_applied = false;
 
     // Two ways in: the editor hands over the PNG it composited from the brushed
-    // mask, or the settings preview confirms the pending file untouched.
+    // mask, or the settings preview confirms the staged file.
     let target = if let Some(payload) = png {
         let Ok(composed) = decode_image_payload(&payload) else {
             return json!({ "ok": false, "error": "Invalid image data" });
@@ -309,20 +406,40 @@ pub fn custom_commit(app: AppHandle, remove_background: Option<bool>, png: Optio
         target
     } else {
         let Some(pending) = pending else { return json!({ "ok": false, "error": "No preview image" }); };
-        let Some(extension) = pending.extension().and_then(|value| value.to_str()) else {
-            return json!({ "ok": false, "error": "Invalid image extension" });
+        // "Remove the background" runs the one Rust pass and bakes the result, so
+        // the stored PNG already carries its transparency and nothing keys it a
+        // second time when the pet window loads it.
+        let baked = if remove_background {
+            fs::read(&pending)
+                .ok()
+                .and_then(|bytes| bake_cutout(&bytes, config_tolerance(&app), cutout::DEFAULT_FEATHER).ok())
+                .filter(|result| result.applied)
+        } else {
+            None
         };
-        let target = dir.join(format!("custom.{extension}"));
-        if let Err(error) = install_custom(&dir, &target, |path| {
-            fs::rename(&pending, path).map_err(|_| "Could not save image".to_string())
-        }) {
-            return json!({ "ok": false, "error": error });
+        match baked {
+            Some(result) => {
+                cutout_applied = true;
+                let target = dir.join("custom.png");
+                if fs::create_dir_all(&dir).is_err() {
+                    return json!({ "ok": false, "error": translate(&locale(&app), "dialog.copyFailed") });
+                }
+                if let Err(error) = install_custom(&dir, &target, |path| {
+                    fs::write(path, encode_png(&result.rgba, result.width, result.height))
+                        .map_err(|_| "Could not save image".to_string())
+                }) {
+                    return json!({ "ok": false, "error": error });
+                }
+                target
+            }
+            // No usable background to remove (or an undecodable file): keep the
+            // original picture rather than replacing it with an empty canvas.
+            None => match install_pending(&dir, &pending) {
+                Ok(target) => target,
+                Err(error) => return json!({ "ok": false, "error": error }),
+            },
         }
-        target
     };
-    // A composited PNG already carries its transparency, so it must never be keyed
-    // a second time when the pet window loads it.
-    let auto_cutout = remove_background && !baked;
     if let Some(config) = app.try_state::<crate::config::ConfigState>() {
         let revision = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -330,14 +447,19 @@ pub fn custom_commit(app: AppHandle, remove_background: Option<bool>, png: Optio
             .unwrap_or(0);
         let merged = config.apply(&json!({
             "skin": "custom", "currentPetId": "custom", "customImageMode": "single",
-            "customImagePath": target.to_string_lossy(), "customImageRevision": revision,
-            "autoCutout": auto_cutout
+            "customImagePath": target.to_string_lossy(), "customImageRevision": revision
         }));
         config.persist();
         let _ = tauri::Emitter::emit(&app, "config-changed", merged);
         let _ = tauri::Emitter::emit(&app, "custom-image-changed", ());
     }
-    json!({ "ok": true, "path": target.to_string_lossy(), "url": inline_image(&target), "mode": "single" })
+    json!({
+        "ok": true,
+        "path": target.to_string_lossy(),
+        "url": inline_image(&target),
+        "mode": "single",
+        "cutoutApplied": cutout_applied,
+    })
 }
 
 #[tauri::command]
@@ -423,6 +545,34 @@ mod tests {
         let payload = mask_preview_payload(&encode_png(&rgba, 1700, 40), None, 25, 1).unwrap();
         assert_eq!(payload["width"], 1600);
         assert_eq!(payload["height"], 38);
+    }
+
+    /// There is exactly one keying path now: the preview the panel shows and the
+    /// PNG `custom_commit` writes both come out of `bake_cutout`.
+    #[test]
+    fn bake_cutout_is_the_single_keying_pass() {
+        let mut rgba = vec![255u8; 64 * 64 * 4];
+        for y in 16..48 {
+            for x in 16..48 {
+                let offset = (y * 64 + x) * 4;
+                rgba[offset..offset + 4].copy_from_slice(&[220, 90, 110, 255]);
+            }
+        }
+        let baked = bake_cutout(&encode_png(&rgba, 64, 64), 25, 0).unwrap();
+        assert!(baked.applied);
+        assert!(!baked.rejected);
+        assert_eq!((baked.width, baked.height), (64, 64));
+        assert_eq!(baked.rgba[(32 * 64 + 32) * 4 + 3], 255, "the subject keeps its alpha");
+        assert_eq!(baked.rgba[3], 0, "the background is transparent");
+
+        // A picture with nothing to remove comes back fully opaque, so the panel
+        // can tell the user the original was kept.
+        let flat = bake_cutout(&encode_png(&vec![255u8; 64 * 64 * 4], 64, 64), 25, 0).unwrap();
+        assert!(flat.rejected);
+        assert!(flat.rgba.iter().skip(3).step_by(4).all(|alpha| *alpha == 255));
+
+        // Garbage is reported, never panicked on.
+        assert!(bake_cutout(b"not an image", 25, 0).is_err());
     }
 
     #[test]

@@ -81,6 +81,8 @@
     discardCustomImage: () => call<void>('custom_discard'),
     maskPreview: (tolerance?: number, feather?: number) =>
       call<MaskPreviewResult>('custom_mask_preview', { tolerance, feather }),
+    cutoutPreview: (tolerance?: number) =>
+      call<CutoutPreviewResult>('custom_cutout_preview', { tolerance }),
     openMaskEditor: () => send('open_mask_editor'),
     closeMaskEditor: () => send('close_mask_editor'),
     onMaskReload: (callback: () => void) => subscribe<void>('mask-reload', callback),

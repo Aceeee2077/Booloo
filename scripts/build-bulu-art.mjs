@@ -36,6 +36,7 @@ const actionSourceDir = path.join(sourceDir, 'bulu-actions');
 const sheetOutput = path.join(root, 'src', 'assets', 'animated-pets', 'bulu.png');
 const actionOutput = path.join(root, 'src', 'assets', 'animated-pets', 'bulu-actions.webp');
 const actionPreview = path.join(sourceDir, 'bulu-actions-preview.png');
+const walkPreview = path.join(sourceDir, 'bulu-walk-preview.png');
 
 /**
  * Atlas rows, in the order the renderer indexes them. Keep in sync with
@@ -50,6 +51,22 @@ const ACTIONS = [
 ];
 /** The static default pose, taken from frame 0 of this 4x4 sheet. */
 const IDLE_SHEET = '默认状态';
+/**
+ * Where the walking row comes from, and which cells of that sheet are played.
+ *
+ * `走路` is a dedicated sixteen-cell stride sheet and the preferred source, but
+ * it is *not* in use: every one of its cells is the same mid-stride pose with all
+ * four feet planted — there is no swing phase anywhere in the sheet, so looping
+ * four of them reads as the pet gliding rather than walking (measured: the
+ * lowest opaque pixel moves by under 5% between cells).
+ *
+ * Until a sheet with a real stride arrives, the row falls back to the four
+ * walking poses in the default-pose sheet — what shipped before this change, and
+ * the best of the two: its front legs visibly stride, its hind pair barely does.
+ *
+ * To switch to the dedicated sheet, use `{ sheet: '走路', order: [0, 1, 2, 3] }`.
+ */
+const WALK_SOURCE = { sheet: IDLE_SHEET, order: [4, 5, 6, 7] };
 
 const COLS = 4;
 const ROWS = 4;
@@ -67,6 +84,32 @@ const ACTION_ART_WIDTH = 176;
 const ACTION_ART_HEIGHT = 178;
 /** Distance from the cell bottom the action art sits on, so poses do not jump. */
 const ART_BASELINE = 4;
+/**
+ * The walking art is much wider than it is tall, so it gets its own box. The
+ * numbers keep the cat the same on-screen size and height as the walk row this
+ * replaces: ~190 px wide inside the 192 px cell, with its feet 13 px above the
+ * cell bottom.
+ */
+const WALK_ART_WIDTH = 190;
+const WALK_ART_HEIGHT = 184;
+const WALK_BASELINE = 13;
+/**
+ * Background key tolerance for the walk sheet, far below the actions' 34.
+ *
+ * The action sheets carry a stroked outline that stops the border flood fill.
+ * This art has none and its white fur sits directly against the white ground, so
+ * at 34 the fill walks straight through the fur and punches holes under the chin
+ * — which read as black fur on a dark desktop.
+ */
+const WALK_KEY_TOLERANCE = 14;
+/**
+ * Outer band to drop from the walk silhouette, in source pixels. It is the
+ * antialiased mix of fur and white ground; removing it, and letting
+ * `cleanSilhouette` bleed interior colour into what is left, is what keeps the
+ * pet from wearing a white halo. There is no stroked contour here, so the band
+ * is thin.
+ */
+const WALK_ERODE = 2;
 
 // ---------- shared background/geometry helpers ----------
 
@@ -524,11 +567,140 @@ function contactSheet({ height, rows, cols, labels, thumb, labelWidth }) {
     `<rect width="100%" height="100%" fill="#f4f6f9"/>${lines.join('')}</svg>`;
 }
 
+/**
+ * The walking row, rebuilt from its own sheet.
+ *
+ * Same shape as `actionFrames`: an opaque sheet is keyed from its borders, every
+ * cell keeps only its subject, the cut edge is bled so no white fringe survives
+ * compositing over a wallpaper, and all frames share one crop so the stride
+ * inside the loop is not re-centred frame by frame. Walking is far wider than it
+ * is tall, so it gets its own box instead of the action one.
+ *
+ * It also writes `bulu-walk-preview.png`: the sixteen source cells after keying,
+ * left to right and top to bottom, which is exactly how `WALK_SOURCE.order`
+ * indexes them.
+ */
+async function walkRow(reference) {
+  const file = resolveActionSource(WALK_SOURCE.sheet);
+  const { data: raw, info } = await sharp(file).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  const opaqueShare = visibleBounds(raw, info.width, info.height).opaque / (info.width * info.height);
+  let source = raw;
+  if (opaqueShare > 0.97) {
+    const cut = keyOutBackground(raw, info.width, info.height, WALK_KEY_TOLERANCE);
+    if (cut.removed < cut.total * 0.05) {
+      throw new Error(`${path.basename(file)}: the background keying removed almost nothing`);
+    }
+    source = cut.buffer;
+  }
+
+  const cells = gridCells(info.width, info.height, COLS, ROWS);
+  const staged = [];
+  for (const box of cells) {
+    const { data, info: cellInfo } = await sharp(source, {
+      raw: { width: info.width, height: info.height, channels: 4 },
+    }).extract(box).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    keepLargestComponent(data, cellInfo.width, cellInfo.height);
+    cleanSilhouette(data, cellInfo.width, cellInfo.height, WALK_ERODE, CONTOUR_FEATHER);
+    staged.push({ data, info: cellInfo });
+  }
+
+  const chosen = WALK_SOURCE.order.map((index) => {
+    const cell = staged[index];
+    if (!cell) throw new Error(`${WALK_SOURCE.sheet}: there is no cell ${index}`);
+    return cell;
+  });
+  let union = null;
+  for (const cell of chosen) {
+    const visible = visibleBounds(cell.data, cell.info.width, cell.info.height);
+    if (visible.empty) throw new Error(`${WALK_SOURCE.sheet}: a chosen cell is empty`);
+    const right = visible.left + visible.width - 1;
+    const bottom = visible.top + visible.height - 1;
+    union = {
+      left: Math.min(union?.left ?? visible.left, visible.left),
+      top: Math.min(union?.top ?? visible.top, visible.top),
+      right: Math.max(union?.right ?? right, right),
+      bottom: Math.max(union?.bottom ?? bottom, bottom),
+    };
+  }
+  const cellWidth = Math.min(...cells.map((cell) => cell.width));
+  const cellHeight = Math.min(...cells.map((cell) => cell.height));
+  const crop = {
+    left: Math.max(0, Math.min(union.left, cellWidth - 1)),
+    top: Math.max(0, Math.min(union.top, cellHeight - 1)),
+  };
+  crop.width = Math.max(1, Math.min(union.right - crop.left + 1, cellWidth - crop.left));
+  crop.height = Math.max(1, Math.min(union.bottom - crop.top + 1, cellHeight - crop.top));
+
+  const frames = [];
+  for (const cell of chosen) {
+    frames.push(await sharp(cell.data, { raw: cell.info }).extract(crop)
+      .resize({ width: WALK_ART_WIDTH, height: WALK_ART_HEIGHT, fit: 'inside', kernel: sharp.kernel.lanczos3 })
+      .sharpen({ sigma: 0.7, m1: 0.4, m2: 1.5, x1: 2, y2: 12, y3: 20 })
+      .raw().toBuffer({ resolveWithObject: true }));
+  }
+
+  // One tone map for the whole row, measured after keying, so the pet does not
+  // change colour the moment it starts to walk.
+  const lumas = [];
+  const sats = [];
+  for (const { data } of frames) {
+    for (let p = 0; p < data.length / 4; p++) {
+      if (data[p * 4 + 3] < 64) continue;
+      lumas.push(pixelLuma(data, p));
+      sats.push(pixelSaturation(data, p));
+    }
+  }
+  lumas.sort((a, b) => a - b);
+  const meanSaturation = sats.reduce((sum, value) => sum + value, 0) / Math.max(1, sats.length);
+  applyStyle(frames, toneLut({ lumas }, reference, TONE_STRENGTH),
+    1 + (reference.meanSaturation / Math.max(1e-3, meanSaturation) - 1) * SATURATION_STRENGTH);
+
+  // The picker: every source cell, keyed and cropped to its own silhouette, laid
+  // out in reading order so the stride (if the sheet really is one) is easy to
+  // follow. `WALK_ORDER` indexes exactly this sequence.
+  const thumb = 300;
+  const previewCols = 8;
+  const labelWidth = 90;
+  const labels = Array.from({ length: Math.ceil(FRAMES / previewCols) }, (_, row) =>
+    `#${row * previewCols}..${row * previewCols + previewCols - 1}`);
+  const previewPieces = [{
+    input: Buffer.from(contactSheet({
+      height: labels.length * thumb, rows: labels.length, cols: previewCols, labels, thumb, labelWidth,
+    })),
+    left: 0,
+    top: 0,
+  }];
+  for (const [index, cell] of staged.entries()) {
+    const visible = visibleBounds(cell.data, cell.info.width, cell.info.height);
+    if (visible.empty) continue;
+    const small = await sharp(cell.data, { raw: cell.info })
+      .extract({ left: visible.left, top: visible.top, width: visible.width, height: visible.height })
+      .resize({ width: thumb - 16, height: thumb - 36, fit: 'inside' }).png().toBuffer();
+    const meta = await sharp(small).metadata();
+    previewPieces.push({
+      input: small,
+      left: labelWidth + (index % previewCols) * thumb + Math.floor((thumb - meta.width) / 2),
+      top: Math.floor(index / previewCols) * thumb + 26,
+    });
+  }
+  await sharp({ create: { width: labelWidth + previewCols * thumb, height: labels.length * thumb, channels: 4, background: '#00000000' } })
+    .composite(previewPieces).png().toFile(walkPreview);
+
+  const biggest = frames.reduce((size, { data, info: frameInfo }) => {
+    const visible = visibleBounds(data, frameInfo.width, frameInfo.height);
+    return { width: Math.max(size.width, visible.width), height: Math.max(size.height, visible.height) };
+  }, { width: 0, height: 0 });
+  console.log(`✓ ${path.relative(root, walkPreview)}  （${WALK_SOURCE.sheet} 的 ${FRAMES} 格，行优先编号；本行取 ${WALK_SOURCE.order.join(', ')}）`);
+  console.log(`  走路帧: 裁切 ${crop.width}x${crop.height} → 最大 ${biggest.width}x${biggest.height} px（格 ${CELL}）`);
+  return { frames };
+}
+
 // ---------- 1. the base sheet (idle / walk / sleep / click) ----------
 
-async function buildSheet() {
+async function buildSheet(reference) {
   // Sleep / click have no matching animation sources yet, so only those two
-  // rows are carried over. Idle and walking use the original default sheet.
+  // rows are carried over. Idle comes from the default pose, walking from its own
+  // stride sheet.
   const previous = await sharp(sheetOutput).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
   const previousCell = Math.round(previous.info.width / COLS);
   const composites = [];
@@ -545,22 +717,22 @@ async function buildSheet() {
     }
   }
 
+  // Row 1 is the walking cycle, which has a sheet of its own (see `walkRow`).
+  const walk = await walkRow(reference);
+  for (const [index, frame] of walk.frames.entries()) {
+    composites.push({
+      input: await sharp(frame.data, { raw: frame.info }).png().toBuffer(),
+      left: index * CELL + Math.floor((CELL - frame.info.width) / 2),
+      top: CELL + Math.max(0, CELL - WALK_BASELINE - frame.info.height),
+    });
+  }
+
   // Idle is a *still* pose: the pet must not move on its own, so all four frames
   // hold the same art (frame 0 of the default-pose sheet). Only walking — auto-walk
   // or dragging — plays an animation.
   const idleSheet = await sharp(resolveActionSource(IDLE_SHEET)).ensureAlpha()
     .raw().toBuffer({ resolveWithObject: true });
   const cells = gridCells(idleSheet.info.width, idleSheet.info.height, COLS, ROWS);
-  for (let col = 0; col < COLS; col++) {
-    const { data, info } = await sharp(idleSheet.data, { raw: idleSheet.info })
-      .extract(cells[COLS + col]).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
-    keepLargestComponent(data, info.width, info.height);
-    composites.push({
-      input: await sharp(data, { raw: info }).resize(CELL, CELL, { kernel: sharp.kernel.lanczos3 }).png().toBuffer(),
-      left: col * CELL,
-      top: CELL,
-    });
-  }
   const first = cells[0];
   const { data, info: frameInfo } = await sharp(idleSheet.data, { raw: idleSheet.info })
     .extract(first).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
@@ -761,7 +933,7 @@ async function buildActions(reference) {
   }
 }
 
-await buildSheet();
 // The default pose doubles as the idle art, so it *is* the style to match.
 const reference = { ...await measureStyle(resolveActionSource(IDLE_SHEET)), source: `${IDLE_SHEET}（默认状态）` };
+await buildSheet(reference);
 await buildActions(reference);
