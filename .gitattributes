@@ -1,0 +1,11 @@
+# Shell scripts have to keep LF endings. With core.autocrlf=true on Windows,
+# a CRLF checkout of scripts/setup-github-metadata.sh fails on macOS and Linux
+# with "bad interpreter: /usr/bin/env bash^M".
+*.sh text eol=lf
+
+# Keep the image assets binary so no EOL conversion is ever attempted on them.
+*.png binary
+*.ico binary
+*.icns binary
+*.webp binary
+*.gif binary
