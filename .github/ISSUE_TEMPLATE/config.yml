@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Share your pet, a skin idea, or ask a usage question
+    url: https://github.com/Aceeee2077/Booloo/discussions
+    about: Screenshots of your imported pet, art and skin ideas, and "how do I…" questions belong in Discussions. The issue tracker is for reproducible bugs and concrete feature requests.
+  - name: Download the latest release
+    url: https://github.com/Aceeee2077/Booloo/releases/latest
+    about: Windows installer and macOS .dmg builds.

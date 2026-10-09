@@ -1,0 +1,103 @@
+name: Build
+
+# Release-free builds of every supported platform, plus a downloadable artifact
+# on every pull request.
+#
+# The Release workflow only runs on a tag and publishes immediately, so this is
+# the safe way to find out whether a change still compiles and packages on all
+# three platforms. It is also the only place Linux bundles exist: no Linux
+# installer is published yet, so the AppImage and deb below are what a Linux
+# user has to grab.
+#
+# Updater artifacts are disabled here - signing them needs
+# TAURI_SIGNING_PRIVATE_KEY, which a check build should not require.
+#
+# Cutting a release:
+#   1. bump the version in package.json, src-tauri/tauri.conf.json and
+#      src-tauri/Cargo.toml (they have to agree);
+#   2. commit and push;
+#   3. git tag vX.Y.Z && git push origin vX.Y.Z  - release.yml does the rest.
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches: [Tauri2.0-version]
+
+concurrency:
+  # A newer push makes the running build pointless; cancel it instead of queueing.
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: ${{ matrix.label }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: Windows x64
+            slug: windows
+            os: windows-latest
+            bundles: nsis
+          - label: macOS
+            slug: macos
+            os: macos-latest
+            bundles: app,dmg
+          # 22.04 rather than ubuntu-latest: it is the oldest runner GitHub still
+          # supports, so the AppImage keeps working on older distributions and
+          # needs the lowest glibc of the pair.
+          - label: Linux x64
+            slug: linux
+            os: ubuntu-22.04
+            bundles: appimage,deb
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ startsWith(matrix.os, 'macos') && 'aarch64-apple-darwin' || '' }}
+
+      # Tauri on Linux needs WebKitGTK plus the tray and packaging libraries;
+      # the macOS and Windows runners already have everything they need.
+      - name: Install Linux system dependencies
+        if: matrix.slug == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libxdo-dev \
+            patchelf \
+            build-essential \
+            libssl-dev
+
+      - name: Cache the Rust build
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Build (unsigned)
+        shell: bash
+        run: npx tauri build --bundles ${{ matrix.bundles }} --config '{"bundle":{"createUpdaterArtifacts":false}}'
+
+      - name: Upload the bundles
+        uses: actions/upload-artifact@v4
+        with:
+          name: booloo-${{ matrix.slug }}
+          path: src-tauri/target/release/bundle/**
+          if-no-files-found: error
