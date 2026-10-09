@@ -169,7 +169,7 @@ src-tauri/         Rust 后端：窗口、托盘、配置、自定义图片、i1
   load.rs          机器状态：CPU / 内存 / 电量（Windows 调 kernel32，macOS 读 1 分钟负载）
 src/assets/        动画素材与品牌图标（精灵表和图标由 npm run build 生成）
 scripts/           构建、资源生成与测试脚本（build-bulu-art.mjs 组装图集）
-docs/              README 配图、演示 GIF，以及替换它的 docs/RECORDING.md
+docs/              README 配图与演示 GIF
 ```
 
 ## 社区

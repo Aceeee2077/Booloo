@@ -83,23 +83,25 @@ NSIS 安装钩子保留旧的内部安装注册键，使新版能覆盖原有安
 
 ## Releases / 发布流程
 
-Releases are cut from a tag; nobody uploads installers by hand.
-发版完全由 tag 驱动，不需要手动上传安装包。
+Releases are cut from a tag; nobody uploads installers by hand. There is no
+CHANGELOG in the repository — the release notes are written in
+`.github/workflows/release.yml` and published with the tag.
+发版完全由 tag 驱动，不需要手动上传安装包。仓库里没有 CHANGELOG，发版说明写在
+`.github/workflows/release.yml` 里，随 tag 一起发布。
 
 1. Bump the version in **all three** places, which have to agree:
    `package.json`, `src-tauri/tauri.conf.json` and `src-tauri/Cargo.toml`
    (plus the two `version` fields in `package-lock.json`).
    / 把版本号在**三处**同步改掉：`package.json`、`src-tauri/tauri.conf.json`、
    `src-tauri/Cargo.toml`（以及 `package-lock.json` 里的两个 `version` 字段）。
-2. Add an entry to `CHANGELOG.md`. / 在 `CHANGELOG.md` 里补一条。
-3. Commit, push, then tag and push the tag:
+2. Commit, push, then tag and push the tag:
    / 提交并推送，然后打 tag 并推送：
 
    ```bash
    git tag v0.7.0 && git push origin v0.7.0
    ```
 
-4. `.github/workflows/release.yml` builds Windows and macOS, signs the updater
+3. `.github/workflows/release.yml` builds Windows and macOS, signs the updater
    artifacts, and publishes the release with `latest.json` and the `.sig` files —
    so the in-app updater picks it up on its own. Signing needs the
    `TAURI_SIGNING_PRIVATE_KEY` / `..._PASSWORD` secrets; the workflow fails early
@@ -108,7 +110,7 @@ Releases are cut from a tag; nobody uploads installers by hand.
    `latest.json` 与 `.sig` 一起发布，应用内的自动更新会自动接上。签名需要
    `TAURI_SIGNING_PRIVATE_KEY` 与对应密码两个 secret，缺失时 workflow 会在前期
    直接报错说明。
-5. Linux has no published bundle yet — the **Build** workflow uploads AppImage and
+4. Linux has no published bundle yet — the **Build** workflow uploads AppImage and
    deb artifacts on every run instead.
    / Linux 目前没有正式发布包，改由 **Build** workflow 在每次运行时上传
    AppImage / deb 构建产物。
