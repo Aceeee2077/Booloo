@@ -315,7 +315,7 @@ for (const [file, pattern] of [
   assert.match(readFileSync(join(process.cwd(), file), 'utf8'), pattern, `${file} lost its macOS wiring`);
 }
 assert.ok(existsSync(join(process.cwd(), 'src', 'assets', 'tray-mac.png')), 'the macOS tray template is missing');
-assert.ok(existsSync(join(process.cwd(), '.github', 'workflows', 'build-check.yml')),
+assert.ok(existsSync(join(process.cwd(), '.github', 'workflows', 'build.yml')),
   'the release-free build check workflow is missing');
 
 // A typo in a key renders as the key itself, so both sides of the lookup are checked.
@@ -353,21 +353,26 @@ assert.match(settingsCss, /header\s*\{[^}]*border-radius:\s*20px\s+20px\s+0\s+0;
 assert.match(settingsCss, /\.panel\s*\{[^}]*padding:\s*0\s+0\s+24px;/);
 assert.match(settingsCss, /\.panel\s*\{[^}]*margin:\s*0;/);
 
-// The two READMEs share a promo GIF but ship their own static screenshots. The
-// English one pointed at the Chinese panel for a while, which this guards against. Each of
-// them also has to offer a way across to the other language up in the header,
-// where a reader actually lands — a footer link alone is easy to miss.
+// The two READMEs — English at the root, Chinese beside it — share the demo GIF
+// and the promo GIF link, but each embeds its own static screenshots: the
+// English one pointed at the Chinese panel for a while, which this guards
+// against. Both also have to offer a way across to the other language up in the
+// header, where a reader actually lands — a footer link alone is easy to miss.
 for (const [readme, expected, other] of [
-  ['README.md', ['docs/screenshots/lightweight-pet.png', 'docs/screenshots/lightweight-settings.png'], './README-EN.md'],
-  ['README-EN.md', ['docs/screenshots/lightweight-pet-en.png', 'docs/screenshots/lightweight-settings-en.png'], './README.md'],
+  ['README.md', ['docs/screenshots/lightweight-pet-en.png', 'docs/screenshots/lightweight-settings-en.png'], './README.zh-CN.md'],
+  ['README.zh-CN.md', ['docs/screenshots/lightweight-pet.png', 'docs/screenshots/lightweight-settings.png'], './README.md'],
 ]) {
   const markdown = readFileSync(join(process.cwd(), readme), 'utf8');
   const header = markdown.slice(0, markdown.indexOf('\n## '));
   assert.ok(header.includes(`](${other})`),
     `${readme} should link to ${other} above the first section`);
+  assert.ok(markdown.includes('](docs/demo.gif)'),
+    `${readme} should embed the shared demo GIF`);
+  assert.ok(markdown.includes('](docs/screenshots/booloo-promo.gif)'),
+    `${readme} should link the shared promo GIF`);
   const images = [...markdown.matchAll(/!\[[^\]]*\]\((docs\/screenshots\/[^)]+)\)/g)].map(match => match[1]);
-  assert.deepEqual(images, ['docs/screenshots/booloo-promo.gif', ...expected],
-    `${readme} should embed the shared promo GIF and the ${readme.includes('-EN') ? 'English' : 'Chinese'} screenshots`);
+  assert.deepEqual(images, expected,
+    `${readme} should embed the ${readme === 'README.md' ? 'English' : 'Chinese'} screenshots`);
   for (const image of images) assert.ok(existsSync(join(process.cwd(), image)), `${image} is missing`);
 }
 
