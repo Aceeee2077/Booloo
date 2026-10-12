@@ -109,9 +109,11 @@
     onUpdateState: (callback: (state: UpdateState) => void) => subscribe<UpdateState>('update-state', callback),
     dragBegin: (visualBounds?: PetBox) => send('drag_begin', { visualBounds: visualBounds ?? bounds() }),
     dragMove: () => send('drag_move'),
-    dragEnd: (visualBounds?: PetBox) => send('drag_end', { visualBounds: visualBounds ?? bounds() }),
+    // `dock: false` on a flick: the throw must start from the cursor's position, so
+    // the drop is not allowed to dock the pet to the screen edge first.
+    dragEnd: (visualBounds?: PetBox, dock = true) => send('drag_end', { visualBounds: visualBounds ?? bounds(), dock }),
     getWindowPosition: () => call<[number, number]>('window_position'),
-    moveWindowTo: (x: number, y: number) => call<void>('window_move_to', { x: Math.round(x), y: Math.round(y), visualBounds: bounds() }),
+    moveWindowTo: (x: number, y: number) => call<void>('window_move_to', { x: Math.round(x), y: Math.round(y) }),
     getWindowCenterTarget: (visualBounds?: PetBox) => call<[number, number]>('window_center_target', { visualBounds: visualBounds ?? bounds() }),
     autoMoveStart,
     autoMoveStop,

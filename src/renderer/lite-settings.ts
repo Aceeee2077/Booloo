@@ -13,6 +13,7 @@
   const size = $<HTMLInputElement>('pet-size');
   const opacity = $<HTMLInputElement>('opacity');
   const autoMove = $<HTMLInputElement>('auto-move');
+  const snapToEdge = $<HTMLInputElement>('snap-to-edge');
   const customOutline = $<HTMLInputElement>('custom-outline');
   const fileDropReactions = $<HTMLInputElement>('file-drop-reactions');
   const standReminder = $<HTMLInputElement>('stand-reminder');
@@ -791,6 +792,7 @@
     $<HTMLOutputElement>('size-value').textContent = `${Math.round(Number(size.value) * 100)}%`;
     $<HTMLOutputElement>('opacity-value').textContent = `${Math.round(Number(opacity.value) * 100)}%`;
     autoMove.checked = !!cfg.autoMove;
+    snapToEdge.checked = cfg.snapToEdge === true;
     customOutline.checked = cfg.customOutline === true;
     fileDropReactions.checked = cfg.fileDropReactions !== false;
     const minutes = reminderMinutes(cfg);
@@ -929,6 +931,7 @@
   opacity.addEventListener('change', () => void window.api.setConfig({ opacity: Number(opacity.value) }));
   language.addEventListener('change', () => void window.api.setConfig({ locale: language.value === 'en' ? 'en' : 'zh' }));
   autoMove.addEventListener('change', () => void window.api.setConfig({ autoMove: autoMove.checked }));
+  snapToEdge.addEventListener('change', () => void window.api.setConfig({ snapToEdge: snapToEdge.checked }));
   customOutline.addEventListener('change', () => void window.api.setConfig({ customOutline: customOutline.checked }));
   fileDropReactions.addEventListener('change', () => void window.api.setConfig({ fileDropReactions: fileDropReactions.checked }));
   standReminder.addEventListener('change', saveStandReminder);

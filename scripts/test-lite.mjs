@@ -232,6 +232,31 @@ assert.match(readFileSync(join(process.cwd(), 'src-tauri', 'src', 'tray.rs'), 'u
 assert.match(readFileSync(join(process.cwd(), 'src-tauri', 'src', 'lib.rs'), 'utf8'), /tray::pet_care/);
 assert.match(readFileSync(join(process.cwd(), 'src', 'renderer', 'lite-app.ts'), 'utf8'), /onPetCare/);
 
+// Edge snapping: the rule lives in Rust (it needs the work area and the display
+// scale), so what the page owes is the switch that turns it on and the landing move
+// that asks for the magnet. Every link is asserted, because the setting spent a
+// while on disk — config, i18n label and snap code all present — with nothing in the
+// UI to reach it.
+assert.match(readFileSync(join(renderer, 'settings.html'), 'utf8'), /id="snap-to-edge"/,
+  'settings.html needs the snap-to-edge toggle');
+assert.match(readFileSync(join(renderer, 'lite-settings.js'), 'utf8'), /snapToEdge/,
+  'the snap-to-edge toggle has to write the config');
+const windowRs = readFileSync(join(process.cwd(), 'src-tauri', 'src', 'window.rs'), 'utf8');
+assert.match(windowRs, /snap_if_enabled\(&window, anchor\.visual_bounds/,
+  'a drag has to apply the magnet while the button is still down');
+assert.match(windowRs, /fn snap_position/, 'the snap rule has to stay a shared pure function');
+// …and the throw stays out of it. A flick flies on `window_move_to`, which clamps the
+// whole window and never asks for the magnet, and the release tells Rust not to dock.
+// Both halves matter: snapping the landing would move a pet that was never dragged.
+assert.match(windowRs, /pub fn window_move_to\([\s\S]{0,400}?clamp_whole_window/,
+  'the flight move must not depend on the snap setting');
+assert.doesNotMatch(windowRs, /snapIfEnabled|window_move_and_snap/,
+  'the throw path must not acquire a snapping variant later');
+const liteApp = readFileSync(join(process.cwd(), 'src', 'renderer', 'lite-app.ts'), 'utf8');
+assert.match(liteApp, /dragEnd\(visibleRect, !velocity\)/,
+  'a flick has to release without letting the drop dock the pet');
+assert.doesNotMatch(liteApp, /moveWindowAndSnap/, 'the landing move must stay a plain move');
+
 for (const page of ['index.html', 'settings.html', 'mask.html']) {
   const html = readFileSync(join(renderer, page), 'utf8');
   assert.match(html, /lite-api\.js/);

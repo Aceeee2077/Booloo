@@ -53,10 +53,25 @@ fn config_bool(window: &WebviewWindow, key: &str, fallback: bool) -> bool {
 /// dragged off-screen. By default that area is the current monitor's work area (the
 /// taskbar is respected); with "cross monitors" enabled it becomes the bounding box
 /// of every monitor instead.
+///
+/// With "snap to edges" on, only the pet's *visible* box has to stay inside, which is
+/// what lets it come to rest flush against a screen edge with its transparent padding
+/// hanging past it.
 fn clamp_to_monitor(window: &WebviewWindow, x: i32, y: i32, visual: Option<VisualBounds>) -> (i32, i32) {
     let stay_on_one = config_bool(window, "stayOnOneDisplay", true);
     let visual = if config_bool(window, "snapToEdge", false) { visual } else { None };
     clamp_to(window, x, y, !stay_on_one, visual)
+}
+
+/// The clamp the throw uses, matching a drag with the magnet switched *off*.
+///
+/// A flick is not a placement: it has to fly, bounce and settle exactly the same way
+/// whether or not "snap to edges" is on, so the flight's own geometry stays out of the
+/// setting's reach. The bounds the renderer bounces off come from
+/// `window_flight_bounds`, which is what actually shapes the trajectory.
+fn clamp_whole_window(window: &WebviewWindow, x: i32, y: i32) -> (i32, i32) {
+    let all_monitors = !config_bool(window, "stayOnOneDisplay", true);
+    clamp_to(window, x, y, all_monitors, None)
 }
 
 /// Bounding rectangle the pet must stay inside: either its current monitor's work
@@ -130,9 +145,102 @@ fn clamp_position(x: i32, y: i32, area: (i32, i32, i32, i32), visible: (i32, i32
     (x.clamp(min_x, max_x), y.clamp(min_y, max_y))
 }
 
+/// Pull one axis flush when it already sits within `threshold` of a side.
+fn snap_axis(value: i32, min: i32, max: i32, threshold: i32) -> i32 {
+    let value = value.clamp(min, max);
+    if value - min <= threshold {
+        min
+    } else if max - value <= threshold {
+        max
+    } else {
+        value
+    }
+}
+
+/// Where a position ends up once the pet is "docked" to the sides it is close to.
+///
+/// Pure on purpose: the magnet runs on every frame of a drag and again when the pet is
+/// dropped, and a rule stated once can be tested without a window. `limits` are the
+/// four numbers from `position_limits`, i.e. already accounting for the pet's
+/// transparent padding.
+fn snap_position(x: i32, y: i32, limits: (i32, i32, i32, i32), threshold: i32) -> (i32, i32) {
+    let (min_x, min_y, max_x, max_y) = limits;
+    (
+        snap_axis(x, min_x, max_x, threshold),
+        snap_axis(y, min_y, max_y, threshold),
+    )
+}
+
+/// How far (in physical pixels at 100% scaling) the pet may sit from a work-area side
+/// and still be pulled flush against it. The magnet grows with the display scale so it
+/// feels the same on a 200% screen.
+const SNAP_DISTANCE: f64 = 28.0;
+
+/// The magnet distance in physical pixels for the window's display.
+fn snap_threshold(window: &WebviewWindow) -> i32 {
+    (SNAP_DISTANCE * window.scale_factor().unwrap_or(1.0)).round() as i32
+}
+
+/// Where `(x, y)` should go to hug the nearest edge, or `None` when the window, its
+/// monitor or its silhouette cannot be read.
+///
+/// `(x, y)` is the position being *placed* rather than the live one: by the time a
+/// caller asks, the position has already been clamped, so snapping the requested
+/// value avoids a race with a window move that the OS has not reported back yet.
+fn snap_target(window: &WebviewWindow, visual: Option<VisualBounds>, x: i32, y: i32) -> Option<(i32, i32)> {
+    let size = window.outer_size().ok()?;
+    let monitor = window.current_monitor().ok().flatten()?;
+    let area = monitor.work_area();
+    let area = (
+        area.position.x,
+        area.position.y,
+        area.size.width as i32,
+        area.size.height as i32,
+    );
+    let visible = physical_visual(window, visual)
+        .unwrap_or((0, 0, size.width as i32, size.height as i32));
+    Some(snap_position(x, y, position_limits(area, visible), snap_threshold(window)))
+}
+
+/// Apply the user's "snap to edges" setting to a position that is already clamped.
+fn snap_if_enabled(window: &WebviewWindow, visual: Option<VisualBounds>, x: i32, y: i32) -> (i32, i32) {
+    if !config_bool(window, "snapToEdge", false) {
+        return (x, y);
+    }
+    snap_target(window, visual, x, y).unwrap_or((x, y))
+}
+
 #[cfg(test)]
 mod edge_tests {
-    use super::{clamp_position, position_limits};
+    use super::{clamp_position, position_limits, snap_position};
+
+    /// The edge magnet: inside the reach of a side the pet is pulled flush, outside
+    /// it nothing moves, and the two axes are decided independently of each other.
+    #[test]
+    fn snaps_only_the_sides_within_reach() {
+        let area = (0, 0, 1920, 1040);
+        // The pet occupies x=100..200, y=170..290 inside a 300px window, so the
+        // window's own limits are (-100, -170, 1720, 750).
+        let limits = position_limits(area, (100, 170, 200, 290));
+        assert_eq!(snap_position(-80, 600, limits, 28), (-100, 600));
+        assert_eq!(snap_position(600, 740, limits, 28), (600, 750));
+        // Near the top-left corner both axes dock at once.
+        assert_eq!(snap_position(-95, -150, limits, 28), (-100, -170));
+        // Halfway across the desktop it is miles from every side.
+        assert_eq!(snap_position(700, 300, limits, 28), (700, 300));
+    }
+
+    /// A window wider than the work area collapses its allowed range; the magnet must
+    /// then stay inside that range instead of jumping to the opposite side.
+    #[test]
+    fn snapping_stays_inside_the_clamped_range() {
+        let limits = position_limits((0, 0, 1000, 800), (0, 0, 300, 300));
+        assert_eq!(limits, (0, 0, 700, 500));
+        assert_eq!(snap_position(690, 20, limits, 28), (700, 0));
+
+        let collapsed = position_limits((0, 0, 200, 200), (0, 0, 300, 300));
+        assert_eq!(snap_position(-400, 900, collapsed, 28), (0, 0));
+    }
 
     #[test]
     fn allows_transparent_padding_outside_each_work_area_edge() {
@@ -347,8 +455,8 @@ pub fn window_move(window: WebviewWindow, dx: i32, dy: i32, visual_bounds: Optio
 }
 
 #[tauri::command]
-pub fn window_move_to(window: WebviewWindow, x: i32, y: i32, visual_bounds: Option<VisualBounds>) -> Result<(), String> {
-    let (x, y) = clamp_to_monitor(&window, x, y, visual_bounds);
+pub fn window_move_to(window: WebviewWindow, x: i32, y: i32) -> Result<(), String> {
+    let (x, y) = clamp_whole_window(&window, x, y);
     window
         .set_position(PhysicalPosition::new(x, y))
         .map_err(|e| e.to_string())
@@ -451,14 +559,29 @@ pub fn drag_move(window: WebviewWindow, state: State<'_, DragState>) -> Result<(
     let x = anchor.win_x + (cursor.x - anchor.cur_x).round() as i32;
     let y = anchor.win_y + (cursor.y - anchor.cur_y).round() as i32;
     let (x, y) = clamp_to_monitor(&window, x, y, anchor.visual_bounds);
+    // Snap while the button is still down, so the pet is already hugging the wall by
+    // the time the user lets go. The cursor anchor does not move with it, so dragging
+    // further away simply takes the pet off the edge again.
+    let (x, y) = snap_if_enabled(&window, anchor.visual_bounds, x, y);
     window
         .set_position(PhysicalPosition::new(x, y))
         .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-pub fn drag_end(window: WebviewWindow, state: State<'_, DragState>, visual_bounds: Option<VisualBounds>) {
+pub fn drag_end(
+    window: WebviewWindow,
+    state: State<'_, DragState>,
+    visual_bounds: Option<VisualBounds>,
+    dock: Option<bool>,
+) {
     *state.0.lock().unwrap() = None;
+    // The renderer passes `dock: false` for a flick. A throw has to start from exactly
+    // where the cursor let go, so the magnet stays out of that gesture entirely — only
+    // a placement (or the tail end of one) is allowed to dock the pet to the edge.
+    if dock == Some(false) {
+        return;
+    }
     if config_bool(&window, "snapToEdge", false) {
         snap_to_edge(&window, visual_bounds);
     }
@@ -469,34 +592,9 @@ fn snap_to_edge(window: &WebviewWindow, visual_bounds: Option<VisualBounds>) {
     let Ok(position) = window.outer_position() else {
         return;
     };
-    let Ok(size) = window.outer_size() else {
+    let Some((x, y)) = snap_target(window, visual_bounds, position.x, position.y) else {
         return;
     };
-    let Ok(Some(monitor)) = window.current_monitor() else {
-        return;
-    };
-    let area = monitor.work_area();
-    let left = area.position.x;
-    let top = area.position.y;
-    let right = area.position.x + area.size.width as i32;
-    let bottom = area.position.y + area.size.height as i32;
-    let (vx0, vy0, vx1, vy1) = physical_visual(window, visual_bounds)
-        .unwrap_or((0, 0, size.width as i32, size.height as i32));
-    let threshold = (28.0 * window.scale_factor().unwrap_or(1.0)).round() as i32;
-
-    let mut x = position.x;
-    let mut y = position.y;
-    if (position.x + vx0 - left).abs() <= threshold {
-        x = left - vx0;
-    } else if (right - (position.x + vx1)).abs() <= threshold {
-        x = right - vx1;
-    }
-    if (position.y + vy0 - top).abs() <= threshold {
-        y = top - vy0;
-    } else if (bottom - (position.y + vy1)).abs() <= threshold {
-        y = bottom - vy1;
-    }
-
     if x != position.x || y != position.y {
         let _ = window.set_position(PhysicalPosition::new(x, y));
     }

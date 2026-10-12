@@ -378,7 +378,7 @@ export const zhDict: Record<string, I18nValue> = {
   // Feeding and the cat teaser — the food names and effects come from
   // CARE_FOODS in src/renderer/lite-care.ts.
   'lite.care.title': '投喂',
-  'lite.care.hint': '饱腹值会随陪伴时间慢慢变高，喂点东西就降下来。也可以右键桌宠选「喂食…」。',
+  'lite.care.hint': '饥饿值会随陪伴时间慢慢变高，喂点东西就降下来。也可以右键桌宠选「喂食…」。',
   'lite.care.level.full': '刚吃饱（{p}/100）',
   'lite.care.level.ok': '不饿（{p}/100）',
   'lite.care.level.hungry': '有点饿了（{p}/100）',
@@ -436,6 +436,8 @@ export const zhDict: Record<string, I18nValue> = {
   'lite.settings.petSize': '宠物大小',
   'lite.settings.opacity': '透明度',
   'lite.settings.autoMove': '自主走动',
+  'lite.settings.snapToEdge': '贴边吸附',
+  'lite.settings.snapHint': '打开后，把宠物拖到屏幕边缘附近，它会自动贴齐那一边。甩着玩的时候不受影响，怎么飞还是怎么飞。',
   'lite.settings.fileDrop': '拖文件给桌宠时显示互动气泡',
   'lite.settings.standReminder': '站立提醒',
   'lite.settings.interval': '提醒间隔',
@@ -972,7 +974,7 @@ export const enDict: Record<string, I18nValue> = {
   'lite.pet.hourlyChime': 'It is {h} o\'clock~',
 
   'lite.care.title': 'Treats',
-  'lite.care.hint': 'Fullness creeps up while we hang out, and a treat brings it back down. You can also right-click the pet and pick "Feed…".',
+  'lite.care.hint': 'Hunger creeps up while we hang out, and a treat brings it back down. You can also right-click the pet and pick "Feed…".',
   'lite.care.level.full': 'Just ate ({p}/100)',
   'lite.care.level.ok': 'Not hungry ({p}/100)',
   'lite.care.level.hungry': 'A little hungry ({p}/100)',
@@ -1029,6 +1031,8 @@ export const enDict: Record<string, I18nValue> = {
   'lite.settings.petSize': 'Pet size',
   'lite.settings.opacity': 'Opacity',
   'lite.settings.autoMove': 'Wander on its own',
+  'lite.settings.snapToEdge': 'Snap to screen edges',
+  'lite.settings.snapHint': 'On: drag the pet near a screen edge and it docks flush against that side. Throwing it works exactly as before.',
   'lite.settings.fileDrop': 'React when a file is dropped on the pet',
   'lite.settings.standReminder': 'Standing reminder',
   'lite.settings.interval': 'Remind every',

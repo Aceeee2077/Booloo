@@ -250,12 +250,12 @@ const OUTLINE_OFFSETS: ReadonlyArray<readonly [number, number]> =
    * the real position is the only trustworthy answer. A grab that happened while
    * these awaits were in flight wins — catching a thrown pet must not fight with
    * the throw that was already starting.
+   *
+   * `velocity` comes from the caller because the same judgement decides whether the
+   * drop may dock the pet to a screen edge: a flick must not be nudged first, or the
+   * flight would launch from somewhere the cursor never was.
    */
-  async function launchThrow() {
-    // One judgement call, two gates (src/renderer/lite-throw.ts): the hand had to be
-    // fast somewhere in the window *and* still moving when the button came up. A drag
-    // that ended in a stop is a placement and must not move the pet at all.
-    const velocity = throwRelease(dragSamples);
+  async function launchThrow(velocity: ThrowVelocity | null) {
     dragSamples.length = 0;
     if (!velocity) return;
     try {
@@ -280,6 +280,10 @@ const OUTLINE_OFFSETS: ReadonlyArray<readonly [number, number]> =
    * The move is fire-and-forget: `window_move_to` clamps to the monitor on the
    * Rust side anyway, and awaiting an IPC round trip per frame would put the whole
    * pet loop behind the animation frame it is drawing.
+   *
+   * Every frame of the flight — the landing one included — uses the plain move, so a
+   * flick is never pulled onto a screen edge: the throw ends exactly where friction,
+   * gravity and the bounce left it.
    */
   function stepFlight(now: number) {
     if (!flight) return;
@@ -1684,11 +1688,17 @@ const OUTLINE_OFFSETS: ReadonlyArray<readonly [number, number]> =
   function release() {
     if (!pressed) return;
     const wasDragging = dragging;
-    window.api.dragEnd(visibleRect);
+    // One judgement call, two gates (src/renderer/lite-throw.ts): the hand had to be
+    // fast somewhere in the window *and* still moving when the button came up. It is
+    // made here, before the drag is handed back, because the answer also decides
+    // whether the drop may dock the pet to a screen edge — a flick starts its flight
+    // from exactly where the cursor is, so the magnet stays out of that gesture.
+    const velocity = wasDragging ? throwRelease(dragSamples) : null;
+    window.api.dragEnd(visibleRect, !velocity);
     pressed = false; dragging = false; canvas.style.cursor = 'grab';
     // A drag that ended fast enough becomes a throw; anything slower is a
     // placement, and the pet simply stays where it was dropped.
-    if (wasDragging) { void launchThrow(); return; }
+    if (wasDragging) { void launchThrow(velocity); return; }
     // A tap answers from where the pet was touched; two taps in quick succession
     // are read as affection rather than as two pokes.
     const now = performance.now();

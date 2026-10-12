@@ -609,7 +609,9 @@ interface PetApi {
   petAssetUrl(path: string): string | undefined;
   /** Move the pet window by a delta (dx/dy) */
   moveWindow(dx: number, dy: number): void;
-  /** Move the pet window to absolute screen coordinates (clamped to the display work area) */
+  /** Move the pet window to absolute screen coordinates (clamped to the display work
+   *  area). Deliberately never edge-snaps: this is what a thrown pet flies on, and the
+   *  magnet must not bend a trajectory or a landing. */
   moveWindowTo(x: number, y: number): Promise<void> | void;
   /** Target native window position that puts the visible pet at the work-area center. */
   getWindowCenterTarget(visualBounds?: PetBox): Promise<[number, number]>;
@@ -617,8 +619,10 @@ interface PetApi {
   dragBegin(visualBounds?: PetBox): void;
   /** Continue a drag; main targets the window at its own live cursor minus the anchor offset. */
   dragMove(): void;
-  /** End a drag and release the main-process cursor/window anchor. */
-  dragEnd(visualBounds?: PetBox): void;
+  /** End a drag and release the main-process cursor/window anchor. `dock` (default
+   *  true) lets main snap the pet to the nearest screen edge; the renderer passes
+   *  false when the gesture is a throw, so a flick keeps its release position. */
+  dragEnd(visualBounds?: PetBox, dock?: boolean): void;
   /** Get the pet window's current position [x, y] */
   getWindowPosition(): Promise<number[]>;
   /** Reset to the center of the screen */
