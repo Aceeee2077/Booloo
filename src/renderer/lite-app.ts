@@ -40,6 +40,13 @@
   }
   const buluActions = new Image();
   buluActions.src = '../assets/animated-pets/bulu-actions.webp';
+  /**
+   * Bulu in the air: four poses built from the walking art by
+   * `scripts/build-bulu-airborne.mjs`, so a thrown pet flails instead of walking.
+   * Its own file, which is what keeps the walking animation untouched.
+   */
+  const buluAirborne = new Image();
+  buluAirborne.src = '../assets/animated-pets/bulu-airborne.png';
 // Row order must match ACTIONS in scripts/build-bulu-art.mjs.
 type PetAction = 'wave' | 'groom' | 'stretch' | 'yawn' | 'scratch';
 /** Which half of the pet a pointer landed on: the head, or everything below it. */
@@ -47,6 +54,14 @@ type PetRegion = 'head' | 'body';
 const actionRows: Record<PetAction, number> = { wave: 0, groom: 1, stretch: 2, yawn: 3, scratch: 4 };
 /** Each atlas row is one action's whole sheet: 4x4 source frames in a row. */
 const ACTION_FRAMES = 16;
+/** One frame of the airborne wriggle stays on screen this long. */
+const AIRBORNE_FRAME_MS = 70;
+/**
+ * The airborne strip is generated 9% small so a rotated pose still fits its cell
+ * (`FIT_SCALE_FROM` in scripts/build-bulu-airborne.mjs). Drawing it that much
+ * larger keeps the pet the same size on screen whether it is walking or flying.
+ */
+const AIRBORNE_DRAW_SCALE = 1 / 0.91;
 /**
  * Bulu's blink. The idle row's last cell is a closed-eye pose baked into
  * bulu.png by scripts/build-bulu-blink.mjs; the pet holds it for BLINK_MS and
@@ -216,12 +231,15 @@ const OUTLINE_OFFSETS: ReadonlyArray<readonly [number, number]> =
   }
 
   // ---------- the throw ----------
-  /** Remember one pointer position from the drag. */
+  /**
+   * Remember one pointer position from the drag.
+   *
+   * The buffer's policy (how much of the gesture to keep) lives with the model, in
+   * `throwRemember` — it is bounded by *time*, because a fixed sample count is a
+   * different amount of gesture on a 125 Hz mouse than on a 1000 Hz one.
+   */
   function sampleDrag(x: number, y: number) {
-    dragSamples.push({ x, y, t: performance.now() });
-    // The whole gesture is never needed — `throwVelocity` only reads the last
-    // 120 ms — so the buffer is bounded rather than growing for a long drag.
-    if (dragSamples.length > 24) dragSamples.shift();
+    throwRemember(dragSamples, x, y, performance.now());
   }
 
   /**
@@ -234,9 +252,12 @@ const OUTLINE_OFFSETS: ReadonlyArray<readonly [number, number]> =
    * the throw that was already starting.
    */
   async function launchThrow() {
-    const velocity = throwVelocity(dragSamples);
+    // One judgement call, two gates (src/renderer/lite-throw.ts): the hand had to be
+    // fast somewhere in the window *and* still moving when the button came up. A drag
+    // that ended in a stop is a placement and must not move the pet at all.
+    const velocity = throwRelease(dragSamples);
     dragSamples.length = 0;
-    if (!throwCanLaunch(velocity)) return;
+    if (!velocity) return;
     try {
       const [x, y] = await window.api.getWindowPosition();
       if (pressed || dragging) return;
@@ -244,7 +265,7 @@ const OUTLINE_OFFSETS: ReadonlyArray<readonly [number, number]> =
       // the pet's silhouette, none of which the page can see. No box = no flight.
       const bounds = throwBounds(await window.api.flightBounds(visibleRect));
       if (!bounds) return;
-      flight = { x, y, vx: velocity!.vx, vy: velocity!.vy, at: performance.now(), bounds };
+      flight = { x, y, vx: velocity.vx, vy: velocity.vy, at: performance.now(), bounds };
       // Wakes the pet and stops any walk that was still running, so nothing else
       // moves the window while the flight owns it.
       activity();
@@ -1382,7 +1403,21 @@ const OUTLINE_OFFSETS: ReadonlyArray<readonly [number, number]> =
 
     ctx.save();
     ctx.globalAlpha = state === 'sleep' ? 0.78 : 1;
-    if (target === 'bulu' && action && buluActions.complete && buluActions.naturalWidth) {
+    if (target === 'bulu' && state === 'thrown' && buluAirborne.complete && buluAirborne.naturalWidth) {
+      // Its own four-frame wriggle, not the walking row: legs pedalling in mid-air
+      // read as walking, which is exactly what a thrown pet must not look like.
+      const cell = buluAirborne.naturalWidth / 4;
+      const frame = Math.floor(now / AIRBORNE_FRAME_MS) % 4;
+      const size = 132 * sizeScale * AIRBORNE_DRAW_SCALE;
+      const x = 150 - size / 2 + shiftX, y = 293 - size + shiftY;
+      ctx.imageSmoothingEnabled = true;
+      if (facing > 0) {
+        ctx.translate(300, 0); ctx.scale(-1, 1);
+      }
+      leanForFlight(state, x + size / 2, y + size / 2, facing > 0);
+      ctx.drawImage(buluAirborne, frame * cell, 0, cell, cell, x, y, size, size);
+      visibleRect = { x, y, w: size, h: size };
+    } else if (target === 'bulu' && action && buluActions.complete && buluActions.naturalWidth) {
       const cell = buluActions.naturalWidth / ACTION_FRAMES;
       const progress = (now - action.started) / action.duration;
       const column = Math.min(ACTION_FRAMES - 1, Math.max(0, Math.floor(progress * ACTION_FRAMES)));
@@ -1456,6 +1491,8 @@ const OUTLINE_OFFSETS: ReadonlyArray<readonly [number, number]> =
         const blink = target === 'bulu' ? blinkColumn(now, state, !!action) : 0;
         const column = target === 'bulu' && state === 'idle' ? blink : frame;
         const row = action ? action.kind === 'yawn' ? 2 : 3
+          // Only reached when the airborne strip failed to load: the walk row is the
+          // stand-in, and it is drawn faster in the air than on the ground.
           : state === 'walk' || state === 'thrown' ? 1
           : state === 'sleep' ? 2 : state === 'click' ? 3 : 0;
         const size = 132 * sizeScale;
@@ -1679,7 +1716,19 @@ const OUTLINE_OFFSETS: ReadonlyArray<readonly [number, number]> =
     // After the action: starting one clears whatever bubble was on screen.
     say(liteT('lite.pet.doubleTap'), 2400);
   }
-  window.addEventListener('mouseup', release);
+  window.addEventListener('mouseup', (event) => {
+    // The release position is part of the gesture, not just the end of it: when the
+    // pointer stopped before letting go, this sample is the still tail that tells
+    // `throwRelease` the pet was placed rather than thrown.
+    //
+    // A synthetic mouse-up carries no coordinates — and `screenX` would default to
+    // 0 rather than to "unknown" — so it is only sampled when there is a real press
+    // and a real position, or it would read as a flick into the top-left corner.
+    if (pressed && Number.isFinite(event?.screenX) && Number.isFinite(event?.screenY)) {
+      sampleDrag(event.screenX, event.screenY);
+    }
+    release();
+  });
   canvas.addEventListener('contextmenu', (event) => {
     event.preventDefault();
     if (hit(event.offsetX, event.offsetY)) window.api.showContextMenu();

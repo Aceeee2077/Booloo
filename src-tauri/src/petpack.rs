@@ -511,10 +511,28 @@ mod tests {
         assert!(!safe_sheet(""));
         assert!(!safe_sheet("../outside.png"));
         assert!(!safe_sheet("art/../../outside.png"));
-        assert!(!safe_sheet("C:\\pets\\sheet.png"));
         assert!(!safe_sheet("/etc/sheet.png"));
         assert!(!safe_sheet("sheet.txt"));
         assert!(!safe_sheet("sheet"));
+        // A drive letter or a UNC share is absolute *on Windows*. On Unix the same
+        // string is one long file name with no separator in it — it cannot leave the
+        // folder — so the invariant to assert is the one that holds everywhere
+        // (below), not the Windows spelling of it. Asserting the Windows answer here
+        // is what turned this file red on the macOS runner.
+        #[cfg(windows)]
+        {
+            assert!(!safe_sheet("C:\\pets\\sheet.png"));
+            assert!(!safe_sheet("\\\\server\\share\\sheet.png"));
+        }
+        // …and whatever the validator accepts has to stay inside the pack folder
+        // once joined. (`join` throws the base away when handed an absolute path,
+        // which is exactly the escape this guards against — those are refused.)
+        let dir = Path::new("pets").join("demo");
+        for sheet in ["sheet.png", "art/pose.webp", "C:\\pets\\sheet.png"] {
+            if !safe_sheet(sheet) { continue; }
+            let joined = dir.join(sheet);
+            assert!(joined.starts_with(&dir), "{sheet} escaped the pack folder: {}", joined.display());
+        }
     }
 
     /// 4 columns × 2 rows, so cells 0..8 exist and 8 does not.

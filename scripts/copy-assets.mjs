@@ -32,7 +32,8 @@ for (const file of readdirSync(join(ROOT, 'dist', 'renderer'))) {
 }
 mkdirSync(join(ROOT, 'dist', 'assets', 'animated-pets'), { recursive: true });
 // Bulu is the only built-in character; every other look is an imported picture.
-for (const file of ['bulu.png', 'bulu-actions.webp']) {
+// `bulu-airborne.png` is the thrown pose set (see scripts/build-bulu-airborne.mjs).
+for (const file of ['bulu.png', 'bulu-actions.webp', 'bulu-airborne.png']) {
   cpSync(join(ROOT, 'src', 'assets', 'animated-pets', file), join(ROOT, 'dist', 'assets', 'animated-pets', file));
 }
 

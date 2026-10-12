@@ -119,7 +119,12 @@ const context = {
     })[id],
   },
   // The atlas is 16 frames wide at 192 px per frame (see scripts/build-bulu-actions.mjs).
-  Image: class { complete = true; naturalWidth = 512; set src(url) { if (url.includes('bulu-actions')) this.naturalWidth = 16 * 192; } },
+  // `_src` is kept so a test can tell which atlas a frame was drawn from.
+  Image: class {
+    complete = true;
+    naturalWidth = 512;
+    set src(url) { this._src = url; if (url.includes('bulu-actions')) this.naturalWidth = 16 * 192; }
+  },
   performance: { now: () => clock }, Date: FakeDate,
   requestAnimationFrame(callback) { frame = callback; }, queueMicrotask, Math, Number, Promise, console,
 };
@@ -675,8 +680,11 @@ assert.ok(afterOneFrame > launched, 'a throw moves the window with no mouse held
 const thrownXs = moves.slice(beforeThrow).map(([x]) => x);
 assert.ok(thrownXs.some(x => x > 100), `the pet travels after the release (${thrownXs.join(',')})`);
 assert.ok(thrownXs.every(x => x >= -100 && x <= 1720), 'and never leaves the work area');
-// In the air it flails: the walk row drawn faster, not the resting pose.
-assert.equal(lastDraw[2] / 128, 1, 'a flying pet uses the walk row');
+// In the air it plays its own strip — a four-frame flail, not the walking row, which
+// is what stops a thrown pet from looking like it is taking a stroll in mid-air.
+assert.ok(lastDraw[0]._src?.includes('bulu-airborne'), `a flying pet draws the airborne strip, got ${lastDraw[0]._src}`);
+assert.equal(lastDraw[2], 0, 'whose single row starts at y=0');
+assert.ok(lastDraw[1] % 128 === 0 && lastDraw[1] < 128 * 4, `and one of its four frames, got x=${lastDraw[1]}`);
 
 // The flight ends by itself — no timer, the friction runs out.
 throwFrames(400);
@@ -693,6 +701,47 @@ clock += 100; throwMove(412, 400, 0); // 12 px over 100 ms = a slow placement
 await tick();
 throwFrames(10);
 assert.equal(moves.length, beforePlace, 'putting the pet down must not throw it');
+
+// The complaint this judgement was rewritten for: drag it quickly, stop, let go. The
+// release is sampled from the mouse-up itself, so the hand's last 80 ms of stillness
+// is visible to the model and the pet stays exactly where it was dropped.
+const beforeHeldRelease = moves.length;
+throwDown(400, 400);
+clock += 10; throwMove(440, 400);      // a fast drag…
+clock += 10; throwMove(480, 400);
+clock += 80;                           // …that comes to a stop before the release
+windowEvents.get('mouseup')({ screenX: 480, screenY: 400 });
+await tick();
+throwFrames(10);
+assert.equal(moves.length, beforeHeldRelease, 'drag, stop, release must not throw the pet');
+
+// …but a flick whose hand has already begun to slow down still throws: the *gesture*
+// has to look like a throw, the release only has to be moving. Demanding full speed at
+// the release made a normal "swipe and let go" do nothing at all.
+const beforeSlowTail = moves.length;
+throwDown(400, 400);
+clock += 10; throwMove(430, 400);      // ~3000 px/s
+clock += 10; throwMove(470, 400);      // ~4000 px/s
+clock += 16; throwMove(474, 400, 0);   // 4 px in 16 ms ≈ 250 px/s when it lets go
+await tick();
+throwFrames(6);
+assert.ok(moves.length > beforeSlowTail, 'a flick that is still moving at release must fly');
+
+// A mouse that reports every millisecond — a gaming mouse — has to be able to throw the
+// pet as well. The release used to be judged between the last two events, where a single
+// pixel of movement is 1000 px/s of apparent jitter and the old 2 px floor demanded
+// 2000 px/s: the pet was throwable below 125 Hz and impossible above it.
+const beforeFineMouse = moves.length;
+throwDown(400, 400);
+for (let i = 1; i <= 40; i++) {
+  clock += 1;
+  throwMove(400 + Math.round(i * 0.7), 400);  // 700 px/s at one event per millisecond
+}
+clock += 1;
+throwMove(428, 400, 0);
+await tick();
+throwFrames(6);
+assert.ok(moves.length > beforeFineMouse, 'a 1000 Hz mouse can throw the pet');
 
 // Catching a pet in mid-air ends the flight where it was caught. (No `hit` check on
 // the rotated pose: the press lands on the pet's own box, as it does for any drag.)

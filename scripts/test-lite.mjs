@@ -687,10 +687,21 @@ const throwConst = (name) => vm.runInContext(name, thrown);
 const throwJson = (value) => JSON.parse(JSON.stringify(value));
 const box = { minX: -100, minY: -100, maxX: 100, maxY: 100 };
 assert.equal(throwConst('THROW_MAX_SPEED'), 2600);
-assert.equal(throwConst('THROW_LAUNCH_SPEED'), 140);
+assert.equal(throwConst('THROW_LAUNCH_SPEED'), 420);
+assert.equal(throwConst('THROW_PEAK_SPAN_MS'), 30, 'the launch is judged on the fastest 30 ms of the gesture');
+assert.equal(throwConst('THROW_TAIL_SPAN_MS'), 12, 'the release is judged over a span, never between two events');
+assert.equal(throwConst('THROW_MIN_TAIL_PX'), 1);
+assert.equal(throwConst('THROW_TAIL_MIN_SPEED'), 90);
 assert.equal(throwConst('THROW_BOUNCE'), 0.62);
 assert.equal(throwConst('THROW_STOP_SPEED'), 40);
 assert.equal(throwConst('THROW_GRAVITY'), 0, 'the throw asks for friction and walls, not an arc');
+assert.ok(throwConst('THROW_TAIL_SPAN_MS') < throwConst('THROW_TAIL_MS'),
+  'the tail is a span of movement, and it still has to be recent');
+assert.ok(throwConst('THROW_TAIL_MS') <= throwConst('THROW_SAMPLE_MS'));
+assert.ok(throwConst('THROW_PEAK_SPAN_MS') <= throwConst('THROW_SAMPLE_MS'),
+  'the fastest stretch has to fit inside the window it is looked for in');
+assert.ok(throwConst('THROW_BUFFER_MS') > throwConst('THROW_SAMPLE_MS'),
+  'the gesture buffer has to hold more than the window the judgement reads');
 const toStep = throwConst('THROW_STEP_MS');
 assert.equal(Math.round(toStep), 17, 'the friction numbers are tuned per 60 fps frame');
 
@@ -707,9 +718,144 @@ assert.equal(thrown.throwVelocity([]), null);
 // One fast flick cannot teleport the pet across the screen.
 const capped = thrown.throwVelocity([{ x: 0, y: 0, t: 0 }, { x: 10_000, y: 0, t: 100 }]);
 assert.ok(Math.abs(capped.vx - 2600) < 1e-6, `the launch speed is capped, got ${capped.vx}`);
-assert.equal(thrown.throwCanLaunch({ vx: 139, vy: 0 }), false);
-assert.equal(thrown.throwCanLaunch({ vx: 140, vy: 0 }), true);
-assert.equal(thrown.throwCanLaunch(null), false);
+assert.equal(thrown.throwCanLaunch(419), false);
+assert.equal(thrown.throwCanLaunch(420), true);
+assert.equal(thrown.throwCanLaunch(Number.NaN), false, 'no gesture is not a throw');
+
+// The gate that decides whether the gesture was a throw at all. It reads the fastest
+// stretch of the gesture, not its average: a flick is quick in the middle and already
+// slowing when the button comes up, and asking the whole window to average 420 px/s
+// made a normal flick do nothing.
+const steadyDrag = (speed, ms, rateHz) => {
+  const samples = [];
+  const dt = 1000 / rateHz;
+  for (let t = 0; t <= ms + 1e-9; t += dt) samples.push({ x: Math.round((speed * t) / 1000), y: 0, t });
+  return samples;
+};
+/** A stroke that accelerates to `peak` and falls back, released at a fraction of it. */
+const stroked = (peak, ms, rateHz, fraction) => {
+  const samples = [];
+  const dt = 1000 / rateHz;
+  for (let t = 0; t <= ms * fraction + 1e-9; t += dt) {
+    const u = Math.min(t, ms) / ms;
+    samples.push({ x: Math.round(((peak * ms) / Math.PI / 1000) * (1 - Math.cos(Math.PI * u))), y: 0, t });
+  }
+  return samples;
+};
+// A careful drag tops out at the speed the hand is moving, and that is never a throw.
+assert.ok(thrown.throwPeak(steadyDrag(300, 400, 125)) < throwConst('THROW_LAUNCH_SPEED'),
+  'a steady 300 px/s drag is not fast enough to be a throw');
+assert.equal(thrown.throwRelease(steadyDrag(300, 400, 125)), null);
+// A flick reaches 700 px/s in the middle and is down to ~350 px/s at the release: too
+// slow for the old window average (520 px/s measured over the window it used to read),
+// fast enough now.
+const decelerating = stroked(700, 200, 125, 0.9);
+assert.ok(thrown.throwPeak(decelerating) > throwConst('THROW_LAUNCH_SPEED'));
+assert.ok(thrown.throwRelease(decelerating), 'a flick that is slowing at release still flies');
+// Same gesture, same verdict, whatever the mouse reports at: the launch gate reads a
+// span of movement, not the gap between two events.
+for (const rate of [1000, 500, 250, 125, 60]) {
+  const samples = stroked(700, 200, rate, 0.9);
+  assert.ok(thrown.throwPeak(samples) >= throwConst('THROW_LAUNCH_SPEED'), `${rate} Hz flick is fast enough`);
+  assert.ok(thrown.throwRelease(samples), `a flick thrown with a ${rate} Hz mouse has to fly`);
+}
+// A soft flick — 500 px/s at its fastest — used to read 384 px/s as a window average
+// and do nothing at all.
+assert.ok(thrown.throwRelease(stroked(500, 250, 125, 0.9)), 'a soft flick flies too');
+// The peak is a *sustained* speed: one sample pair a millisecond apart cannot supply it.
+assert.ok(thrown.throwPeak([
+  { x: 0, y: 0, t: 0 }, { x: 2, y: 0, t: 50 }, { x: 4, y: 0, t: 90 }, { x: 34, y: 0, t: 95 },
+]) < throwConst('THROW_LAUNCH_SPEED'), 'a 5 ms spike is not a sustained 420 px/s');
+
+// The gate that stopped a placement from becoming a throw: the pointer has to have
+// been moving at the *release*, not just somewhere earlier in the drag. Without it a
+// quick drag that ended in a stop still averaged over the threshold and the pet
+// hopped off on its own every time.
+const dragThenStop = [
+  { x: 0, y: 0, t: 0 }, { x: 12, y: 0, t: 10 }, { x: 24, y: 0, t: 20 }, { x: 36, y: 0, t: 30 },
+  { x: 36, y: 0, t: 110 },
+];
+assert.equal(thrown.throwStillMoving(dragThenStop), false, 'a stop before letting go is not a throw');
+assert.equal(thrown.throwRelease(dragThenStop), null, 'and the pet must stay where it was dropped');
+const stillFlick = [
+  { x: 0, y: 0, t: 0 }, { x: 12, y: 0, t: 10 }, { x: 24, y: 0, t: 20 }, { x: 36, y: 0, t: 30 },
+];
+assert.equal(thrown.throwStillMoving(stillFlick), true);
+assert.deepEqual(throwJson(thrown.throwRelease(stillFlick)), { vx: 1200, vy: 0 });
+// Jitter on a hand that is not moving is not movement.
+assert.equal(thrown.throwStillMoving([{ x: 10, y: 10, t: 0 }, { x: 10.4, y: 10, t: 60 }]), false);
+assert.equal(thrown.throwStillMoving([{ x: 10, y: 10, t: 0 }, { x: 10, y: 10, t: 20 }]), false);
+// The tail only has to be *moving*: a flick's hand is already slowing when the button
+// comes up, and asking for the full launch speed there made the pet unthrowable.
+assert.equal(thrown.throwStillMoving([{ x: 0, y: 0, t: 0 }, { x: 24, y: 0, t: 10 }, { x: 26, y: 0, t: 26 }]), true,
+  'a hand that is slowing down is still moving');
+assert.equal(thrown.throwStillMoving([{ x: 0, y: 0, t: 0 }, { x: 24, y: 0, t: 10 }, { x: 24.5, y: 0, t: 26 }]), false,
+  'a hand that has stopped is not');
+assert.ok(throwConst('THROW_TAIL_MIN_SPEED') < throwConst('THROW_LAUNCH_SPEED'),
+  'the release is judged more gently than the gesture as a whole');
+// The same hand movement has to read the same at every report rate. Asking the last
+// two events for 2 px of movement was a hidden speed floor of (2 px ÷ report interval):
+// 2000 px/s on a 1000 Hz gaming mouse, where a 700 px/s flick therefore did nothing at
+// all — the pet was easy to throw below 125 Hz and impossible above it.
+for (const rate of [1000, 500, 250, 125, 60]) {
+  const dt = 1000 / rate;
+  const samples = [];
+  for (let t = 0; t <= 40 + 1e-9; t += dt) samples.push({ x: Math.round((700 * t) / 1000), y: 0, t });
+  assert.equal(thrown.throwStillMoving(samples), true, `a hand moving at 700 px/s is moving at ${rate} Hz`);
+  assert.ok(thrown.throwRelease(samples), `and it throws the pet at ${rate} Hz`);
+}
+// A hand that has stopped is a stop at every report rate too.
+for (const rate of [1000, 500, 250, 125]) {
+  const dt = 1000 / rate;
+  const samples = [];
+  for (let t = 0; t <= 40 + 1e-9; t += dt) samples.push({ x: Math.round((700 * t) / 1000), y: 0, t });
+  const last = samples[samples.length - 1];
+  samples.push({ x: last.x, y: 0, t: last.t + 60 });
+  assert.equal(thrown.throwStillMoving(samples), false, `a hand that stopped 60 ms ago has stopped at ${rate} Hz`);
+}
+// Two events can share a millisecond (a fast mouse, a coarsened clock). The tail has
+// to look back past them instead of concluding "no movement".
+assert.equal(thrown.throwStillMoving([
+  { x: 0, y: 0, t: 0 }, { x: 20, y: 0, t: 10 }, { x: 46, y: 0, t: 20 }, { x: 72, y: 0, t: 20 },
+]), true, 'same-millisecond events must not hide a flick');
+const sameMsThrow = thrown.throwRelease([
+  { x: 0, y: 0, t: 0 }, { x: 20, y: 0, t: 10 }, { x: 46, y: 0, t: 20 }, { x: 72, y: 0, t: 20 },
+]);
+assert.ok(sameMsThrow && Math.hypot(sameMsThrow.vx, sameMsThrow.vy) > 900,
+  `a same-millisecond flick still throws, got ${JSON.stringify(sameMsThrow)}`);
+assert.ok(Math.hypot(sameMsThrow.vx, sameMsThrow.vy) <= throwConst('THROW_MAX_SPEED'));
+// …but a jump that happened long before the release is not movement either.
+assert.equal(thrown.throwStillMoving([{ x: 0, y: 0, t: 0 }, { x: 90, y: 0, t: 20 }, { x: 90, y: 0, t: 300 }]), false);
+// A slow, careful drag is a placement however long it went on for.
+assert.equal(thrown.throwRelease([{ x: 0, y: 0, t: 0 }, { x: 20, y: 0, t: 100 }]), null);
+assert.equal(thrown.throwRelease([{ x: 0, y: 0, t: 0 }]), null, 'one sample is not a gesture');
+assert.equal(thrown.throwRelease([]), null);
+// The window average still has to agree: a fast finish that was slow overall used to
+// sneak through on one jittery sample pair.
+assert.equal(thrown.throwRelease([
+  { x: 0, y: 0, t: 0 }, { x: 2, y: 0, t: 50 }, { x: 4, y: 0, t: 90 }, { x: 34, y: 0, t: 95 },
+]), null, 'the tail alone must not decide it either');
+
+// The gesture buffer is bounded by *time*, not by a sample count. A fixed count is the
+// mouse's report rate in disguise — 24 samples is 190 ms of gesture at 125 Hz and 24 ms
+// at 1000 Hz, less than the window the judgement reads, and the pet quietly became
+// unthrowable on a fast mouse.
+const buffered = [];
+for (let i = 0; i < 400; i++) thrown.throwRemember(buffered, i, 0, i);
+assert.ok(buffered.length <= throwConst('THROW_BUFFER_MAX'), 'a 1000 Hz mouse cannot grow the buffer without bound');
+assert.ok(buffered[buffered.length - 1].t - buffered[0].t >= throwConst('THROW_SAMPLE_MS'),
+  'and the kept history still covers the whole window the judgement reads');
+assert.ok(thrown.throwRelease(buffered), 'a gesture on a fast mouse is judged on its whole tail');
+const lonely = [];
+thrown.throwRemember(lonely, 1, 2, 3);
+assert.deepEqual(throwJson(lonely), [{ x: 1, y: 2, t: 3 }], 'one sample is kept to start with');
+thrown.throwRemember(lonely, Number.NaN, 0, 4);
+assert.equal(lonely.length, 1, 'a sample that is not a number is not a position');
+const aged = [{ x: 0, y: 0, t: 0 }, { x: 1, y: 0, t: 10 }];
+thrown.throwRemember(aged, 2, 0, 5000);
+assert.deepEqual(throwJson(aged), [{ x: 1, y: 0, t: 10 }, { x: 2, y: 0, t: 5000 }],
+  'a drag that was left alone for five seconds starts again from the release');
+assert.ok(aged.length >= 2, 'the buffer always keeps enough to describe a gesture');
 
 // Friction is applied per unit of real time, so the same gesture glides the same
 // distance on a 30 fps machine as on a 60 fps one.
@@ -777,7 +923,15 @@ assert.equal(thrown.throwTilt(900) + thrown.throwTilt(-900), 0, 'and it is symme
 assert.ok(Math.abs(thrown.throwTilt(99_999)) <= 0.34);
 assert.equal(thrown.throwTilt(Number.NaN), 0);
 
-assert.match(appSource, /throwVelocity\(dragSamples\)/);
+assert.match(appSource, /throwRelease\(dragSamples\)/, 'one call makes the placement/throw call');
+// The mouse-up position is part of the gesture: without it a pointer that stopped
+// before letting go would still look like it was moving.
+const mouseupAt = appSource.indexOf("window.addEventListener('mouseup'");
+assert.ok(mouseupAt > 0, 'the pet window has to listen for the release');
+const mouseupHandler = appSource.slice(mouseupAt, appSource.indexOf('});', mouseupAt));
+assert.match(mouseupHandler, /sampleDrag\(event\.screenX, event\.screenY\)/,
+  'the release has to be sampled, or a placement can still look like a flick');
+assert.match(mouseupHandler, /release\(\)/);
 assert.match(appSource, /throwStep\(flight,/);
 assert.match(appSource, /throwBounds\(await window\.api\.flightBounds/);
 assert.match(appSource, /leanForFlight\(state/);
@@ -789,9 +943,71 @@ assert.match(throwWindow, /pub fn window_flight_bounds/);
 // One function owns the edge, so a drag and a throw can never disagree about it.
 assert.match(throwWindow, /fn position_limits/);
 assert.match(libSource, /window::window_flight_bounds/);
+
+// ---- the airborne strip -----------------------------------------------------
+// A thrown pet plays its own poses out of its own file. The generator behind it only
+// ever *reads* bulu.png, which is what makes "the walking animation does not change"
+// a property of the build instead of a promise.
+const airbornePath = join(process.cwd(), 'dist', 'assets', 'animated-pets', 'bulu-airborne.png');
+assert.ok(existsSync(airbornePath), 'the airborne strip has to ship next to the other atlases');
+const airborneMeta = await sharp(airbornePath).metadata();
+assert.equal(airborneMeta.height, actionCell, 'the airborne strip is one row of cells');
+assert.equal(airborneMeta.width, actionCell * 4, 'four airborne poses');
+assert.equal(airborneMeta.hasAlpha, true);
+const airborneFrame = (col) => sharp(airbornePath)
+  .extract({ left: col * actionCell, top: 0, width: actionCell, height: actionCell })
+  .ensureAlpha().raw().toBuffer();
+const airborneFrames = [await airborneFrame(0), await airborneFrame(1), await airborneFrame(2), await airborneFrame(3)];
+for (const [index, frame] of airborneFrames.entries()) {
+  let opaque = 0;
+  let minX = actionCell, minY = actionCell, maxX = -1, maxY = -1;
+  for (let pixel = 3; pixel < frame.length; pixel += 4) {
+    if (frame[pixel] <= 16) continue;
+    const at = pixel - 3;
+    const x = (at / 4) % actionCell, y = Math.floor(at / 4 / actionCell);
+    opaque++;
+    if (x < minX) minX = x;
+    if (y < minY) minY = y;
+    if (x > maxX) maxX = x;
+    if (y > maxY) maxY = y;
+  }
+  assert.ok(opaque > 3000, `airborne frame ${index} is empty (${opaque} px)`);
+  // A rotated pose that reaches the cell edge was clipped by the generator, which
+  // fails its own build rather than shipping a sliced head.
+  assert.ok(minX > 0 && minY > 0 && maxX < actionCell - 1 && maxY < actionCell - 1,
+    `airborne frame ${index} touches its cell edge (${minX},${minY}..${maxX},${maxY})`);
+}
+assert.notDeepEqual(airborneFrames[0], airborneFrames[2], 'the airborne loop has to move');
+// And it must not be the walking row: legs pedalling in mid-air was the bug.
+for (const [index, frame] of airborneFrames.entries()) {
+  for (let column = 0; column < 4; column++) {
+    assert.notDeepEqual(frame, await sheetFrame(1, column),
+      `airborne frame ${index} is a copy of walking pose ${column}`);
+  }
+}
+assert.match(appSource, /buluAirborne/);
+assert.match(appSource, /AIRBORNE_FRAME_MS/);
+assert.match(readFileSync(join(process.cwd(), 'scripts', 'copy-assets.mjs'), 'utf8'), /bulu-airborne\.png/);
+const packageJson = JSON.parse(readFileSync(join(process.cwd(), 'package.json'), 'utf8'));
+assert.match(packageJson.scripts['bulu-art'], /build-bulu-airborne\.mjs/,
+  'npm run bulu-art has to rebuild the airborne strip too');
+assert.ok(existsSync(join(process.cwd(), 'scripts', 'build-bulu-airborne.mjs')));
+assert.match(readFileSync(join(process.cwd(), 'scripts', 'build-bulu-airborne.mjs'), 'utf8'),
+  /must only read it/, 'the generator has to prove bulu.png came out unchanged');
+// The strip is built smaller than the walking art so a rotated pose fits its cell,
+// and the renderer draws it that much larger to keep the pet the same size. Two
+// numbers in two files have to agree, so they are checked against each other.
+const generatorSource = readFileSync(join(process.cwd(), 'scripts', 'build-bulu-airborne.mjs'), 'utf8');
+const fitScale = Number(/const FIT_SCALE = ([\d.]+);/.exec(generatorSource)?.[1]);
+assert.ok(fitScale > 0.5 && fitScale < 1, `unreadable FIT_SCALE in the generator: ${fitScale}`);
+// The renderer draws the strip `1 / scale` larger, so its divisor has to be the
+// generator's scale — the same number written in two files, checked here.
+const drawDivisor = Number(/const AIRBORNE_DRAW_SCALE = 1 \/ ([\d.]+);/.exec(appSource)?.[1]);
+assert.ok(Math.abs(drawDivisor - fitScale) < 1e-9,
+  `the strip is generated at ${fitScale} but the renderer compensates for ${drawDivisor}`);
 console.log('Weekly summary (week totals, streak, verdict): passed');
 console.log('Pet packs (frames, grid, wiring, dictionary): passed');
-console.log('Thrown pet: release velocity, friction, four walls, settle: passed');
+console.log('Thrown pet: release judgement, friction, four walls, airborne strip: passed');
 
 console.log('Lightweight image validation (cutout lives in Rust): passed');
 console.log('Lightweight package contents: passed');
