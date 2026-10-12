@@ -69,6 +69,14 @@ header button { border: 0; background: transparent; }
 .skins button { min-height: 67px; font-size: 24px; }
 .skins small { display: block; margin-top: 3px; font-size: 11px; }
 .skins button.active { border: 2px solid #ea773b; background: #ffead9; }
+/* Installed pet packs: one row each, because a card has to carry a name, its
+   author and three actions without turning into a two-column puzzle. */
+.packs { display: flex; flex-direction: column; gap: 8px; margin: 10px 0 12px; }
+.pack-card { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 9px 11px; border: 1px solid #e9cbb6; border-radius: 12px; background: #fffaf4; }
+.pack-card.active { border: 2px solid #ea773b; background: #ffead9; }
+.pack-card strong { flex: 1 1 100%; font-size: 14px; }
+.pack-card small { flex: 1 1 100%; color: #a65a37; font-size: 11px; }
+.pack-card button { font: inherit; font-size: 12px; padding: 4px 10px; }
 .status { min-height: 18px; margin: 8px 0 0; color: #886c5b; font-size: 12px; }
 .status.error { color: #ba3e2e; }
 .preview-row { display: flex; gap: 16px; }

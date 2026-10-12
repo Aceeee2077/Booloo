@@ -560,6 +560,47 @@ export const zhDict: Record<string, I18nValue> = {
   'lite.drop.audio': '是给我点的歌吗？🎵',
   'lite.drop.video': '一起看电影吗？🍿',
   'lite.drop.other': '这是给我的工资吗 ：）',
+
+  // 本周小结 / weekly summary — read from the per-day counters the pet already
+  // keeps (see src/renderer/lite-summary.ts). The headline keys are fixed by
+  // SUMMARY_HEADLINES, so the verdict can never drift from the dictionary.
+  'lite.summary.title': '本周小结',
+  'lite.summary.range': '{from} ~ {to}（本周至今）',
+  'lite.summary.days': '陪伴天数',
+  'lite.summary.clicks': '点击次数',
+  'lite.summary.stand': '站立提醒',
+  'lite.summary.eye': '护眼提醒',
+  'lite.summary.water': '喝水提醒',
+  'lite.summary.affinity': '本周好感',
+  'lite.summary.quiet': '这一周它大多在睡觉，等你有空摸摸它。',
+  'lite.summary.steady': '稳稳的陪伴，它记住了每一次。',
+  'lite.summary.warm': '这一周你常来看看它，它心情很好。',
+  'lite.summary.streak': '已经连续陪伴 {n} 天。',
+  'lite.summary.hint': '数字来自每天已经记录的统计，不会上传。',
+
+  // 宠物包 / pet packs — a user-imported character (see src-tauri/src/petpack.rs).
+  'lite.pack.title': '宠物包',
+  'lite.pack.hint': '宠物包是一个文件夹：里面放着 petpack.json 和它引用的精灵图。选好文件夹即可导入。',
+  'lite.pack.empty': '还没有导入宠物包。',
+  'lite.pack.import': '导入宠物包…',
+  'lite.pack.use': '使用',
+  'lite.pack.export': '导出',
+  'lite.pack.remove': '删除',
+  'lite.pack.imported': '已导入「{name}」。',
+  'lite.pack.exported': '已导出到 {path}',
+  'lite.pack.removed': '已删除「{name}」。',
+  'lite.pack.importFailed': '导入失败：{error}',
+  'lite.pack.exportFailed': '导出失败：{error}',
+  'lite.pack.removeFailed': '删除失败：{error}',
+  'lite.pack.noManifest': '这个文件夹里没有 petpack.json',
+  'lite.pack.badSchema': '不支持的 schemaVersion：{v}（只认 1）',
+  'lite.pack.badSprite': 'sprite 设置不合法：{detail}',
+  'lite.pack.badAnimation': 'animations 不合法：{detail}',
+  'lite.pack.missingSheet': '找不到精灵图 {file}',
+  'lite.pack.notFound': '没有安装这个宠物包',
+  'lite.pack.badSheet': '精灵图是 {width}×{height}，与 sprite 声明的 {expected} 不符',
+  'lite.pack.tooLarge': '宠物包太大（超过 120 MB）',
+  'lite.pack.badId': '宠物包的 id 不能用作文件夹名',
 };
 
 export const enDict: Record<string, I18nValue> = {
@@ -1113,6 +1154,45 @@ export const enDict: Record<string, I18nValue> = {
   'lite.drop.audio': 'Is that a song for me? 🎵',
   'lite.drop.video': 'Movie night together? 🍿',
   'lite.drop.other': 'Is this my paycheck? :)',
+
+  // Weekly summary — see the matching block in zhDict.
+  'lite.summary.title': 'This week',
+  'lite.summary.range': '{from} – {to} (this week so far)',
+  'lite.summary.days': 'Days together',
+  'lite.summary.clicks': 'Clicks',
+  'lite.summary.stand': 'Stand-ups',
+  'lite.summary.eye': 'Eye breaks',
+  'lite.summary.water': 'Water breaks',
+  'lite.summary.affinity': 'Affection',
+  'lite.summary.quiet': 'A quiet week — it mostly napped and waited for you.',
+  'lite.summary.steady': 'Steady company; it remembers every visit.',
+  'lite.summary.warm': 'You dropped by often this week and it shows.',
+  'lite.summary.streak': 'That is {n} days in a row.',
+  'lite.summary.hint': 'Counted from what the pet already records each day — nothing is uploaded.',
+
+  // Pet packs — see the matching block in zhDict.
+  'lite.pack.title': 'Pet packs',
+  'lite.pack.hint': 'A pet pack is a folder holding petpack.json and the sprite sheet it points at. Pick the folder to import it.',
+  'lite.pack.empty': 'No pet packs imported yet.',
+  'lite.pack.import': 'Import a pet pack…',
+  'lite.pack.use': 'Use',
+  'lite.pack.export': 'Export',
+  'lite.pack.remove': 'Delete',
+  'lite.pack.imported': 'Imported “{name}”.',
+  'lite.pack.exported': 'Exported to {path}',
+  'lite.pack.removed': 'Deleted “{name}”.',
+  'lite.pack.importFailed': 'Import failed: {error}',
+  'lite.pack.exportFailed': 'Export failed: {error}',
+  'lite.pack.removeFailed': 'Delete failed: {error}',
+  'lite.pack.noManifest': 'This folder has no petpack.json',
+  'lite.pack.badSchema': 'Unsupported schemaVersion: {v} (only 1 is understood)',
+  'lite.pack.badSprite': 'The sprite block is not valid: {detail}',
+  'lite.pack.badAnimation': 'The animations block is not valid: {detail}',
+  'lite.pack.missingSheet': 'The sprite sheet {file} is missing',
+  'lite.pack.notFound': 'That pet pack is not installed',
+  'lite.pack.badSheet': 'The sheet is {width}×{height} but the sprite block describes {expected}',
+  'lite.pack.tooLarge': 'That pet pack is too large (over 120 MB)',
+  'lite.pack.badId': 'That pet pack id cannot be used as a folder name',
 };
 
 export function getDict(locale: Locale): Record<string, I18nValue> {

@@ -14,6 +14,7 @@ mod custom;
 mod i18n;
 mod load;
 mod opener;
+mod petpack;
 mod tray;
 mod updater;
 mod window;
@@ -122,6 +123,8 @@ const LITE_SETTINGS_CHECK_JS: &str = r#"
     hasAffinity: !!document.getElementById('affinity') && !!document.getElementById('affinity-fill'),
     hasHealth: !!document.getElementById('health') && !!document.getElementById('eye-rest'),
     hasHeatmap: !!document.getElementById('heatmap-grid'),
+    hasWeeklySummary: !!document.getElementById('summary-days'),
+    hasPacks: !!document.getElementById('packs') && !!document.getElementById('import-pack'),
     hasCustomOutline: !!document.getElementById('custom-outline'),
     // The cutout preview is answered by Rust (custom_cutout_preview), so the
     // renderer no longer keys the photo itself; prove the call is wired.
@@ -333,6 +336,7 @@ pub fn run() {
             window::set_click_through,
             window::cursor_in_window,
             window::window_edge_gaps,
+            window::window_flight_bounds,
             window::config_get,
             window::config_set,
             window::quit_app,
@@ -354,6 +358,10 @@ pub fn run() {
             custom::custom_commit,
             custom::custom_discard,
             custom::custom_clear,
+            petpack::pet_list,
+            petpack::pet_import,
+            petpack::pet_export,
+            petpack::pet_remove,
             window::autolaunch_get,
             window::autolaunch_set,
             window::show_pet_window,

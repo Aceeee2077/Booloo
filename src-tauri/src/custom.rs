@@ -25,7 +25,9 @@ const CUSTOM_EXTENSIONS: [&str; 5] = [".png", ".jpg", ".jpeg", ".webp", ".gif"];
 const MAX_CUSTOM_BYTES: u64 = 60 * 1024 * 1024;
 const INLINE_IMAGE_BYTES: u64 = 8 * 1024 * 1024;
 
-fn inline_image(path: &Path) -> Option<String> {
+/// Small images are handed to the renderer as data URLs, so drawing them does not
+/// depend on the asset-protocol scope. Shared with the pet-pack module.
+pub(crate) fn inline_image(path: &Path) -> Option<String> {
     if fs::metadata(path).ok()?.len() > INLINE_IMAGE_BYTES { return None; }
     let mime = match path.extension()?.to_str()?.to_ascii_lowercase().as_str() {
         "png" => "image/png", "jpg" | "jpeg" => "image/jpeg",

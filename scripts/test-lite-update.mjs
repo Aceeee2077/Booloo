@@ -17,7 +17,21 @@ const { zhDict, enDict } = require(join(process.cwd(), 'dist', 'shared', 'i18n.j
 const RELEASES = 'https://github.com/Aceeee2077/Booloo/releases/latest';
 const events = new Map();
 const elements = new Map();
-const calls = { getState: 0, check: 0, download: 0, install: 0, openPage: 0, patches: [], care: [] };
+const calls = {
+  getState: 0, check: 0, download: 0, install: 0, openPage: 0,
+  patches: [], care: [], petList: 0, petExport: [], petRemove: [],
+};
+/** Installed pet packs the harness pretends are on disk. */
+const pets = [{
+  id: 'demo', displayName: '小恐龙', author: 'someone', version: '1.2.0',
+  dir: 'C:\\pets\\demo', spritesheet: 'C:\\pets\\demo\\sheet.png', url: 'data:image/png;base64,AA',
+  manifest: {
+    id: 'demo', displayName: '小恐龙', source: 'imported', schemaVersion: 1,
+    assets: { spritesheet: 'sheet.png' },
+    sprite: { frameWidth: 32, frameHeight: 32, columns: 4, rows: 2, scale: 1 },
+    animations: { idle: { frames: [0, 1], fps: 8, loop: true } },
+  },
+}];
 let locale = 'zh';
 let updateState = () => {};
 let configChanged = () => {};
@@ -84,6 +98,14 @@ const api = {
   },
   updateInstall: async () => { calls.install++; },
   care: (action) => { calls.care.push(action); },
+  // The installed pet packs are a directory listing rather than a config value.
+  petList: async () => {
+    calls.petList++;
+    return { ok: true, pets: pets };
+  },
+  petImport: async () => ({ ok: false, cancelled: true }),
+  petExport: async (id) => { calls.petExport.push(id); return { ok: true, path: `D:\\share\\${id}` }; },
+  petRemove: async (id) => { calls.petRemove.push(id); return { ok: true }; },
   closeSettings: () => {},
   openProjectPage: () => { calls.openPage++; },
 };
@@ -109,6 +131,8 @@ vm.runInContext(readFileSync(join(process.cwd(), 'dist', 'renderer', 'lite-i18n.
 vm.runInContext(readFileSync(join(process.cwd(), 'dist', 'renderer', 'lite-day.js'), 'utf8'), context);
 vm.runInContext(readFileSync(join(process.cwd(), 'dist', 'renderer', 'lite-affinity.js'), 'utf8'), context);
 vm.runInContext(readFileSync(join(process.cwd(), 'dist', 'renderer', 'lite-care.js'), 'utf8'), context);
+// The weekly summary is built from the same per-day buckets the heatmap draws.
+vm.runInContext(readFileSync(join(process.cwd(), 'dist', 'renderer', 'lite-summary.js'), 'utf8'), context);
 vm.runInContext(readFileSync(join(process.cwd(), 'dist', 'renderer', 'lite-settings.js'), 'utf8'), context);
 const settle = async () => { await new Promise(resolve => setImmediate(resolve)); await new Promise(resolve => setImmediate(resolve)); };
 await settle();
@@ -269,6 +293,31 @@ assert.match(cellAt(dayOf(now)).title, /45/, 'a day cell carries its real count 
 levelOf(null);
 assert.match(element('heatmap-summary').textContent, /还没有记录/, 'an empty year says so');
 
+// ---------- weekly summary ----------
+// The report reads the very same per-day buckets the grid above was just drawn
+// from, so the two can never disagree and the pet records nothing extra for it.
+config.dailyStats = {
+  [todayKey]: { clicks: 45, stand: 2, eye: 1, water: 1, affinity: 12 },
+};
+configChanged({ ...config });
+await settle();
+assert.equal(element('summary-clicks').textContent, '45');
+assert.equal(element('summary-days').textContent, '1', 'one day was spent together');
+assert.equal(element('summary-stand').textContent, '2');
+assert.equal(element('summary-eye').textContent, '1');
+assert.equal(element('summary-water').textContent, '1');
+assert.equal(element('summary-affinity').textContent, '+12', 'the week reports the affection it earned');
+assert.match(element('summary-line').textContent, /陪伴/, 'and it says something about the week');
+assert.match(element('summary-range').textContent, /–|~/u, 'the range is printed as a range');
+// A day the pet was not running is absent rather than a zero.
+config.dailyStats = {};
+configChanged({ ...config });
+await settle();
+assert.equal(element('summary-clicks').textContent, '0');
+assert.equal(element('summary-days').textContent, '0');
+assert.match(element('summary-line').textContent, /睡觉/, 'an empty week reads as a quiet one');
+console.log('Weekly summary panel: totals, quiet week and range: passed');
+
 // The rest of the year is on the grid too: later days are drawn as empty squares
 // that say "not yet", and the padding that belongs to the neighbouring year is
 // not drawn as days at all.
@@ -390,3 +439,41 @@ click('open-github');
 assert.equal(calls.openPage, 1, 'clicking the GitHub button opens the project page');
 
 console.log('GitHub button in the settings title bar: passed');
+
+// ---------- pet packs ----------
+// An imported character is a whole folder — a manifest plus a sheet — so the panel
+// lists it, and every action goes through the backend rather than the config.
+const packList = element('packs');
+assert.equal(calls.petList, 1, 'the panel lists the installed packs on open');
+assert.equal(packList.children.length, 1, 'one card per installed pack');
+const packCard = packList.children[0];
+assert.equal(packCard.dataset.packId, 'demo');
+assert.equal(packCard.children[0].textContent, '小恐龙');
+assert.equal(packCard.children[1].textContent, 'someone · 1.2.0');
+const [useButton, exportButton, deleteButton] = packCard.children.slice(2);
+assert.equal(useButton.textContent, zhDict['lite.pack.use']);
+assert.equal(exportButton.textContent, zhDict['lite.pack.export']);
+assert.equal(deleteButton.textContent, zhDict['lite.pack.remove']);
+
+// "Use" is the same config write the skin buttons make, so the pet window picks
+// the pack up through the ordinary config broadcast.
+const cardStub = { dataset: { packId: 'demo' } };
+const packButton = (action) => ({
+  dataset: { packAction: action },
+  closest: (selector) => (selector === '[data-pack-id]' ? cardStub : null),
+});
+const clickPack = (action) => events.get('packs:click')({ target: { closest: () => packButton(action) } });
+clickPack('use');
+await settle();
+// The patch is built inside the VM realm, so compare its shape, not its prototype.
+assert.deepEqual(JSON.parse(JSON.stringify(calls.patches.at(-1))), { skin: 'pack', currentPetId: 'demo' });
+clickPack('export');
+await settle();
+assert.deepEqual(calls.petExport, ['demo'], 'export goes through the backend');
+assert.match(element('pack-status').textContent, /demo/, 'and reports where the copy landed');
+clickPack('remove');
+await settle();
+assert.deepEqual(calls.petRemove, ['demo']);
+assert.equal(calls.petList, 2, 'deleting re-lists the installed packs');
+assert.match(element('pack-status').textContent, /小恐龙/, 'and says which pack went');
+console.log('Pet pack section: cards, use / export / delete: passed');

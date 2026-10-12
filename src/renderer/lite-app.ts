@@ -57,12 +57,8 @@ const BLINK_COLUMN = 3;
 const BLINK_MS = 150;
 const BLINK_GAP_MS = 3200;
 const BLINK_JITTER_MS = 5200;
-/**
- * How long one walking frame is on screen. The walk row is four frames, so a
- * full stride is four of these; anything that has to stay in step with the legs
- * (the body bob) has to be measured in this unit, not in wall-clock seconds.
- */
-const WALK_FRAME_MS = 125;
+// The walking gait (frame length, body bob, ground covered per stride) lives in
+// lite-gait.ts, so the legs, the body and the window movement all read one clock.
 /**
  * Directions the sticker outline is stamped in. Diagonals are in the list so a
  * rounded silhouette has no gap at the corners.
@@ -74,6 +70,17 @@ const OUTLINE_OFFSETS: ReadonlyArray<readonly [number, number]> =
   let custom: LitePreparedImage | null = null;
   /** White silhouette of `custom`, drawn under it when the outline is on. */
   let customOutline: HTMLCanvasElement | null = null;
+  /** The installed pet pack the config points at, once its sheet has decoded. */
+  let pack: { entry: LitePetPackEntry; sheet: HTMLImageElement } | null = null;
+  /**
+   * Which of the pack's animations is playing, and when it started.
+   *
+   * A pack's frames come from its own `fps`, so the clock restarts whenever the
+   * animation changes — otherwise switching from idle to walk would drop the pet
+   * into the middle of the walk cycle.
+   */
+  let packAnimation = '';
+  let packAnimationStartedAt = 0;
   let loadSerial = 0;
   let facing: -1 | 1 = 1;
   let dragging = false;
@@ -83,6 +90,23 @@ const OUTLINE_OFFSETS: ReadonlyArray<readonly [number, number]> =
   let nextSleep = performance.now() + 90_000;
   let sleepUntil = 0;
   let walkUntil = 0;
+  /**
+   * When the current walk started, or 0 when the pet is not walking.
+   *
+   * The gait is measured from here instead of from the wall clock, so a walk
+   * always begins on frame 0 and the body bob is in phase with the legs from the
+   * first step. Cleared as soon as the pet leaves the walking state (see `draw`).
+   */
+  let gaitStartedAt = 0;
+  /**
+   * The pet's flight after a throw, or null when it is not airborne.
+   *
+   * `bounds` is the work-area box Rust computed for this throw (see
+   * src/renderer/lite-throw.ts); the loop integrates it in `stepFlight`.
+   */
+  let flight: { x: number; y: number; vx: number; vy: number; at: number; bounds: ThrowBounds } | null = null;
+  /** The tail of the drag, sampled in screen px + ms, for the release velocity. */
+  const dragSamples: ThrowSample[] = [];
   let nextWalk = performance.now() + 5000;
   let clickUntil = 0;
   let speechTimer: number | null = null;
@@ -189,6 +213,72 @@ const OUTLINE_OFFSETS: ReadonlyArray<readonly [number, number]> =
     walkUntil = 0;
     window.api.autoMoveStop();
     nextWalk = performance.now() + 4000 + Math.random() * 6000;
+  }
+
+  // ---------- the throw ----------
+  /** Remember one pointer position from the drag. */
+  function sampleDrag(x: number, y: number) {
+    dragSamples.push({ x, y, t: performance.now() });
+    // The whole gesture is never needed — `throwVelocity` only reads the last
+    // 120 ms — so the buffer is bounded rather than growing for a long drag.
+    if (dragSamples.length > 24) dragSamples.shift();
+  }
+
+  /**
+   * Turn the gesture that just ended into a flight.
+   *
+   * The launch position is read back from the window instead of assumed: while the
+   * button was down Rust owned the cursor anchor (`drag_begin` / `drag_move`), so
+   * the real position is the only trustworthy answer. A grab that happened while
+   * these awaits were in flight wins — catching a thrown pet must not fight with
+   * the throw that was already starting.
+   */
+  async function launchThrow() {
+    const velocity = throwVelocity(dragSamples);
+    dragSamples.length = 0;
+    if (!throwCanLaunch(velocity)) return;
+    try {
+      const [x, y] = await window.api.getWindowPosition();
+      if (pressed || dragging) return;
+      // Rust owns the edges: this needs the work area, the monitor scale factor and
+      // the pet's silhouette, none of which the page can see. No box = no flight.
+      const bounds = throwBounds(await window.api.flightBounds(visibleRect));
+      if (!bounds) return;
+      flight = { x, y, vx: velocity!.vx, vy: velocity!.vy, at: performance.now(), bounds };
+      // Wakes the pet and stops any walk that was still running, so nothing else
+      // moves the window while the flight owns it.
+      activity();
+    } catch (error) {
+      (window as unknown as Record<string, unknown>).__petError = `throw: ${String(error)}`;
+    }
+  }
+
+  /**
+   * One tick of the flight, then the window move that follows it.
+   *
+   * The move is fire-and-forget: `window_move_to` clamps to the monitor on the
+   * Rust side anyway, and awaiting an IPC round trip per frame would put the whole
+   * pet loop behind the animation frame it is drawing.
+   */
+  function stepFlight(now: number) {
+    if (!flight) return;
+    const next = throwStep(flight, now - flight.at, flight.bounds);
+    flight = next.settled ? null : { ...flight, x: next.x, y: next.y, vx: next.vx, vy: next.vy, at: now };
+    window.api.moveWindowTo(next.x, next.y);
+  }
+
+  /**
+   * Lean the pet into its travel while it is in the air.
+   *
+   * Cosmetic — the position is what the throw is about — but without it a thrown pet
+   * reads as a window that jumped. The sign is flipped when the art is mirrored, so
+   * the pet leans the same way on screen as it does in the unmirrored canvas.
+   */
+  function leanForFlight(state: string, centerX: number, centerY: number, mirrored: boolean) {
+    if (state !== 'thrown' || !flight) return;
+    ctx.translate(centerX, centerY);
+    ctx.rotate(throwTilt(flight.vx) * (mirrored ? -1 : 1));
+    ctx.translate(-centerX, -centerY);
   }
 
   function activity() {
@@ -1072,10 +1162,44 @@ const OUTLINE_OFFSETS: ReadonlyArray<readonly [number, number]> =
     }
   }
 
+  /**
+   * Load the installed pet pack the config names.
+   *
+   * The backend already validated the manifest and the sheet when it was
+   * imported (src-tauri/src/petpack.rs), so this only has to find it and decode
+   * the picture. A missing or unreadable pack leaves `pack` null, and `draw`
+   * falls through to Bulu rather than leaving the window empty.
+   */
+  async function loadPack() {
+    const serial = ++loadSerial;
+    pack = null;
+    packAnimation = '';
+    if (config?.skin !== 'pack') return;
+    const id = String(config.currentPetId ?? '');
+    if (!id) return;
+    try {
+      const list = await window.api.petList();
+      const entry = (list.pets ?? []).find(pet => pet?.id === id);
+      if (!entry) throw new Error(liteT('lite.pack.notFound'));
+      const source = entry.url ?? entry.spritesheet;
+      if (!source) throw new Error(liteT('lite.pack.missingSheet', { file: id }));
+      const sheet = await liteLoadImage(source);
+      if (serial !== loadSerial) return;
+      pack = { entry, sheet };
+      (window as unknown as Record<string, unknown>).__petError = null;
+    } catch (error) {
+      if (serial !== loadSerial) return;
+      (window as unknown as Record<string, unknown>).__petError = `pet pack: ${String(error)}`;
+    }
+  }
+
   function applyConfig(next: AppConfig) {
     const reload = !config || config.skin !== next.skin || config.customImagePath !== next.customImagePath ||
       config.customImageRevision !== next.customImageRevision ||
-      config.customOutline !== next.customOutline;
+      config.customOutline !== next.customOutline ||
+      // Switching between two packs changes nothing else, so the id is part of
+      // what makes the appearance stale.
+      config.currentPetId !== next.currentPetId;
     const reminderChanged = !config || config.standReminderEnabled !== next.standReminderEnabled ||
       config.standReminderMinutes !== next.standReminderMinutes;
     const chimeChanged = !config || config.hourlyChime !== next.hourlyChime;
@@ -1122,10 +1246,14 @@ const OUTLINE_OFFSETS: ReadonlyArray<readonly [number, number]> =
     // Reading the machine is cheap but not free, so it happens on that switch and
     // on the poll timer — never per frame.
     if (loadChanged) void pollLoad();
-    if (reload) void loadCustom();
+    if (reload) { void loadCustom(); void loadPack(); }
   }
 
-  function updateDream(state: 'idle' | 'walk' | 'sleep' | 'click', now: number) {
+  /**
+   * The dream bubble is a sleeping thing, so the only state this cares about is
+   * `sleep` — a thrown pet is very much awake.
+   */
+  function updateDream(state: 'idle' | 'walk' | 'sleep' | 'click' | 'thrown', now: number) {
     if (state !== 'sleep') {
       dream.hidden = true;
       nextDreamAt = 0;
@@ -1188,6 +1316,10 @@ const OUTLINE_OFFSETS: ReadonlyArray<readonly [number, number]> =
   }
 
   function update(now: number) {
+    // A flying pet owns the window: no walk, no reminder trip, no chime may fight
+    // the flight for the position while it is in the air. The flight lasts a couple
+    // of seconds at most (friction ends it), so nothing else is starved by this.
+    if (flight) { stepFlight(now); return; }
     if (!config || dragging || reminderRunning) return;
     if (activeAction) {
       if (now < activeAction.started + activeAction.duration) return;
@@ -1201,26 +1333,38 @@ const OUTLINE_OFFSETS: ReadonlyArray<readonly [number, number]> =
     if (!config.autoMove || walkUntil || now < nextWalk || signVisible() || currentState(now) === 'sleep') return;
     facing = Math.random() < 0.5 ? -1 : 1;
     walkUntil = now + 1600 + Math.random() * 1800;
-    window.api.autoMoveStart(facing, 48);
+    // The glide speed is derived from the gait, not tuned beside it: the stride
+    // length over the stride duration, so the feet stay planted whether the pet
+    // is resized or the animation speed changes. An imported pack declares its own
+    // walking fps, so its legs are compared against the built-in 8 fps rather than
+    // being assumed to match it.
+    const packRate = pack ? litePackWalkFps(pack.entry.manifest) / gaitFps() : 1;
+    gaitStartedAt = now;
+    window.api.autoMoveStart(facing, gaitSpeed(gaitRate(config.animSpeed) * (packRate || 1), config.petScale));
   }
 
   function draw(now: number) {
     syncPixelRatio();
     ctx.clearRect(0, 0, 300, 300);
-    const state = dragging ? 'walk' : currentState(now);
+    // Airborne outranks everything the pet wanted to do: a thrown pet is being
+    // flung, and the pose has to say so until it lands.
+    const state: 'idle' | 'walk' | 'sleep' | 'click' | 'thrown' =
+      flight ? 'thrown' : dragging ? 'walk' : currentState(now);
     const action = activeAction && now < activeAction.started + activeAction.duration ? activeAction : null;
-    const sizeScale = Math.max(0.65, Math.min(1.6, Number(config?.petScale) || 1));
+    const sizeScale = gaitSize(config?.petScale);
     // The resting state is deliberately motionless: the pet only animates while it
     // walks (auto-walk or dragging), clicks or sleeps.
     //
-    // The walking bob is locked to the *leg clock*: two dips per four-frame
-    // stride, one per diagonal step. It used to be `Math.sin(now / 100)`, a
-    // 628 ms period against a 500 ms cycle, so it drifted through the legs
-    // instead of punctuating them and the pet read as floating rather than
-    // walking.
-    const walkPhase = now / WALK_FRAME_MS;
+    // The walking gait is measured from the start of *this* walk (lite-gait.ts):
+    // the legs, the body bob and the glide Rust is running all read one phase, so
+    // the pet begins on a contact frame and the bob punctuates the steps instead
+    // of drifting through them. It used to be `Math.sin(now / 100)` — a 628 ms
+    // period against a 500 ms cycle — which read as floating rather than walking.
+    if (state === 'walk') { if (!gaitStartedAt) gaitStartedAt = now; } else { gaitStartedAt = 0; }
+    const walkElapsed = gaitStartedAt ? now - gaitStartedAt : 0;
+    const gaitRateNow = gaitRate(config?.animSpeed);
     const bob = action ? 0
-      : state === 'walk' ? (0.5 - Math.abs(Math.sin((Math.PI * walkPhase) / 2))) * 5
+      : state === 'walk' ? gaitBob(walkElapsed, gaitRateNow)
       : state === 'click' ? -Math.abs(Math.sin(now / 90)) * 3
       : 0;
     // The care loop moves the whole pet instead of the sprite frames: up and
@@ -1232,7 +1376,9 @@ const OUTLINE_OFFSETS: ReadonlyArray<readonly [number, number]> =
     const shiftY = -20 * pounce + (eating ? careChewDip(now - eating.startedAt) : 0);
     // An unknown skin (an install from before the line-up was trimmed) rides the
     // Bulu art rather than leaving the window blank.
-    const target = config?.skin === 'custom' && custom ? 'custom' : config?.skin && sheets[config.skin] ? config.skin : 'bulu';
+    const target = config?.skin === 'custom' && custom ? 'custom'
+      : config?.skin === 'pack' && pack ? 'pack'
+      : config?.skin && sheets[config.skin] ? config.skin : 'bulu';
 
     ctx.save();
     ctx.globalAlpha = state === 'sleep' ? 0.78 : 1;
@@ -1255,6 +1401,8 @@ const OUTLINE_OFFSETS: ReadonlyArray<readonly [number, number]> =
       const width = bounds.width * fit, height = bounds.height * fit * heightScale;
       const x = 150 - width / 2 + shiftX, y = 293 - height + bob - lift + shiftY;
       ctx.imageSmoothingEnabled = true;
+      // The picture pet is never mirrored, so its lean is a plain screen-space one.
+      leanForFlight(state, x + width / 2, y + height / 2, false);
       if (customOutline) {
         // Stamp the silhouette around the picture for a sticker edge. The
         // thickness tracks the on-screen size, so it looks the same at any
@@ -1267,17 +1415,49 @@ const OUTLINE_OFFSETS: ReadonlyArray<readonly [number, number]> =
       }
       ctx.drawImage(custom.canvas, bounds.x, bounds.y, bounds.width, bounds.height, x, y, width, height);
       visibleRect = { x, y, w: width, h: height };
+    } else if (target === 'pack' && pack && pack.sheet.complete && pack.sheet.naturalWidth) {
+      // An imported character is drawn straight out of its own sheet: the state
+      // picks the animation (`lite-pack.ts`), and an action the pack happens to
+      // declare of that name wins over it. A pack without `wave` therefore still
+      // walks and sleeps normally instead of freezing on a missing clip.
+      const definition = pack.entry.manifest;
+      const wanted = action ? action.kind : litePackStateName(state);
+      const name = litePackAnimationName(definition, wanted) ?? '';
+      if (name !== packAnimation) { packAnimation = name; packAnimationStartedAt = now; }
+      const animation = name ? litePackAnimation(definition, name) : null;
+      if (animation) {
+        // A walk is measured from the start of the walk (the gait's clock), every
+        // other animation from the moment it was selected.
+        const elapsed = state === 'walk' ? walkElapsed : now - packAnimationStartedAt;
+        const slot = animation.frames[litePackFrameIndex(animation, elapsed)];
+        const frame = litePackFrameRect(definition, slot);
+        const fit = Math.min(148 / frame.w, 148 / frame.h) * sizeScale * (Number(definition.sprite.scale) || 1);
+        const width = frame.w * fit, height = frame.h * fit;
+        const x = 150 - width / 2 + shiftX, y = 293 - height + bob + shiftY;
+        ctx.imageSmoothingEnabled = true;
+        if (facing > 0) {
+          ctx.translate(300, 0); ctx.scale(-1, 1);
+        }
+        leanForFlight(state, x + width / 2, y + height / 2, facing > 0);
+        ctx.drawImage(pack.sheet, frame.x, frame.y, frame.w, frame.h, x, y, width, height);
+        visibleRect = { x, y, w: width, h: height };
+      }
     } else {
       const image = sheets[target];
       if (image?.complete && image.naturalWidth) {
         const cell = image.naturalWidth / 4;
-        const frame = Math.floor(now / (state === 'walk' ? WALK_FRAME_MS : 220)) % 4;
+        // In the air the legs cycle faster than a walk: the same four frames, read
+        // as flailing rather than as stepping.
+        const frame = state === 'walk' ? gaitFrame(walkElapsed, gaitRateNow)
+          : Math.floor(now / (state === 'thrown' ? 60 : 220)) % 4;
         // Bulu's resting pose blinks; walking, sleeping and the click answer play
         // their own frames. The blink cell only exists in the bundled sheet, so an
         // imported picture is never asked for one.
         const blink = target === 'bulu' ? blinkColumn(now, state, !!action) : 0;
         const column = target === 'bulu' && state === 'idle' ? blink : frame;
-        const row = action ? action.kind === 'yawn' ? 2 : 3 : state === 'walk' ? 1 : state === 'sleep' ? 2 : state === 'click' ? 3 : 0;
+        const row = action ? action.kind === 'yawn' ? 2 : 3
+          : state === 'walk' || state === 'thrown' ? 1
+          : state === 'sleep' ? 2 : state === 'click' ? 3 : 0;
         const size = 132 * sizeScale;
         const x = 150 - size / 2 + shiftX, y = 293 - size + bob + shiftY;
         // Bulu is a drawn illustration: smoothing preserves the fur details
@@ -1288,6 +1468,7 @@ const OUTLINE_OFFSETS: ReadonlyArray<readonly [number, number]> =
         if (facing > 0) {
           ctx.translate(300, 0); ctx.scale(-1, 1);
         }
+        leanForFlight(state, x + size / 2, y + size / 2, facing > 0);
         ctx.drawImage(image, column * cell, row * cell, cell, cell, x, y, size, size);
         visibleRect = { x, y, w: size, h: size };
       }
@@ -1418,6 +1599,9 @@ const OUTLINE_OFFSETS: ReadonlyArray<readonly [number, number]> =
       canvas.style.cursor = over ? 'grab' : 'default';
     }
     if (!pressed) return;
+    // The last position still counts as part of the gesture: the release that ends
+    // the throw is usually the button coming up during a move, not a separate event.
+    sampleDrag(event.screenX, event.screenY);
     if (event.buttons === 0) { release(); return; }
     if (!dragging && Math.hypot(event.screenX - pressAt.x, event.screenY - pressAt.y) > 5) {
       dragging = true; activity(); canvas.style.cursor = 'grabbing';
@@ -1434,6 +1618,11 @@ const OUTLINE_OFFSETS: ReadonlyArray<readonly [number, number]> =
   });
   canvas.addEventListener('mousedown', (event) => {
     if (event.button !== 0 || !hit(event.offsetX, event.offsetY)) return;
+    // Grabbing a pet in mid-air catches it: the flight ends where it was caught,
+    // and the drag that follows starts from there like any other.
+    flight = null;
+    dragSamples.length = 0;
+    sampleDrag(event.screenX, event.screenY);
     // A tap on a treat feeds it; a tap anywhere else on the pet while the tray is
     // up puts the tray away and falls through to the normal tap reaction.
     if (tray) {
@@ -1460,7 +1649,9 @@ const OUTLINE_OFFSETS: ReadonlyArray<readonly [number, number]> =
     const wasDragging = dragging;
     window.api.dragEnd(visibleRect);
     pressed = false; dragging = false; canvas.style.cursor = 'grab';
-    if (wasDragging) return;
+    // A drag that ended fast enough becomes a throw; anything slower is a
+    // placement, and the pet simply stays where it was dropped.
+    if (wasDragging) { void launchThrow(); return; }
     // A tap answers from where the pet was touched; two taps in quick succession
     // are read as affection rather than as two pokes.
     const now = performance.now();

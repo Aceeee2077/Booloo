@@ -89,7 +89,8 @@ context.liteT = makeTranslate(zhDict);
 const renderer = join(process.cwd(), 'dist', 'renderer');
 const shippedScripts = readdirSync(renderer).filter(name => name.endsWith('.js')).sort();
 assert.deepEqual(shippedScripts, ['lite-affinity.js', 'lite-api.js', 'lite-app.js', 'lite-care.js', 'lite-day.js',
-  'lite-file-reaction.js', 'lite-i18n.js', 'lite-image.js', 'lite-mask.js', 'lite-menu.js', 'lite-settings.js']);
+  'lite-file-reaction.js', 'lite-gait.js', 'lite-i18n.js', 'lite-image.js', 'lite-mask.js', 'lite-menu.js',
+  'lite-pack.js', 'lite-settings.js', 'lite-summary.js', 'lite-throw.js']);
 const fileReaction = { liteT: makeTranslate(zhDict) };
 vm.createContext(fileReaction);
 vm.runInContext(readFileSync(join(renderer, 'lite-file-reaction.js'), 'utf8'), fileReaction);
@@ -485,6 +486,312 @@ assert.equal(dom.documentElement.lang, 'en');
 assert.equal(textNode.textContent, enDict['lite.pet.petting']);
 assert.equal(labelNode.attributes['aria-label'], enDict['lite.pet.canvas']);
 assert.equal(i18n.liteT('lite.drop.multiple', { n: 3 }), 'Whoa, 3 paychecks? I am rich!');
+
+// ---- the walking gait ------------------------------------------------------
+// One clock for the legs, the body and the ground covered. This module is what
+// stopped the body bob drifting through the walk cycle, and the pet window cannot
+// be driven from a test, so its numbers are pinned here instead.
+const gait = {};
+vm.createContext(gait);
+vm.runInContext(readFileSync(join(renderer, 'lite-gait.js'), 'utf8'), gait);
+const gaitConst = (name) => vm.runInContext(name, gait);
+assert.equal(gaitConst('GAIT_FRAME_MS'), 125);
+assert.equal(gaitConst('GAIT_FRAMES'), 4);
+assert.equal(gait.gaitFrameMs(1), 125);
+assert.equal(gait.gaitStrideMs(1), 500, 'four frames make one stride');
+assert.equal(gait.gaitFps(1), 8);
+assert.equal(gait.gaitStridePx(1), 24);
+// The speed the pet window used to hard-code is now derived from the stride, so
+// the legs and the window cannot disagree when either one is retuned.
+assert.equal(gait.gaitSpeed(1, 1), 48);
+assert.equal(gait.gaitSpeed(1, 1.5), 72, 'a bigger pet takes longer steps');
+assert.equal(gait.gaitSpeed(2, 1), 96, 'a faster gait covers more ground');
+assert.equal(gait.gaitSize(0.1), 0.65);
+assert.equal(gait.gaitSize(9), 1.6);
+assert.equal(gait.gaitSize(undefined), 1);
+assert.equal(gait.gaitRate(0.1), 0.5);
+assert.equal(gait.gaitRate(9), 2);
+// The phase starts at the walk, not at the wall clock: every walk begins on frame
+// 0 (a contact pose) instead of wherever the clock happened to be.
+assert.equal(gait.gaitPhase(0, 1), 0);
+assert.equal(gait.gaitFrame(0, 1), 0);
+assert.equal(gait.gaitFrame(124, 1), 0);
+assert.equal(gait.gaitFrame(125, 1), 1);
+assert.equal(gait.gaitFrame(499, 1), 3);
+assert.equal(gait.gaitFrame(500, 1), 0, 'the fifth frame of walking is the first again');
+assert.equal(gait.gaitFrame(1000, 2), 0);
+// The bob is the curve that was tuned against the art by eye, only re-expressed
+// in the walk's own phase — so the shipped look has to come out bit for bit.
+const legacyBob = (t) => (0.5 - Math.abs(Math.sin((Math.PI * (t / 125)) / 2))) * 5;
+for (const t of [0, 41, 125, 250, 373, 500, 1201]) {
+  assert.ok(Math.abs(gait.gaitBob(t, 1) - legacyBob(t)) < 1e-12, `the bob changed at ${t}ms`);
+}
+assert.equal(gait.gaitBob(125, 1), -2.5, 'the body dips on the step');
+assert.ok(Math.abs(gait.gaitBob(1000, 2) - legacyBob(2000)) < 1e-12, 'twice the rate is twice the cycle');
+assert.ok(gait.gaitBob(100, 1) < gait.gaitBob(0, 1), 'and it is in step with the legs');
+assert.ok(gait.gaitBob(200, 1) > gait.gaitBob(125, 1));
+const appSource = readFileSync(join(process.cwd(), 'src', 'renderer', 'lite-app.ts'), 'utf8');
+assert.match(appSource, /gaitBob\(walkElapsed/);
+assert.match(appSource, /gaitFrame\(walkElapsed/);
+assert.match(appSource, /gaitSpeed\(gaitRate\(config\.animSpeed\)/, 'the glide speed comes from the gait');
+assert.match(readFileSync(join(renderer, 'index.html'), 'utf8'), /lite-gait\.js/);
+
+// ---- the weekly summary ----------------------------------------------------
+// Read straight out of the per-day counters the pet already keeps, so it can never
+// disagree with the heatmap sitting next to it. The week starts on Monday because
+// that is the heatmap's row order.
+const summary = {};
+vm.createContext(summary);
+vm.runInContext(readFileSync(join(renderer, 'lite-day.js'), 'utf8'), summary);
+vm.runInContext(readFileSync(join(renderer, 'lite-summary.js'), 'utf8'), summary);
+const summaryJson = (value) => JSON.parse(JSON.stringify(value));
+const week = summary.summaryWeekKeys('2026-01-15');
+assert.equal(week.length, 7);
+assert.equal(summary.liteDayWeekday(week[0]), 0, 'the week starts on Monday');
+for (const day of week) {
+  assert.equal(summary.summaryWeekStart(day), week[0], `${day} fell into another week`);
+  assert.deepEqual(summary.summaryWeekKeys(day), week, 'and every day agrees on it');
+}
+const weekStats = {
+  [week[0]]: { clicks: 5, stand: 1 },
+  [week[3]]: { clicks: 30, stand: 2, eye: 1, water: 1, affinity: 20 },
+};
+const totals = summaryJson(summary.summaryTotals(weekStats, week[0], week[6]));
+assert.equal(totals.from, week[0]);
+assert.equal(totals.to, week[6]);
+assert.equal(totals.days, 2, 'a day the app was not running is absent, not a zero');
+assert.equal(totals.clicks, 35);
+assert.equal(totals.stand, 3);
+assert.equal(totals.eye, 1);
+assert.equal(totals.water, 1);
+assert.equal(totals.affinity, 20);
+assert.equal(totals.best.date, week[3]);
+assert.equal(totals.best.clicks, 30);
+// A reversed or empty window reports nothing rather than a negative week.
+assert.equal(summary.summaryTotals(weekStats, week[6], week[0]).clicks, 0);
+assert.equal(summary.summaryTotals(undefined, week[0], week[6]).days, 0);
+assert.equal(summary.summaryTotals({}, week[0], week[6]).best, null);
+// The streak counts back from today, and a quiet today does not break it: nothing
+// has been recorded yet before the first touch of the day.
+assert.equal(summary.summaryStreak({}, week[0]), 0);
+assert.equal(summary.summaryStreak(weekStats, week[0]), 1);
+assert.equal(summary.summaryStreak({ [week[4]]: { clicks: 1 }, [week[5]]: { clicks: 1 } }, week[5]), 2);
+assert.equal(summary.summaryStreak({ [week[4]]: { clicks: 1 } }, week[5]), 1);
+assert.equal(summary.summaryStreak({ [week[4]]: { clicks: 1 } }, week[6]), 0, 'a missed day does end it');
+// The verdict is a dictionary key, never a sentence baked into the model.
+assert.equal(summary.summaryHeadlineKey({ days: 0 }), 'lite.summary.quiet');
+assert.equal(summary.summaryHeadlineKey({ days: 4 }), 'lite.summary.steady');
+assert.equal(summary.summaryHeadlineKey({ days: 5 }), 'lite.summary.warm');
+for (const key of Object.values(vm.runInContext('SUMMARY_HEADLINES', summary))) {
+  assert.equal(typeof zhDict[key], 'string', `zh is missing ${key}`);
+  assert.equal(typeof enDict[key], 'string', `en is missing ${key}`);
+}
+const settingsSource = readFileSync(join(process.cwd(), 'src', 'renderer', 'lite-settings.ts'), 'utf8');
+assert.match(settingsSource, /paintSummary\(cfg\)/, 'the panel has to paint the week');
+assert.match(readFileSync(join(renderer, 'settings.html'), 'utf8'), /id="summary-days"/);
+
+// ---- pet packs -------------------------------------------------------------
+// An imported character is drawn out of its own sheet: the frames, the grid and
+// the walking pace all come from the pack. This is what makes "import a pet" mean
+// a pet that walks, rather than one still photograph.
+const packs = {};
+vm.createContext(packs);
+vm.runInContext(readFileSync(join(renderer, 'lite-pack.js'), 'utf8'), packs);
+const packJson = (value) => JSON.parse(JSON.stringify(value));
+const pack = {
+  sprite: { frameWidth: 32, frameHeight: 32, columns: 4, rows: 2, scale: 1 },
+  animations: {
+    idle: { frames: [0, 1], fps: 8, loop: true },
+    walk: { frames: [4, 5, 6, 7], fps: 12, loop: true },
+    wave: { frames: [0, 1, 2], fps: 6, loop: false },
+  },
+};
+assert.equal(packs.litePackStateName('walk'), 'walk');
+assert.equal(packs.litePackStateName('sleep'), 'sleep');
+assert.equal(packs.litePackStateName('click'), 'click');
+assert.equal(packs.litePackStateName('idle'), 'idle');
+assert.equal(packs.litePackStateName('anything'), 'idle');
+assert.equal(packs.litePackAnimationName(pack, 'wave'), 'wave');
+assert.equal(packs.litePackAnimationName(pack, 'groom'), 'idle', 'a missing action falls back to idling');
+assert.equal(
+  packs.litePackAnimationName({ sprite: pack.sprite, animations: { walk: pack.animations.walk } }, 'sleep'),
+  'walk',
+  'a pack that only walks still shows something',
+);
+assert.equal(packs.litePackAnimationName({ sprite: pack.sprite, animations: {} }, 'idle'), null);
+// Frames advance on the pack's own fps, from the moment the animation started.
+assert.equal(packs.litePackFrameIndex(pack.animations.idle, 0), 0);
+assert.equal(packs.litePackFrameIndex(pack.animations.idle, 200), 1);
+assert.equal(packs.litePackFrameIndex(pack.animations.idle, 250), 0, 'and loop back');
+assert.equal(packs.litePackFrameIndex(pack.animations.walk, 84), 1);
+assert.equal(packs.litePackFrameIndex(pack.animations.walk, 1000), 0, '12 fps for a second, wrapped');
+assert.equal(packs.litePackFrameIndex(pack.animations.wave, 10_000), 2, 'a one-shot holds its last frame');
+assert.equal(packs.litePackFrameIndex(pack.animations.idle, -50), 0, 'a clock that has not started cannot skip ahead');
+// Frame numbers run left to right and then down, exactly like the built-in sheets.
+assert.deepEqual(packJson(packs.litePackFrameRect(pack, 0)), { x: 0, y: 0, w: 32, h: 32 });
+assert.deepEqual(packJson(packs.litePackFrameRect(pack, 3)), { x: 96, y: 0, w: 32, h: 32 });
+assert.deepEqual(packJson(packs.litePackFrameRect(pack, 4)), { x: 0, y: 32, w: 32, h: 32 });
+assert.deepEqual(packJson(packs.litePackFrameRect(pack, 7)), { x: 96, y: 32, w: 32, h: 32 });
+// The glide speed follows the pack's legs rather than Bulu's 8 fps.
+assert.equal(packs.litePackWalkFps(pack), 12);
+assert.equal(packs.litePackWalkFps({ sprite: pack.sprite, animations: { idle: pack.animations.idle } }), 0);
+assert.equal(packs.litePackWalkFps({ sprite: pack.sprite, animations: { walk: { frames: [0], fps: 0, loop: true } } }), 8);
+assert.match(appSource, /loadPack/, 'the pet window has to load the active pack');
+assert.match(appSource, /litePackAnimationName\(definition/);
+assert.match(appSource, /litePackFrameRect\(definition/);
+assert.match(appSource, /pack\.sheet, frame\.x, frame\.y/);
+const apiSource = readFileSync(join(process.cwd(), 'src', 'renderer', 'lite-api.ts'), 'utf8');
+for (const command of ['pet_list', 'pet_import', 'pet_export', 'pet_remove']) {
+  assert.match(apiSource, new RegExp(command), `lite-api is missing the ${command} bridge`);
+}
+const libSource = readFileSync(join(process.cwd(), 'src-tauri', 'src', 'lib.rs'), 'utf8');
+assert.match(libSource, /mod petpack;/);
+for (const command of ['petpack::pet_list', 'petpack::pet_import', 'petpack::pet_export', 'petpack::pet_remove']) {
+  assert.match(libSource, new RegExp(command), `${command} is not registered`);
+}
+const tauriConfigFile = JSON.parse(readFileSync(join(process.cwd(), 'src-tauri', 'tauri.conf.json'), 'utf8'));
+assert.ok(tauriConfigFile.app.security.assetProtocol.scope.includes('$APPCONFIG/pets/**'),
+  'a pack sheet has to be readable through the asset protocol');
+// A module nothing compiles is a feature that quietly disappears: this is exactly
+// how updater.rs was dropped once, so the ignore file is checked for both halves.
+const ignoreFile = readFileSync(join(process.cwd(), '.gitignore'), 'utf8');
+assert.doesNotMatch(ignoreFile, /^\/src-tauri\/src\/petpack\.rs$/m, 'petpack.rs must not be gitignored');
+assert.doesNotMatch(ignoreFile, /^\/src\/renderer\/lite-pack\.ts$/m, 'lite-pack.ts must not be gitignored');
+assert.match(settingsSource, /petImport\(\)/);
+assert.match(settingsSource, /petExport\(id\)/);
+assert.match(settingsSource, /petRemove\(id\)/);
+assert.match(readFileSync(join(renderer, 'index.html'), 'utf8'), /lite-pack\.js/);
+assert.match(readFileSync(join(renderer, 'settings.html'), 'utf8'), /id="packs"/);
+assert.match(readFileSync(join(renderer, 'settings.html'), 'utf8'), /id="import-pack"/);
+// The Rust side translates its refusals out of the dictionary it embeds, so the
+// *built* resource is what has to carry the keys — not just the TypeScript source.
+const packKeys = ['lite.pack.imported', 'lite.pack.exported', 'lite.pack.removed', 'lite.pack.importFailed',
+  'lite.pack.exportFailed', 'lite.pack.removeFailed', 'lite.pack.noManifest', 'lite.pack.notFound',
+  'lite.pack.badSchema', 'lite.pack.badSprite', 'lite.pack.badAnimation', 'lite.pack.badSheet',
+  'lite.pack.missingSheet', 'lite.pack.tooLarge', 'lite.pack.badId'];
+const packResource = JSON.parse(readFileSync(join(process.cwd(), 'src-tauri', 'resources', 'i18n.json'), 'utf8'));
+for (const key of packKeys) {
+  for (const locale of ['zh', 'en']) {
+    assert.equal(typeof zhDict[key], 'string', `${locale}Dictionary in src/shared/i18n.ts is missing ${key}`);
+    assert.equal(typeof packResource[locale][key], 'string', `src-tauri/resources/i18n.json is missing ${locale} ${key}`);
+  }
+}
+console.log('Walking gait (one clock for legs, body and ground): passed');
+// ---- the throw --------------------------------------------------------------
+// Dragging is native (window.rs); everything that happens after the button comes
+// up is this model: the release velocity, the friction, and the four walls.
+const thrown = {};
+vm.createContext(thrown);
+vm.runInContext(readFileSync(join(renderer, 'lite-throw.js'), 'utf8'), thrown);
+const throwConst = (name) => vm.runInContext(name, thrown);
+const throwJson = (value) => JSON.parse(JSON.stringify(value));
+const box = { minX: -100, minY: -100, maxX: 100, maxY: 100 };
+assert.equal(throwConst('THROW_MAX_SPEED'), 2600);
+assert.equal(throwConst('THROW_LAUNCH_SPEED'), 140);
+assert.equal(throwConst('THROW_BOUNCE'), 0.62);
+assert.equal(throwConst('THROW_STOP_SPEED'), 40);
+assert.equal(throwConst('THROW_GRAVITY'), 0, 'the throw asks for friction and walls, not an arc');
+const toStep = throwConst('THROW_STEP_MS');
+assert.equal(Math.round(toStep), 17, 'the friction numbers are tuned per 60 fps frame');
+
+// The release velocity is read from the tail of the gesture.
+assert.deepEqual(throwJson(thrown.throwVelocity([{ x: 0, y: 0, t: 0 }, { x: 100, y: 0, t: 100 }])), { vx: 1000, vy: 0 });
+assert.deepEqual(throwJson(thrown.throwVelocity([{ x: 0, y: 0, t: 0 }, { x: 0, y: 50, t: 50 }])), { vx: 0, vy: 1000 });
+// A pointer held still before letting go is a placement, not a throw: only the last
+// 120 ms count, so the pause cannot be averaged into speed.
+const held = [{ x: 0, y: 0, t: 0 }, { x: 300, y: 0, t: 100 }, { x: 300, y: 0, t: 300 }, { x: 300, y: 0, t: 420 }];
+assert.deepEqual(throwJson(thrown.throwVelocity(held)), { vx: 0, vy: 0 });
+assert.equal(thrown.throwVelocity([{ x: 0, y: 0, t: 0 }]), null, 'one sample is a tap, not a throw');
+assert.equal(thrown.throwVelocity([{ x: 0, y: 0, t: 5 }, { x: 9, y: 0, t: 5 }]), null, 'and no time passed');
+assert.equal(thrown.throwVelocity([]), null);
+// One fast flick cannot teleport the pet across the screen.
+const capped = thrown.throwVelocity([{ x: 0, y: 0, t: 0 }, { x: 10_000, y: 0, t: 100 }]);
+assert.ok(Math.abs(capped.vx - 2600) < 1e-6, `the launch speed is capped, got ${capped.vx}`);
+assert.equal(thrown.throwCanLaunch({ vx: 139, vy: 0 }), false);
+assert.equal(thrown.throwCanLaunch({ vx: 140, vy: 0 }), true);
+assert.equal(thrown.throwCanLaunch(null), false);
+
+// Friction is applied per unit of real time, so the same gesture glides the same
+// distance on a 30 fps machine as on a 60 fps one.
+const once = thrown.throwStep({ x: 0, y: 0, vx: 1000, vy: 0 }, toStep, box);
+const twice = thrown.throwStep(thrown.throwStep({ x: 0, y: 0, vx: 1000, vy: 0 }, toStep / 2, box), toStep / 2, box);
+assert.ok(Math.abs(once.vx - twice.vx) < 0.01, `${once.vx} vs ${twice.vx}`);
+assert.ok(Math.abs(once.x - twice.x) < 0.2, `${once.x} vs ${twice.x}`);
+assert.ok(once.vx < 1000 && once.vx > 985, 'and it decays a little every frame');
+
+// The four walls reflect the velocity, scaled by the bounce factor.
+const left = thrown.throwStep({ x: -99.9, y: 0, vx: -500, vy: 0 }, toStep, box);
+assert.equal(left.hits.left, true);
+assert.equal(left.x, box.minX, 'the pet is put back on the edge it crossed');
+assert.ok(left.vx > 0, 'and sent the other way');
+assert.ok(Math.abs(left.vx - 500 * 0.988 * 0.62) < 1, `bounce factor, got ${left.vx}`);
+const right = thrown.throwStep({ x: 99.9, y: 0, vx: 500, vy: 0 }, toStep, box);
+assert.equal(right.hits.right, true);
+assert.ok(right.vx < 0);
+const top = thrown.throwStep({ x: 0, y: -99.9, vx: 0, vy: -500 }, toStep, box);
+assert.equal(top.hits.top, true);
+assert.ok(top.vy > 0);
+const bottom = thrown.throwStep({ x: 0, y: 99.9, vx: 0, vy: 500 }, toStep, box);
+assert.equal(bottom.hits.bottom, true);
+assert.ok(bottom.vy < 0);
+
+// A stalled frame is clamped, so a hitch cannot tunnel the pet through a wall.
+const stalled = thrown.throwStep({ x: 0, y: 0, vx: 1000, vy: 0 }, 5000, box);
+assert.ok(stalled.x < box.maxX, `a 5 s frame must not cross the box, got ${stalled.x}`);
+
+// The flight ends by itself, below the stop speed, and never leaves the box.
+let flight = { x: 0, y: 0, vx: 2000, vy: 900 };
+let steps = 0;
+while (steps < 2000) {
+  const next = thrown.throwStep(flight, toStep, box);
+  flight = next;
+  steps += 1;
+  assert.ok(flight.x >= box.minX && flight.x <= box.maxX && flight.y >= box.minY && flight.y <= box.maxY,
+    `escaped the box at step ${steps}`);
+  if (next.settled) break;
+}
+assert.ok(steps < 2000, 'a throw has to come to rest on its own');
+assert.equal(flight.vx, 0, 'and be left with no velocity at all');
+assert.equal(flight.vy, 0);
+const slow = thrown.throwStep({ x: 0, y: 0, vx: 30, vy: 0 }, toStep, box);
+assert.equal(slow.settled, true, 'under the threshold the flight is over');
+const fast = thrown.throwStep({ x: 0, y: 0, vx: 3000, vy: 0 }, toStep, box);
+assert.equal(fast.settled, false);
+
+// The bounce box comes from Rust, and a backend that cannot answer means "do not
+// fly" rather than a guessed boundary.
+assert.deepEqual(throwJson(thrown.throwBounds({ ok: true, minX: -100, minY: -170, maxX: 1720, maxY: 750 })),
+  { minX: -100, minY: -170, maxX: 1720, maxY: 750 });
+assert.equal(thrown.throwBounds({ ok: false, minX: 0, minY: 0, maxX: 0, maxY: 0 }), null);
+assert.equal(thrown.throwBounds(null), null);
+assert.equal(thrown.throwBounds({ ok: true, minX: 0, minY: 0, maxX: Number.NaN, maxY: 10 }), null);
+// A window bigger than the work area gives a reversed box; it collapses to a point
+// instead of letting `throwStep` clamp to an impossible range.
+assert.deepEqual(throwJson(thrown.throwBounds({ ok: true, minX: 40, minY: 0, maxX: -10, maxY: -5 })),
+  { minX: 40, minY: 0, maxX: 40, maxY: 0 });
+
+// The lean is cosmetic, derived from the horizontal speed, and saturates.
+assert.equal(thrown.throwTilt(0), 0);
+assert.ok(Math.abs(thrown.throwTilt(900) - 0.34) < 1e-9);
+assert.equal(thrown.throwTilt(900) + thrown.throwTilt(-900), 0, 'and it is symmetric');
+assert.ok(Math.abs(thrown.throwTilt(99_999)) <= 0.34);
+assert.equal(thrown.throwTilt(Number.NaN), 0);
+
+assert.match(appSource, /throwVelocity\(dragSamples\)/);
+assert.match(appSource, /throwStep\(flight,/);
+assert.match(appSource, /throwBounds\(await window\.api\.flightBounds/);
+assert.match(appSource, /leanForFlight\(state/);
+assert.match(readFileSync(join(renderer, 'index.html'), 'utf8'), /lite-throw\.js/);
+const throwApi = readFileSync(join(process.cwd(), 'src', 'renderer', 'lite-api.ts'), 'utf8');
+assert.match(throwApi, /window_flight_bounds/, 'lite-api is missing the flight-bounds bridge');
+const throwWindow = readFileSync(join(process.cwd(), 'src-tauri', 'src', 'window.rs'), 'utf8');
+assert.match(throwWindow, /pub fn window_flight_bounds/);
+// One function owns the edge, so a drag and a throw can never disagree about it.
+assert.match(throwWindow, /fn position_limits/);
+assert.match(libSource, /window::window_flight_bounds/);
+console.log('Weekly summary (week totals, streak, verdict): passed');
+console.log('Pet packs (frames, grid, wiring, dictionary): passed');
+console.log('Thrown pet: release velocity, friction, four walls, settle: passed');
 
 console.log('Lightweight image validation (cutout lives in Rust): passed');
 console.log('Lightweight package contents: passed');

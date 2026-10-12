@@ -108,19 +108,31 @@ fn physical_visual(window: &WebviewWindow, visual: Option<VisualBounds>) -> Opti
     Some((x0, y0, x1, y1))
 }
 
-fn clamp_position(x: i32, y: i32, area: (i32, i32, i32, i32), visible: (i32, i32, i32, i32)) -> (i32, i32) {
+/// The window positions that keep the *visible* box inside `area`, as
+/// `(min_x, min_y, max_x, max_y)`.
+///
+/// One function serves both jobs so a drag and a throw can never disagree about
+/// where the edge is: `clamp_position` squashes a position into the range, and
+/// `window_flight_bounds` hands the same four numbers to the renderer, which
+/// bounces a thrown pet off them.
+fn position_limits(area: (i32, i32, i32, i32), visible: (i32, i32, i32, i32)) -> (i32, i32, i32, i32) {
     let (bx, by, bw, bh) = area;
     let (vx0, vy0, vx1, vy1) = visible;
     let min_x = bx - vx0;
     let min_y = by - vy0;
     let max_x = (bx + bw - vx1).max(min_x);
     let max_y = (by + bh - vy1).max(min_y);
+    (min_x, min_y, max_x, max_y)
+}
+
+fn clamp_position(x: i32, y: i32, area: (i32, i32, i32, i32), visible: (i32, i32, i32, i32)) -> (i32, i32) {
+    let (min_x, min_y, max_x, max_y) = position_limits(area, visible);
     (x.clamp(min_x, max_x), y.clamp(min_y, max_y))
 }
 
 #[cfg(test)]
 mod edge_tests {
-    use super::clamp_position;
+    use super::{clamp_position, position_limits};
 
     #[test]
     fn allows_transparent_padding_outside_each_work_area_edge() {
@@ -138,6 +150,21 @@ mod edge_tests {
         let area = (0, 0, 1920, 1040);
         let window = (0, 0, 300, 300);
         assert_eq!(clamp_position(-100, 1000, area, window), (0, 740));
+    }
+
+    /// The four numbers a thrown pet bounces between are the same ones a drag is
+    /// clamped to, and they account for the transparent padding on all four sides.
+    #[test]
+    fn flight_bounds_are_the_drag_limits() {
+        let area = (0, 0, 1920, 1040);
+        let visible = (100, 170, 200, 290);
+        assert_eq!(position_limits(area, visible), (-100, -170, 1720, 750));
+
+        // A window bigger than the work area collapses to a point instead of
+        // producing a reversed range (max < min would make the clamp panic).
+        let (min_x, min_y, max_x, max_y) = position_limits((0, 0, 100, 100), (0, 0, 300, 300));
+        assert!(min_x <= max_x && min_y <= max_y);
+        assert_eq!((min_x, min_y), (0, 0));
     }
 }
 
@@ -201,6 +228,29 @@ pub fn window_edge_gaps(window: WebviewWindow, visual: Option<VisualBounds>) -> 
         "workHeight": bh,
         "scale": scale,
     })
+}
+
+/// The box a thrown pet bounces inside: `[minX, minY, maxX, maxY]` in physical
+/// window coordinates.
+///
+/// The renderer integrates the flight itself (src/renderer/lite-throw.ts) because
+/// the pet window already runs at frame rate and the canvas has to be redrawn
+/// anyway; what it cannot work out on its own is where the edges are, since that
+/// needs the monitor's work area, its scale factor and the renderer's silhouette.
+/// So this is one call per throw — see `window_edge_gaps` for the walking case.
+#[tauri::command]
+pub fn window_flight_bounds(window: WebviewWindow, visual: Option<VisualBounds>) -> Value {
+    let unavailable = json!({ "ok": false, "minX": 0, "minY": 0, "maxX": 0, "maxY": 0 });
+    let Ok(size) = window.outer_size() else { return unavailable };
+    // Deliberately the same area a drag is clamped to, "cross monitors" included:
+    // a throw must not be able to land the pet somewhere the user could not have
+    // dragged it to.
+    let all_monitors = !config_bool(&window, "stayOnOneDisplay", true);
+    let Some(area) = bounds(&window, all_monitors) else { return unavailable };
+    let visible = physical_visual(&window, visual)
+        .unwrap_or((0, 0, size.width as i32, size.height as i32));
+    let (min_x, min_y, max_x, max_y) = position_limits(area, visible);
+    json!({ "ok": true, "minX": min_x, "minY": min_y, "maxX": max_x, "maxY": max_y })
 }
 
 // ---------- Position memory ----------

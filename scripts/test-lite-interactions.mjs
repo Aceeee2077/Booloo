@@ -77,6 +77,9 @@ const api = {
   getWindowCenterTarget: async () => [810, 294],
   moveWindowTo: async (x, y) => { moves.push([x, y]); },
   windowEdgeGaps: async () => null,
+  // The bounce box Rust would compute: the pet lives inside 0..1920 × 0..1040 with
+  // a 300 px window whose visible box is inset by (100, 170).
+  flightBounds: async () => ({ ok: true, minX: -100, minY: -170, maxX: 1720, maxY: 750 }),
   getSystemLoad: async () => loadState,
   // Mirrors the real backend: the patch is merged, persisted and broadcast back,
   // which is what makes the daily counters accumulate across batches.
@@ -125,6 +128,12 @@ vm.runInContext(readFileSync(join(process.cwd(), 'dist/renderer/lite-i18n.js'), 
 vm.runInContext(readFileSync(join(process.cwd(), 'dist/renderer/lite-day.js'), 'utf8'), context);
 vm.runInContext(readFileSync(join(process.cwd(), 'dist/renderer/lite-affinity.js'), 'utf8'), context);
 vm.runInContext(readFileSync(join(process.cwd(), 'dist/renderer/lite-care.js'), 'utf8'), context);
+// The gait owns the walking frame, the body bob and the glide speed, and the
+// pack model owns how an imported character is drawn — the pet loop calls into
+// both, so they load in the same order index.html loads them.
+vm.runInContext(readFileSync(join(process.cwd(), 'dist/renderer/lite-gait.js'), 'utf8'), context);
+vm.runInContext(readFileSync(join(process.cwd(), 'dist/renderer/lite-pack.js'), 'utf8'), context);
+vm.runInContext(readFileSync(join(process.cwd(), 'dist/renderer/lite-throw.js'), 'utf8'), context);
 vm.runInContext(readFileSync(join(process.cwd(), 'dist/renderer/lite-app.js'), 'utf8'), context);
 await new Promise(resolve => setImmediate(resolve));
 
@@ -641,3 +650,61 @@ assert.equal(speech.textContent, '玩够啦，谢谢陪我～ 抓到 1 次');
 console.log('Petting, taps, holds, blinking, affinity, reminders, load reactions, daily ' +
   'counters, health plan, dreams, actions, language switch, update notice, feeding and ' +
   'the cat teaser: passed');
+
+// ---------- throwing the pet ----------
+// A drag that ends fast becomes a flight the window drives itself: it keeps moving
+// after the button is up, bounces off the work-area edge Rust reported and stops on
+// its own once the friction has eaten the speed. The drag itself is native
+// (drag_begin / drag_move), so what is asserted here is everything after the release.
+const throwDown = (x, y) => canvasEvents.get('mousedown')({ button: 0, offsetX: 120, offsetY: 200, screenX: x, screenY: y, preventDefault() {} });
+const throwMove = (x, y, buttons = 1) => canvasEvents.get('mousemove')({ button: 0, offsetX: 120, offsetY: 200, screenX: x, screenY: y, buttons });
+const throwFrames = (count, step = 16) => { for (let i = 0; i < count; i++) frame(clock += step); };
+
+const beforeThrow = moves.length;
+throwDown(400, 400);
+clock += 10; throwMove(412, 400);
+clock += 10; throwMove(424, 400);
+clock += 10; throwMove(436, 400);
+// Released while still moving: the last sample counts, and the pet flies.
+throwMove(448, 400, 0);
+await tick();                       // the launch reads the window position back
+const launched = moves.length - beforeThrow;
+frame(clock += 16);
+const afterOneFrame = moves.length - beforeThrow;
+assert.ok(afterOneFrame > launched, 'a throw moves the window with no mouse held');
+const thrownXs = moves.slice(beforeThrow).map(([x]) => x);
+assert.ok(thrownXs.some(x => x > 100), `the pet travels after the release (${thrownXs.join(',')})`);
+assert.ok(thrownXs.every(x => x >= -100 && x <= 1720), 'and never leaves the work area');
+// In the air it flails: the walk row drawn faster, not the resting pose.
+assert.equal(lastDraw[2] / 128, 1, 'a flying pet uses the walk row');
+
+// The flight ends by itself — no timer, the friction runs out.
+throwFrames(400);
+const settledAt = moves.length;
+throwFrames(30);
+assert.equal(moves.length, settledAt, 'the flight has to come to rest on its own');
+assert.ok(moves.slice(beforeThrow).length > 20, 'and it was a real flight, not one hop');
+
+// A slow drag is a placement: the pet stays where it was dropped.
+const beforePlace = moves.length;
+throwDown(400, 400);
+clock += 100; throwMove(410, 400);   // >5 px, so this really is a drag
+clock += 100; throwMove(412, 400, 0); // 12 px over 100 ms = a slow placement
+await tick();
+throwFrames(10);
+assert.equal(moves.length, beforePlace, 'putting the pet down must not throw it');
+
+// Catching a pet in mid-air ends the flight where it was caught. (No `hit` check on
+// the rotated pose: the press lands on the pet's own box, as it does for any drag.)
+throwDown(400, 400);
+clock += 10; throwMove(440, 400);
+clock += 10; throwMove(480, 400, 0);
+await tick();
+throwFrames(3);
+const caughtAt = moves.length;
+throwDown(400, 400);
+throwFrames(6);
+assert.equal(moves.length, caughtAt, 'grabbing a flying pet stops it');
+windowEvents.get('mouseup')();
+
+console.log('Thrown pet: launch, bounce off the work area, friction stop, catch: passed');

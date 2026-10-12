@@ -87,6 +87,19 @@
     closeMaskEditor: () => send('close_mask_editor'),
     onMaskReload: (callback: () => void) => subscribe<void>('mask-reload', callback),
     onCustomImageChanged: (callback: () => void) => subscribe<void>('custom-image-changed', callback),
+    // A pack's sheet is a data URL when it is small; otherwise the renderer draws
+    // it through the asset protocol, which is why the absolute path is resolved
+    // here rather than in the pet loop.
+    petList: async () => {
+      const result = await call<PetPackListResult>('pet_list');
+      return {
+        ...result,
+        pets: (result.pets ?? []).map(pet => ({ ...pet, url: pet.url ?? urlOf(pet.spritesheet) ?? null })),
+      };
+    },
+    petImport: () => call<PetPackActionResult>('pet_import'),
+    petExport: (id: string) => call<PetPackActionResult>('pet_export', { id }),
+    petRemove: (id: string) => call<PetPackActionResult>('pet_remove', { id }),
     updateGetState: () => call<UpdateState>('update_get_state'),
     updateCheck: () => call<UpdateState>('update_check'),
     updateDownload: () => call<UpdateState>('update_download'),
@@ -103,6 +116,8 @@
     autoMoveStart,
     autoMoveStop,
     windowEdgeGaps: (visualBounds?: PetBox | null) => call<WindowEdgeGaps>('window_edge_gaps', { visual: visualBounds ?? bounds() ?? null }),
+    flightBounds: (visualBounds?: PetBox | null) =>
+      call<WindowFlightBounds>('window_flight_bounds', { visual: visualBounds ?? bounds() ?? null }),
     setClickThrough,
     showContextMenu: () => send('show_pet_menu'),
     petMenuAction: (action: string) => send('pet_menu_action', { action }),

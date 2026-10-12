@@ -42,6 +42,17 @@
   const heatmapYearLabel = $<HTMLElement>('heatmap-year');
   const heatmapPrev = $<HTMLButtonElement>('heatmap-prev');
   const heatmapNext = $<HTMLButtonElement>('heatmap-next');
+  const summaryRange = $<HTMLElement>('summary-range');
+  const summaryDays = $<HTMLElement>('summary-days');
+  const summaryClicks = $<HTMLElement>('summary-clicks');
+  const summaryStand = $<HTMLElement>('summary-stand');
+  const summaryEye = $<HTMLElement>('summary-eye');
+  const summaryWater = $<HTMLElement>('summary-water');
+  const summaryAffinity = $<HTMLElement>('summary-affinity');
+  const summaryLine = $<HTMLElement>('summary-line');
+  const packs = $<HTMLElement>('packs');
+  const importPack = $<HTMLButtonElement>('import-pack');
+  const packStatus = $<HTMLParagraphElement>('pack-status');
   const affinityLevelLabel = $<HTMLElement>('affinity-level');
   const affinityValue = $<HTMLElement>('affinity-value');
   const affinityFill = $<HTMLElement>('affinity-fill');
@@ -552,6 +563,101 @@
       })
       : liteT('lite.heatmap.empty', { year: heatmapYear });
   }
+
+  /**
+   * This week so far — Monday to today — out of the same per-day buckets the
+   * heatmap draws, so the two can never disagree. The pet records nothing extra
+   * for the report, and a partial week is never compared against a full one.
+   */
+  function paintSummary(cfg: AppConfig) {
+    const today = liteDayKey();
+    const totals = summaryTotals(cfg.dailyStats, summaryWeekStart(today), today);
+    summaryRange.textContent = liteT('lite.summary.range', {
+      from: dayLabel(totals.from), to: dayLabel(totals.to),
+    });
+    summaryDays.textContent = String(totals.days);
+    summaryClicks.textContent = String(totals.clicks);
+    summaryStand.textContent = String(totals.stand);
+    summaryEye.textContent = String(totals.eye);
+    summaryWater.textContent = String(totals.water);
+    summaryAffinity.textContent = `+${totals.affinity}`;
+    // The streak is a second sentence rather than a row: it is the one number
+    // that only means something next to "days together".
+    const headline = liteT(summaryHeadlineKey(totals));
+    const streak = summaryStreak(cfg.dailyStats, today);
+    summaryLine.textContent = streak >= 2
+      ? `${headline} ${liteT('lite.summary.streak', { n: streak })}`
+      : headline;
+  }
+
+  // ---------- pet packs ----------
+  /**
+   * Installed pet packs, as last listed by the backend.
+   *
+   * A pack is a whole character (a sheet plus its animations), which is why it
+   * gets its own list rather than a third button next to "Bulu" / "my picture":
+   * each entry carries a name, an author and three actions.
+   */
+  let pets: LitePetPackEntry[] = [];
+  /** Locale the cards were built with — the labels are translated, so they age. */
+  let packsLocale = '';
+
+  function packButton(key: string, action: string) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.dataset.packAction = action;
+    button.textContent = liteT(key);
+    return button;
+  }
+
+  function buildPacks() {
+    packsLocale = liteCurrentLocale();
+    packs.textContent = '';
+    if (!pets.length) {
+      const empty = document.createElement('p');
+      empty.className = 'note';
+      empty.textContent = liteT('lite.pack.empty');
+      packs.append(empty);
+      return;
+    }
+    for (const pet of pets) {
+      const card = document.createElement('div');
+      card.className = 'pack-card';
+      card.dataset.packId = pet.id;
+      const name = document.createElement('strong');
+      name.textContent = pet.displayName || pet.id;
+      const meta = document.createElement('small');
+      meta.textContent = [pet.author, pet.version].filter(Boolean).join(' · ');
+      // The card is what "wearing this pack" looks like, so it carries the state
+      // rather than a separate radio group that could fall out of step with it.
+      card.classList.toggle('active', current?.skin === 'pack' && current.currentPetId === pet.id);
+      card.append(name);
+      if (meta.textContent) card.append(meta);
+      card.append(packButton('lite.pack.use', 'use'), packButton('lite.pack.export', 'export'), packButton('lite.pack.remove', 'remove'));
+      packs.append(card);
+    }
+  }
+
+  /** Only the selection changed, so the cards do not have to be rebuilt. */
+  function paintPackSelection(cfg: AppConfig) {
+    for (const card of Array.from(packs.querySelectorAll<HTMLElement>('[data-pack-id]'))) {
+      card.classList.toggle('active', cfg.skin === 'pack' && card.dataset.packId === cfg.currentPetId);
+    }
+  }
+
+  async function refreshPacks() {
+    try {
+      const list = await window.api.petList();
+      pets = list.pets ?? [];
+    } catch (error) {
+      // A pack that cannot be listed is not worth an error banner: the pet keeps
+      // drawing whatever it is already wearing.
+      pets = [];
+      console.error('[lite-settings] pet packs:', error);
+    }
+    buildPacks();
+  }
+
   /** `HH:MM` for a time input, in local time. */
   function timeValue(date: Date) {
     return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
@@ -707,6 +813,10 @@
     paintCare(cfg);
     paintHealth(cfg);
     paintHeatmap(cfg);
+    paintSummary(cfg);
+    // The pack cards are translated markup, so a language switch rebuilds them;
+    // otherwise only the "in use" outline can have changed.
+    if (packsLocale !== liteCurrentLocale()) buildPacks(); else paintPackSelection(cfg);
     paintReminders(cfg);
     updateAutoCheck.checked = cfg.updateAutoCheck !== false;
     updateAutoDownload.checked = cfg.updateAutoDownload !== false;
@@ -761,6 +871,58 @@
       await window.api.setConfig({ skin, currentPetId: skin });
     });
   }
+  importPack.addEventListener('click', async () => {
+    packStatus.classList.remove('error');
+    try {
+      const result = await window.api.petImport();
+      if (result.cancelled) return;
+      if (!result.ok) {
+        packStatus.classList.add('error');
+        packStatus.textContent = liteT('lite.pack.importFailed', { error: result.error ?? '' });
+        return;
+      }
+      await refreshPacks();
+      packStatus.textContent = liteT('lite.pack.imported', { name: result.pet?.displayName ?? result.pet?.id ?? '' });
+    } catch (error) {
+      packStatus.classList.add('error');
+      packStatus.textContent = liteT('lite.pack.importFailed', { error: String(error) });
+    }
+  });
+  packs.addEventListener('click', async (event) => {
+    const button = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-pack-action]');
+    const id = button?.closest<HTMLElement>('[data-pack-id]')?.dataset.packId;
+    if (!button || !id) return;
+    const action = button.dataset.packAction;
+    if (action === 'use') { await window.api.setConfig({ skin: 'pack', currentPetId: id }); return; }
+    packStatus.classList.remove('error');
+    try {
+      if (action === 'export') {
+        const result = await window.api.petExport(id);
+        if (result.cancelled) return;
+        if (!result.ok) {
+          packStatus.classList.add('error');
+          packStatus.textContent = liteT('lite.pack.exportFailed', { error: result.error ?? '' });
+          return;
+        }
+        packStatus.textContent = liteT('lite.pack.exported', { path: result.path ?? '' });
+        return;
+      }
+      const removed = pets.find(pet => pet.id === id);
+      const result = await window.api.petRemove(id);
+      if (!result.ok) {
+        packStatus.classList.add('error');
+        packStatus.textContent = liteT('lite.pack.removeFailed', { error: result.error ?? '' });
+        return;
+      }
+      // The backend put the pet back on Bulu when it was wearing the deleted pack,
+      // and broadcasts the new config — this only refreshes the list.
+      await refreshPacks();
+      packStatus.textContent = liteT('lite.pack.removed', { name: removed?.displayName ?? id });
+    } catch (error) {
+      packStatus.classList.add('error');
+      packStatus.textContent = liteT('lite.pack.removeFailed', { error: String(error) });
+    }
+  });
   size.addEventListener('input', () => { $<HTMLOutputElement>('size-value').textContent = `${Math.round(Number(size.value) * 100)}%`; });
   size.addEventListener('change', () => void window.api.setConfig({ petScale: Number(size.value) }));
   opacity.addEventListener('input', () => { $<HTMLOutputElement>('opacity-value').textContent = `${Math.round(Number(opacity.value) * 100)}%`; });
@@ -855,6 +1017,9 @@
     reminderTime.value = timeValue(new Date(Date.now() + 10 * 60_000));
     renderUpdate(await window.api.updateGetState());
     autoLaunch.checked = enabled;
+    // The pack list is a directory read, not a config value, so it is fetched
+    // once here and after every import / delete rather than on every paint.
+    await refreshPacks();
     window.api.onConfigChanged(paint);
   })().catch((error) => message(liteT('lite.settings.loadFailed', { error: String(error) }), true));
 })();

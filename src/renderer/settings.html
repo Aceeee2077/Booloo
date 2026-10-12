@@ -40,6 +40,12 @@
       </div>
       <button id="choose-image" class="primary" type="button" data-i18n="lite.settings.importImage">导入我的图片…</button>
       <p id="image-status" class="status" role="status"></p>
+
+      <h2 data-i18n="lite.pack.title">宠物包</h2>
+      <p class="note" data-i18n="lite.pack.hint"></p>
+      <div id="packs" class="packs"></div>
+      <button id="import-pack" type="button" data-i18n="lite.pack.import">导入宠物包…</button>
+      <p id="pack-status" class="status" role="status"></p>
     </section>
 
     <section id="import-preview" hidden>
@@ -150,6 +156,21 @@
       <p class="note" data-i18n="lite.heatmap.hint"></p>
     </section>
 
+    <section id="summary">
+      <h2 data-i18n="lite.summary.title">本周小结</h2>
+      <p id="summary-range" class="note"></p>
+      <div class="update-grid">
+        <span data-i18n="lite.summary.days">陪伴天数</span><span id="summary-days" class="value">0</span>
+        <span data-i18n="lite.summary.clicks">点击次数</span><span id="summary-clicks" class="value">0</span>
+        <span data-i18n="lite.summary.stand">站立提醒</span><span id="summary-stand" class="value">0</span>
+        <span data-i18n="lite.summary.eye">护眼提醒</span><span id="summary-eye" class="value">0</span>
+        <span data-i18n="lite.summary.water">喝水提醒</span><span id="summary-water" class="value">0</span>
+        <span data-i18n="lite.summary.affinity">本周好感</span><span id="summary-affinity" class="value">+0</span>
+      </div>
+      <p id="summary-line" class="note"></p>
+      <p class="note" data-i18n="lite.summary.hint"></p>
+    </section>
+
     <section id="reminders">
       <h2 data-i18n="lite.reminders.title">待办提醒</h2>
       <div class="reminder-form">
@@ -209,6 +230,7 @@
   <script src="./lite-day.js"></script>
   <script src="./lite-affinity.js"></script>
   <script src="./lite-care.js"></script>
+  <script src="./lite-summary.js"></script>
   <script src="./lite-api.js"></script>
   <script src="./lite-image.js"></script>
   <script src="./lite-settings.js"></script>

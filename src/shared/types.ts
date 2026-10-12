@@ -9,11 +9,14 @@
 
 /** Pet skin (legacy IDs dog/default now display the built-in fox/rabbit art). */
 /**
- * Bulu is the only built-in character; everything else is an imported picture.
- * Older installs may still have 'cat' / 'dog' / 'default' / 'robot' persisted —
- * src-tauri/src/config.rs migrates those to 'bulu' on load.
+ * Bulu is the only built-in character. `custom` is one imported picture (it
+ * breathes and reacts, but has no walk or sleep of its own); `pack` is an
+ * installed pet pack — a folder of a sprite sheet plus its animations, named by
+ * `currentPetId` (see src-tauri/src/petpack.rs). Older installs may still have
+ * 'cat' / 'dog' / 'default' / 'robot' persisted — src-tauri/src/config.rs
+ * migrates those to 'bulu' on load.
  */
-type PetSkin = 'bulu' | 'custom';
+type PetSkin = 'bulu' | 'custom' | 'pack';
 
 /** UI language */
 type Locale = 'zh' | 'en';
@@ -220,6 +223,47 @@ interface AccessoryUpdateRequest {
 interface AccessoryMutationResult {
   ok: boolean;
   accessory?: UserAccessoryDefinition;
+  error?: string;
+}
+
+/**
+ * One installed pet pack, as the backend lists it.
+ *
+ * `manifest` is the normalized PetDefinition (src/shared/petpack-types.ts) the
+ * pet window draws from; `url` is a data URL for small sheets, and the renderer
+ * falls back to `spritesheet` (an absolute path) through `convertFileSrc`.
+ */
+interface LitePetPackEntry {
+  id: string;
+  displayName: string;
+  description?: string;
+  author?: string;
+  version?: string;
+  /** Absolute path of the installed folder. */
+  dir: string;
+  /** Absolute path of the sprite sheet inside that folder. */
+  spritesheet: string;
+  /** Ready-to-draw URL, or null when the sheet was too large to inline. */
+  url: string | null;
+  manifest: PetDefinition;
+}
+
+/** Answer of `pet_list`. */
+interface PetPackListResult {
+  ok: boolean;
+  pets?: LitePetPackEntry[];
+}
+
+/** Answer of `pet_import` / `pet_export` / `pet_remove`. */
+interface PetPackActionResult {
+  ok: boolean;
+  /** The user closed the dialog — not a failure, and nothing to report. */
+  cancelled?: boolean;
+  /** The freshly installed pack (import only). */
+  pet?: LitePetPackEntry;
+  /** Where the copy landed (export only). */
+  path?: string;
+  /** Localized failure reason. */
   error?: string;
 }
 
@@ -502,6 +546,22 @@ interface SystemLoad {
   charging: boolean;
 }
 
+/**
+ * The window positions that keep the pet's visible box inside its work area —
+ * the box a thrown pet bounces inside.
+ *
+ * Physical pixels, computed by the main process (only it knows the monitor scale
+ * factor); `ok` is false when there is no monitor to ask, and the renderer then
+ * leaves the pet where it was dropped rather than guessing a boundary.
+ */
+interface WindowFlightBounds {
+  ok: boolean;
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+}
+
 /** Space between the pet's visible box and the sides / bottom of the work area. */
 interface WindowEdgeGaps {
   /** Physical px from the visible box's left edge to the work area's left edge. */
@@ -674,6 +734,17 @@ interface PetApi {
   /** Delete the custom image in the app data directory */
   clearCustomImage(): Promise<boolean>;
   /**
+   * List the installed pet packs (one folder per pack under
+   * %APPCONFIG%/pets). A broken pack is skipped by the backend, never thrown.
+   */
+  petList(): Promise<PetPackListResult>;
+  /** Pick a folder, validate it and install it as a pet pack. */
+  petImport(): Promise<PetPackActionResult>;
+  /** Copy an installed pack out to a folder the user picks, ready to share. */
+  petExport(id: string): Promise<PetPackActionResult>;
+  /** Delete an installed pack; the pet falls back to Bulu when it wore it. */
+  petRemove(id: string): Promise<PetPackActionResult>;
+  /**
    * List the user-imported accessories (one folder per item under
    * %APPCONFIG%/accessories). Broken entries are skipped or flagged by the
    * backend, never thrown.
@@ -706,6 +777,11 @@ interface PetApi {
    * guessing at DPI scaling.
    */
   windowEdgeGaps(visualBounds: PetBox | null): Promise<WindowEdgeGaps>;
+  /**
+   * The box a thrown pet bounces inside (`[minX, minY, maxX, maxY]` in physical
+   * window coordinates), for the flight the renderer integrates itself.
+   */
+  flightBounds(visualBounds?: PetBox | null): Promise<WindowFlightBounds>;
   /** Hop the pet window vertically (a parabolic jump of `height` px over `duration` ms) */
   autoJump(height: number, duration: number): void;
   /** Center the pet window on the display it currently sits on */
