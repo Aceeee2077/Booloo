@@ -6,7 +6,9 @@
 //      tauri.conf.json, Cargo.toml) — the release workflow's own comments say
 //      "they have to agree", which is a rule a human has to remember today;
 //   2. CHANGELOG.md has an entry for that version, so a release cannot ship
-//      without saying what changed;
+//      without saying what changed — when the file is there at all, because this
+//      repository keeps the changelog out of Git (.gitignore:144) as the
+//      maintainer's own release notes;
 //   3. the tag being built matches it (`--tag vX.Y.Z`, passed by release.yml);
 //   4. no signing key material is inside the repository — the updater's private
 //      key once lived in a stray `~/.tauri/` folder in the working copy, created
@@ -20,7 +22,7 @@
 // ============================================================================
 
 import { execFileSync } from 'node:child_process';
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -30,6 +32,8 @@ const checkGit = !args.includes('--no-git');
 const tag = args.includes('--tag') ? args[args.indexOf('--tag') + 1] : null;
 
 const problems = [];
+/** Checks that did not apply here, reported so a CI log is not silently thinner. */
+const notes = [];
 const read = (id) => readFileSync(join(ROOT, id), 'utf8');
 const readJson = (id) => JSON.parse(read(id));
 
@@ -68,12 +72,20 @@ if (!/^\d+\.\d+\.\d+$/.test(version ?? '')) {
 
 // ---------- 2. the changelog entry ----------
 
-const changelog = read('CHANGELOG.md');
-if (!new RegExp(`^## \\[${String(version).replace(/\./g, '\\.')}\\]`, 'm').test(changelog)) {
-  problems.push(`CHANGELOG.md has no "## [${version}]" section — write one before tagging`);
-}
-if (!/^## \[Unreleased\]/m.test(changelog)) {
-  problems.push('CHANGELOG.md is missing its "## [Unreleased]" section');
+// CHANGELOG.md is deliberately not in the repository: it is the maintainer's local
+// record (the same call that keeps release.md out — see commit 226d602). So the
+// check belongs to the machine that writes it, which is the one that tags a release,
+// and a CI runner that was never given the file is told so instead of failing.
+if (existsSync(join(ROOT, 'CHANGELOG.md'))) {
+  const changelog = read('CHANGELOG.md');
+  if (!new RegExp(`^## \\[${String(version).replace(/\./g, '\\.')}\\]`, 'm').test(changelog)) {
+    problems.push(`CHANGELOG.md has no "## [${version}]" section — write one before tagging`);
+  }
+  if (!/^## \[Unreleased\]/m.test(changelog)) {
+    problems.push('CHANGELOG.md is missing its "## [Unreleased]" section');
+  }
+} else {
+  notes.push('CHANGELOG.md is not in this checkout (it is a local file) — the changelog check is skipped');
 }
 
 // ---------- 3. the tag ----------
@@ -128,8 +140,10 @@ if (checkGit) {
 if (problems.length) {
   console.error(`✗ release check failed for v${version}\n`);
   for (const problem of problems) console.error(`- ${problem}\n`);
+  for (const note of notes) console.error(`note: ${note}\n`);
   process.exit(1);
 }
 
-console.log(`✓ release check: v${version} is the version in package.json, the lockfile, tauri.conf.json and Cargo.toml; the changelog has it; no key material in the tree`);
+console.log(`✓ release check: v${version} is the version in package.json, the lockfile, tauri.conf.json and Cargo.toml; no key material in the tree${notes.length ? '' : '; the changelog has it'}`);
+for (const note of notes) console.log(`  note: ${note}`);
 console.log(`  next: git add -A && git commit -m "release version v${version}" && git tag -a v${version} -m "release version v${version}"`);
