@@ -39,20 +39,46 @@
     }, 16);
   }
 
+  /**
+   * How often the cursor is looked up while the pet ignores the mouse.
+   *
+   * While the pet is click-through, the only way to learn that the cursor has
+   * arrived on a drawn pixel is to ask — an ignored window receives no pointer
+   * events. That lookup is an IPC round trip per probe, and it runs for as long as
+   * the pet is transparent, which is most of the day.
+   *
+   * Two rates: while the cursor is somewhere over the pet's 300×300 window (about
+   * to be grabbed, so the answer has to be quick) and while it is somewhere else
+   * entirely (only the moment of arrival matters, and a quarter of the rate still
+   * catches it well inside the time it takes to move onto the pet).
+   */
+  const PROBE_NEAR_MS = 70;
+  const PROBE_AWAY_MS = 250;
+
   let reentry: number | null = null;
   function setClickThrough(enabled: boolean) {
     send('set_click_through', { enabled });
-    if (reentry !== null) { window.clearInterval(reentry); reentry = null; }
+    if (reentry !== null) { window.clearTimeout(reentry); reentry = null; }
     if (!enabled) return;
     let failures = 0;
-    reentry = window.setInterval(() => {
+    // A self-rescheduling timeout rather than an interval: the delay depends on
+    // where the cursor was last seen.
+    const probe = () => {
+      reentry = null;
       const test = (window as unknown as { __boolooHitTest?: (x: number, y: number) => boolean }).__boolooHitTest;
-      if (!test) return;
+      if (!test) { reentry = window.setTimeout(probe, PROBE_AWAY_MS); return; }
       void call<[number, number] | null>('cursor_in_window').then(point => {
         failures = 0;
-        if (point && test(point[0], point[1])) setClickThrough(false);
-      }).catch(() => { if (++failures >= 5) setClickThrough(false); });
-    }, 70);
+        if (point && test(point[0], point[1])) { setClickThrough(false); return; }
+        reentry = window.setTimeout(probe, point ? PROBE_NEAR_MS : PROBE_AWAY_MS);
+      }).catch(() => {
+        // A command that keeps failing would leave the pet unclickable forever, so
+        // the window is handed back to the cursor instead of being left ignored.
+        if (++failures >= 5) { setClickThrough(false); return; }
+        reentry = window.setTimeout(probe, PROBE_NEAR_MS);
+      });
+    };
+    reentry = window.setTimeout(probe, PROBE_NEAR_MS);
   }
 
   const api = {

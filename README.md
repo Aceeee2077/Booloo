@@ -148,12 +148,19 @@ xattr -dr com.apple.quarantine /Applications/Booloo.app
 ```bash
 npm install
 npm run build      # sprite sheets + brand icons → tsc → copy renderer assets → export src-tauri/resources/i18n.json
-npm test           # lightweight-page behaviour tests (Node) + Rust unit tests
+npm test           # the surface gate below + lightweight-page behaviour tests (Node) + Rust unit tests
 npm run screenshots # regenerate the README images (one set per language; needs Chrome or Edge)
 npm run tauri:dev  # run in development mode
 ```
 
 `npm run tauri:check` builds and launches the real windows for a self-check, so it needs a working Windows WebView2 graphical session.
+
+Two checks guard the parts of the project that rot quietly:
+
+```bash
+npm run verify-surface # every config key and UI string must have a reader (part of npm test)
+npm run release:check  # before tagging: version files, changelog entry, no key in the tree
+```
 
 ## Layout
 

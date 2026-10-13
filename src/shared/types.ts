@@ -21,9 +21,6 @@ type PetSkin = 'bulu' | 'custom' | 'pack';
 /** UI language */
 type Locale = 'zh' | 'en';
 
-/** UI theme: light = orange-white gradient, dark = the original purple tone */
-type Theme = 'light' | 'dark';
-
 /** Software update release channel */
 type UpdateChannel = 'stable' | 'prerelease';
 
@@ -130,53 +127,6 @@ interface BoolooI18n {
   /** Set the active locale + dictionary (provided by the main process via IPC). */
   setLocaleData(locale: Locale, dict: Record<string, I18nValue>): void;
   getLocale(): Locale;
-}
-
-/** AI chat role */
-type ChatRole = 'system' | 'user' | 'assistant';
-
-interface ChatMessage {
-  role: ChatRole;
-  content: string;
-}
-
-/** One independent AI chat conversation (the pet can hold many) */
-interface ChatConversation {
-  id: string;
-  /** Auto-title derived from the first user message (may be empty = "new chat") */
-  title: string;
-  messages: ChatMessage[];
-  createdAt: number;
-  updatedAt: number;
-  /** True while the conversation is archived (hidden from the main list). */
-  archived?: boolean;
-}
-
-/** Full chat-store snapshot shared between the chat window and the pet window. */
-interface ChatState {
-  conversations: ChatConversation[];
-  /** Id of the conversation new messages go to ('' when there is none yet). */
-  activeId: string;
-}
-
-/** Result of sending one chat message (user + assistant round-trip orchestrated in main). */
-interface ChatSendResult {
-  ok: boolean;
-  /** Localized failure reason (only when ok is false). */
-  error?: string;
-}
-
-/** How talkative the pet should be in AI chat (injected into the persona prompt). */
-type ChatVerbosity = 'brief' | 'normal' | 'chatty';
-
-/** One saved AI provider profile: switching providers becomes a single click. */
-interface AiProvider {
-  id: string;
-  /** Display label, e.g. "OpenAI" / "DeepSeek" / "本地 Ollama" */
-  name: string;
-  baseUrl: string;
-  apiKey: string;
-  model: string;
 }
 
 /**
@@ -376,32 +326,6 @@ interface AppConfig {
   opacity: number;
   /** Launch at startup */
   autoLaunch: boolean;
-  /** AI chat toggle */
-  aiEnabled: boolean;
-  /** API Key (kept only on this machine) */
-  apiKey: string;
-  /** OpenAI-compatible API base URL, e.g. https://api.openai.com/v1 */
-  apiBaseUrl: string;
-  /** Model name, e.g. gpt-4o-mini / deepseek-chat */
-  model: string;
-  /** Saved AI provider profiles (empty = use the apiBaseUrl / apiKey / model above) */
-  aiProviders: AiProvider[];
-  /** Id of the active provider profile */
-  aiProviderId: string;
-  /** Max tokens per AI reply */
-  chatMaxTokens: number;
-  /** Sampling temperature for AI replies (0 ~ 1.5) */
-  chatTemperature: number;
-  /** Reply length preference fed into the persona prompt */
-  chatVerbosity: ChatVerbosity;
-  /** Whether the pet may use emoji in AI replies */
-  chatEmoji: boolean;
-  /** Usage counters, reset whenever chatUsageDate rolls over */
-  chatUsageDate: string;
-  chatUsageMessages: number;
-  chatUsageTokens: number;
-  /** Click sound toggle */
-  soundEnabled: boolean;
   /** Display mode for the custom appearance: single=single image / sheet=sprite sheet / model=3D model */
   customImageMode: CustomImageMode;
   /** Custom image path (for reference) */
@@ -414,8 +338,6 @@ interface AppConfig {
   customOutline?: boolean;
   /** UI language */
   locale: Locale;
-  /** UI theme: light = orange-white gradient, dark = the original purple tone */
-  theme: Theme;
   /**
    * Wardrobe: what the pet is wearing, one accessory id per slot
    * (`effects` is a list — see src/shared/accessory-types.ts). Persisted here so
@@ -432,37 +354,18 @@ interface AppConfig {
    * simulation clock.
    */
   petStats: PetStatsSnapshot;
-  /** Developer animation panel: live behavior readout + on-canvas debug overlay. */
-  animDebug: boolean;
-  /** Actions: let the pet switch to a random idle action on its own */
-  actionAutoIdle: boolean;
-  /** Actions: draw the anchor + accessory debug overlay on the pet */
-  actionDebug: boolean;
-  /** Affinity with the pet (0 ~ 100, grows when you interact: click / drag / chat) */
+  /** Affinity with the pet (0 ~ 100, grows when you interact: click / drag / file drop) */
   affinity: number;
-  /** Focus mode: periodically remind the user to stand up and stretch (default on) */
-  focusMode: boolean;
-  /** Break reminder interval in minutes (20 / 30 / 40 / 60 / 90, default 40) */
-  focusInterval: number;
   /** Interaction stats: first day the app was launched (YYYY-MM-DD) */
   statsFirstSeen: string;
   /** Interaction stats: distinct launch dates (YYYY-MM-DD) */
   statsDays: string[];
   /** Interaction stats: total clicks on the pet */
   statsClicks: number;
-  /** Interaction stats: total AI chat messages sent */
-  statsChats: number;
   /** Affinity growth history (one snapshot per interaction day, newest last) */
   affinityHistory: AffinityPoint[];
-  /** Proactive chat: the pet greets you after 10 minutes of inactivity */
-  greetEnabled: boolean;
-  /** Weather: clicking the pet sometimes reports today's weather (fetched by the main process) */
-  weatherEnabled: boolean;
   /** Hourly chime: the pet jumps and announces the hour */
   hourlyChime: boolean;
-  /** Marked eye positions (normalized 0..1 within the custom photo) for the photo-pet
-   *  eye-following overlay. null = not calibrated. */
-  photoEyes: { x1: number; y1: number; x2: number; y2: number } | null;
   /** Autonomous movement: the pet walks / runs / jumps around the desktop on its own
    *  (stays awake instead of auto-sleeping while enabled) */
   autoMove: boolean;
@@ -472,26 +375,12 @@ interface AppConfig {
   stayOnOneDisplay: boolean;
   /** Snap flush to the nearest screen edge when a drag ends */
   snapToEdge: boolean;
-  /** Seconds of inactivity before the pet falls asleep (10 ~ 300) */
-  sleepTimeoutSec: number;
-  /** Speed multiplier for autonomous walking / running (0.5 ~ 2) */
-  wanderSpeed: number;
-  /** How often idle actions and wandering happen (0.5 ~ 2, higher = livelier) */
-  activityFrequency: number;
   /** Update: check for new GitHub Releases shortly after startup (packaged builds) */
   updateAutoCheck: boolean;
   /** Update: download a found release automatically in the background */
   updateAutoDownload: boolean;
   /** Update: stable releases only, or include pre-releases */
   updateChannel: UpdateChannel;
-  /** Update: version the user asked to install later / that finished installing */
-  updateDeferredVersion: string;
-  /** Update: timestamp when the user chose "later" (ms epoch; 0 = none) */
-  updateDeferredAt: number;
-  /** Update: next automatic check due time (ms epoch; 0 = due now) */
-  updateNextAutoCheckAt: number;
-  /** Update: consecutive automatic-check failures (drives the backoff schedule) */
-  updateAutoRetry: number;
 }
 
 /** One local day's counters behind the click heatmap and the health summary. */
@@ -646,8 +535,6 @@ interface PetApi {
   petMenuAction(action: string): void;
   /** Dismiss the right-click menu window */
   closePetMenu(): void;
-  /** Call AI chat (the network request is made in the main process to avoid CORS) */
-  aiChat(messages: ChatMessage[]): Promise<string>;
   /** Query the auto-launch status */
   autoLaunchGet(): Promise<boolean>;
   /** Set auto-launch, returns the final status */
@@ -678,33 +565,6 @@ interface PetApi {
    * because load is a delta between two samples.
    */
   getSystemLoad(): Promise<SystemLoad>;
-  /** Open (or focus) the standalone ChatGPT-style chat window */
-  openChat(): void;
-  /** Close the chat window (frameless windows close themselves via this IPC) */
-  closeChatWindow(): void;
-  /** Read the whole chat store (conversations + active id) */
-  chatsGetState(): Promise<ChatState>;
-  /** Create a fresh conversation and make it active */
-  chatsCreate(): Promise<ChatConversation>;
-  /** Delete a conversation (the active one is re-selected automatically) */
-  chatsDelete(id: string): Promise<void>;
-  /** Toggle a conversation's archived flag */
-  chatsArchive(id: string): Promise<void>;
-  /** Rename a conversation */
-  chatsRename(id: string, title: string): Promise<void>;
-  /** Remember which conversation is active (used when the chat window reopens) */
-  setActiveChat(id: string): void;
-  /** Send one message in a conversation; the AI reply is appended by the main process */
-  chatsSend(id: string, text: string): Promise<ChatSendResult>;
-  /** Import the old localStorage conversations/history once (no-op when the store already has data) */
-  chatsImportLegacy(payload: unknown): Promise<boolean>;
-  /** Subscribe to chat-store changes, returns an unsubscribe function */
-  onChatsChanged(cb: (state: ChatState) => void): () => void;
-  /** Subscribe to "an AI reply just completed" (pet adds affinity / stats via this) */
-  onChatReward(cb: () => void): () => void;
-  onAiAction(cb: (action: { emotion?: string; action?: string }) => void): () => void;
-  /** Subscribe to main-process notices shown as a pet speech bubble (e.g. "new update") */
-  onPetNotice(cb: (text: string) => void): () => void;
   /** Subscribe to update-state changes (settings progress bar / status / buttons) */
   onUpdateState(cb: (state: UpdateState) => void): () => void;
   /** Read the currently active custom image (userData takes priority, then the project's src/assets/sprites/custom.*) */

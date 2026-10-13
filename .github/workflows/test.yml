@@ -56,6 +56,12 @@ jobs:
       - name: Install npm dependencies
         run: npm ci
 
+      # Cheap and offline, so it runs before anything is built: the version files
+      # agree, the changelog has an entry for that version, and no signing key is
+      # sitting inside the checkout. The gate itself only needs Node.
+      - name: Release pre-flight
+        run: node scripts/release-check.mjs --no-git
+
       # The Node tests read the compiled pages out of dist/, so the build has to
       # run first — `npm test` on a fresh checkout would otherwise fail on the
       # missing dist/renderer/*.js.

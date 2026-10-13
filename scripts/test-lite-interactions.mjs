@@ -32,6 +32,9 @@ const drawHistory = [];
 const transforms = [];
 const intervals = [];
 const moves = [];
+/** Frames the pet asked for, and the delays it armed — the idle-loop contract. */
+let framesRequested = 0;
+const timeoutDelays = [];
 const canvasEvents = new Map();
 const windowEvents = new Map();
 /** Every pixel the pet window looked up while hit-testing, in backing-store px. */
@@ -102,6 +105,7 @@ const browser = {
   api, devicePixelRatio: 2,
   setInterval: callback => { intervals.push(callback); return intervals.length; },
   setTimeout: (callback, delay) => {
+    timeoutDelays.push(delay);
     if (delay === 32) { clock += 125; queueMicrotask(callback); }
     return 1;
   },
@@ -126,7 +130,8 @@ const context = {
     set src(url) { this._src = url; if (url.includes('bulu-actions')) this.naturalWidth = 16 * 192; }
   },
   performance: { now: () => clock }, Date: FakeDate,
-  requestAnimationFrame(callback) { frame = callback; }, queueMicrotask, Math, Number, Promise, console,
+  requestAnimationFrame(callback) { framesRequested++; frame = callback; },
+  queueMicrotask, Math, Number, Promise, console,
 };
 vm.createContext(context);
 vm.runInContext(readFileSync(join(process.cwd(), 'dist/renderer/lite-i18n.js'), 'utf8'), context);
@@ -160,6 +165,43 @@ assert.ok(blinkFrames.length < idleFrames.length / 4,
   `blinking must stay occasional, got ${blinkFrames.length}/${idleFrames.length} frames`);
 assert.ok(idleFrames.every(args => args[1] === 0 || args[1] === 3 * 128),
   'the idle row only contains the open pose and the baked blink pose');
+
+// A frame is only asked for while something is actually moving. The loop re-armed
+// itself unconditionally before this, which repainted the canvas 60 times a second
+// for as long as the app ran — including the hours the pet spends standing still,
+// where nothing changes between two blinks. That is the one thing a desktop pet
+// advertising "lightweight" cannot do.
+framesRequested = 0;
+timeoutDelays.length = 0;
+frame(clock += 16);
+assert.equal(framesRequested, 0, 'an idle pet must not ask for another frame');
+assert.ok(timeoutDelays.at(-1) <= 1000,
+  `the sleeping loop must arm its own backstop, armed ${timeoutDelays.at(-1)} ms`);
+
+// A touch wakes it. The long press is noticed from a frame and the tap answer is
+// drawn, so a press cannot wait for the backstop to come around.
+framesRequested = 0;
+canvasEvents.get('mousedown')({ button: 0, offsetX: 120, offsetY: 175, screenX: 100, screenY: 100 });
+assert.ok(framesRequested > 0, 'pressing the pet must wake the sleeping loop');
+windowEvents.get('mouseup')();
+frame(clock += 20);
+
+// …and a pet that is walking does keep drawing, or the gait would freeze mid-stride.
+configChanged({ skin: 'bulu', petScale: 1, opacity: 1, autoMove: true, locale: 'zh' });
+clock += 6000; // past nextWalk: the pet decides to go for a walk
+frame(clock);
+for (let i = 0; i < 3; i++) {
+  framesRequested = 0;
+  frame(clock += 16);
+  assert.ok(framesRequested > 0, 'a walking pet must keep asking for frames');
+}
+
+// Walking back to rest hands the loop back to the idle path.
+configChanged({ skin: 'bulu', petScale: 1, opacity: 1, autoMove: false, locale: 'zh' });
+frame(clock += 4000); // the walk has run out: stopWalking()
+framesRequested = 0;
+frame(clock += 16);
+assert.equal(framesRequested, 0, 'the pet stands still again once the walk is over');
 
 for (const x of [110, 135, 115, 140]) {
   clock += 50;

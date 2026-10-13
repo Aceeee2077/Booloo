@@ -17,7 +17,12 @@ pub struct ConfigState {
     value: Mutex<Value>,
 }
 
-/// Mirrors DEFAULT_CONFIG in src/shared/config.ts.
+/// Mirrors `interface AppConfig` in src/shared/types.ts.
+///
+/// Every key here has a reader — `npm run verify-surface` fails the build when one
+/// does not, which is how the residue of the pre-lightweight features (the AI chat
+/// panel, the theme switcher, the sound / weather / greeting switches, the photo
+/// eye overlay, the update bookkeeping) was found and dropped.
 pub fn defaults() -> Value {
     json!({
         "skin": "bulu",
@@ -25,20 +30,6 @@ pub fn defaults() -> Value {
         "animSpeed": 1,
         "opacity": 1,
         "autoLaunch": false,
-        "aiEnabled": false,
-        "apiKey": "",
-        "apiBaseUrl": "https://api.openai.com/v1",
-        "model": "gpt-4o-mini",
-        "aiProviders": [],
-        "aiProviderId": "",
-        "chatMaxTokens": 120,
-        "chatTemperature": 0.8,
-        "chatVerbosity": "normal",
-        "chatEmoji": false,
-        "chatUsageDate": "",
-        "chatUsageMessages": 0,
-        "chatUsageTokens": 0,
-        "soundEnabled": true,
         "customImageMode": "single",
         "customImagePath": "",
         "customImageRevision": 0,
@@ -48,31 +39,23 @@ pub fn defaults() -> Value {
         // edge look deliberate. Off by default — Bulu needs no help.
         "customOutline": false,
         "locale": "zh",
-        "theme": "light",
         // The wardrobe's saved equipment: slot -> accessory id (see
         // src/shared/accessory-types.ts). Older config files simply do not have
         // it; `fill_missing` adds the empty object and the manager reads that as
         // "nothing equipped".
         "equippedAccessories": {},
+        // Reserved with the equipment map above: the accessory system's anchor
+        // overlay switch, read by the wardrobe when it lands (docs/accessory-system.md).
         "accessoryDebug": false,
         // Pet needs (0..100) read by behavior conditions. Older config files do
         // not have this key; the defaults below are a content pet.
         "petStats": { "mood": 70, "energy": 80, "hunger": 20 },
-        "animDebug": false,
-        "actionAutoIdle": true,
-        "actionDebug": false,
         "affinity": 0,
-        "focusMode": true,
-        "focusInterval": 40,
         "statsFirstSeen": "",
         "statsDays": [],
         "statsClicks": 0,
-        "statsChats": 0,
         "affinityHistory": [],
-        "greetEnabled": true,
-        "weatherEnabled": true,
         "hourlyChime": true,
-        "photoEyes": null,
         "autoMove": true,
         "fileDropReactions": true,
         "standReminderEnabled": true,
@@ -98,16 +81,9 @@ pub fn defaults() -> Value {
         "petScale": 1,
         "stayOnOneDisplay": true,
         "snapToEdge": false,
-        "sleepTimeoutSec": 30,
-        "wanderSpeed": 1,
-        "activityFrequency": 1,
         "updateAutoCheck": true,
         "updateAutoDownload": true,
-        "updateChannel": "stable",
-        "updateDeferredVersion": "",
-        "updateDeferredAt": 0,
-        "updateNextAutoCheckAt": 0,
-        "updateAutoRetry": 0
+        "updateChannel": "stable"
     })
 }
 
@@ -117,8 +93,51 @@ pub fn defaults() -> Value {
 /// the `head` key, and a recursive merge would simply keep the old id — the hat
 /// would come back on the next launch, and a config naming a deleted accessory
 /// could never be cleaned up from the UI. Everything else keeps the documented
-/// merge semantics (a patch touching one AI field must not wipe the rest).
+/// merge semantics (a patch touching one field must not wipe the rest).
 const REPLACE_ON_PATCH: [&str; 1] = ["equippedAccessories"];
+
+/// Keys this build never reads, dropped from a stored file on load.
+///
+/// They are the residue of features the lightweight rewrite did not carry over:
+/// the AI chat panel and its saved provider profiles, the theme switcher, the
+/// sound / weather / proactive-greeting switches, the photo-pet eye overlay, the
+/// tunables that are constants now, and the update bookkeeping the Rust updater
+/// keeps in memory. Anything needed again is re-added by `fill_missing`, so
+/// carrying the old values costs only confusion — and `apiKey` is worse than that:
+/// it is a plaintext API key in a file the user is invited to read.
+const RETIRED_KEYS: [&str; 31] = [
+    "aiEnabled",
+    "apiKey",
+    "apiBaseUrl",
+    "model",
+    "aiProviders",
+    "aiProviderId",
+    "chatMaxTokens",
+    "chatTemperature",
+    "chatVerbosity",
+    "chatEmoji",
+    "chatUsageDate",
+    "chatUsageMessages",
+    "chatUsageTokens",
+    "soundEnabled",
+    "theme",
+    "animDebug",
+    "actionAutoIdle",
+    "actionDebug",
+    "focusMode",
+    "focusInterval",
+    "statsChats",
+    "greetEnabled",
+    "weatherEnabled",
+    "photoEyes",
+    "sleepTimeoutSec",
+    "wanderSpeed",
+    "activityFrequency",
+    "updateDeferredVersion",
+    "updateDeferredAt",
+    "updateNextAutoCheckAt",
+    "updateAutoRetry",
+];
 
 /// Recursively merge `patch` into `base` (objects merge, everything else replaces).
 fn deep_merge(base: &mut Value, patch: &Value) {
@@ -140,7 +159,7 @@ fn deep_merge(base: &mut Value, patch: &Value) {
 ///
 /// This must NOT be `deep_merge`: merging the defaults with the overwrite semantics
 /// used for patches resets every stored value back to its default on startup — which
-/// is exactly what happened before (the chosen pet, theme, size and so on were lost
+/// is exactly what happened before (the chosen pet, size and locale were lost
 /// on every relaunch).
 fn fill_missing(base: &mut Value, defaults: &Value) {
     let (Value::Object(base_map), Value::Object(default_map)) = (base, defaults) else {
@@ -175,14 +194,23 @@ pub fn init(app: &AppHandle) -> ConfigState {
         }
     }
     migrate_retired_skin(&mut value);
-    // Fill in anything the persisted file is missing (new keys, first run).
+    let before = value.clone();
+    // Drop what this build stopped reading, then fill in whatever is missing.
+    drop_retired_keys(&mut value);
     fill_missing(&mut value, &defaults());
-    seed_provider_from_legacy(&mut value);
 
-    ConfigState {
+    let state = ConfigState {
         path,
         value: Mutex::new(value),
+    };
+    // Write it back when the load changed anything — a migration, or a first run
+    // that had no file at all. The document the user is invited to read is then
+    // the one this build actually uses, and a dropped key (the old plaintext
+    // `apiKey` in particular) does not sit in the file until the next edit.
+    if state.snapshot() != before {
+        state.persist();
     }
+    state
 }
 
 /// Map a skin from an older install onto the character that still ships.
@@ -200,71 +228,16 @@ fn migrate_retired_skin(value: &mut Value) {
     }
 }
 
-/// Best-effort display label derived from a base URL host.
-fn provider_label(base_url: &str) -> String {
-    let host = base_url
-        .split("://")
-        .nth(1)
-        .unwrap_or(base_url)
-        .split('/')
-        .next()
-        .unwrap_or("");
-    if host.contains("openai") {
-        "OpenAI".to_string()
-    } else if host.contains("deepseek") {
-        "DeepSeek".to_string()
-    } else if host.contains("moonshot") {
-        "Moonshot".to_string()
-    } else if host.contains("localhost") || host.starts_with("127.") {
-        "Local".to_string()
-    } else if host.is_empty() {
-        "Default".to_string()
-    } else {
-        host.to_string()
-    }
-}
-
-/// Turn the single legacy base URL / key / model into the first saved provider, so
-/// the new provider switcher starts populated instead of empty on upgrade.
-fn seed_provider_from_legacy(value: &mut Value) {
-    let providers_empty = value
-        .get("aiProviders")
-        .and_then(|v| v.as_array())
-        .map(|list| list.is_empty())
-        .unwrap_or(true);
-    if !providers_empty {
+/// Remove the keys listed in `RETIRED_KEYS` from a loaded document.
+///
+/// A key this build reads again later comes back through `fill_missing`, so this
+/// only ever deletes values nothing can use.
+fn drop_retired_keys(value: &mut Value) {
+    let Some(map) = value.as_object_mut() else {
         return;
-    }
-
-    let base_url = value
-        .get("apiBaseUrl")
-        .and_then(|v| v.as_str())
-        .unwrap_or("")
-        .to_string();
-    let api_key = value
-        .get("apiKey")
-        .and_then(|v| v.as_str())
-        .unwrap_or("")
-        .to_string();
-    let model = value
-        .get("model")
-        .and_then(|v| v.as_str())
-        .unwrap_or("")
-        .to_string();
-    if base_url.is_empty() && api_key.is_empty() {
-        return;
-    }
-
-    let provider = json!({
-        "id": "default",
-        "name": provider_label(&base_url),
-        "baseUrl": base_url,
-        "apiKey": api_key,
-        "model": model,
-    });
-    if let Some(map) = value.as_object_mut() {
-        map.insert("aiProviders".into(), json!([provider]));
-        map.insert("aiProviderId".into(), json!("default"));
+    };
+    for key in RETIRED_KEYS {
+        map.remove(key);
     }
 }
 
@@ -306,26 +279,57 @@ mod tests {
     /// values the user already chose (that bug wiped every setting on relaunch).
     #[test]
     fn defaults_fill_gaps_without_overwriting() {
-        let mut stored = json!({ "skin": "bulu", "petScale": 1.25, "theme": "dark" });
+        let mut stored = json!({ "skin": "bulu", "petScale": 1.25, "opacity": 0.8 });
         fill_missing(&mut stored, &defaults());
 
         assert_eq!(stored.get("skin").and_then(|v| v.as_str()), Some("bulu"));
         assert_eq!(stored.get("petScale").and_then(|v| v.as_f64()), Some(1.25));
-        assert_eq!(stored.get("theme").and_then(|v| v.as_str()), Some("dark"));
+        assert_eq!(stored.get("opacity").and_then(|v| v.as_f64()), Some(0.8));
         // …while keys the file does not have yet still get their default.
         assert_eq!(
-            stored.get("chatMaxTokens").and_then(|v| v.as_i64()),
-            Some(120)
+            stored.get("stayOnOneDisplay").and_then(|v| v.as_bool()),
+            Some(true)
         );
     }
 
     /// Patches (config_set) keep the overwrite semantics.
     #[test]
     fn deep_merge_overwrites_for_patches() {
-        let mut stored = json!({ "skin": "bulu", "focusInterval": 40 });
+        let mut stored = json!({ "skin": "bulu", "opacity": 0.8 });
         deep_merge(&mut stored, &json!({ "skin": "cat" }));
         assert_eq!(stored.get("skin").and_then(|v| v.as_str()), Some("cat"));
-        assert_eq!(stored.get("focusInterval").and_then(|v| v.as_i64()), Some(40));
+        assert_eq!(stored.get("opacity").and_then(|v| v.as_f64()), Some(0.8));
+    }
+
+    /// Regression: the keys this build stopped reading are dropped from the file on
+    /// load, and nothing that is still in use goes with them. `apiKey` matters most
+    /// — it is the plaintext API key of a feature that no longer exists.
+    #[test]
+    fn retired_keys_are_dropped_on_load() {
+        let mut stored = json!({
+            "skin": "bulu",
+            "apiKey": "sk-do-not-keep-me",
+            "theme": "dark",
+            "updateDeferredVersion": "0.5.0",
+            "petScale": 1.25,
+        });
+        drop_retired_keys(&mut stored);
+
+        assert!(stored.get("apiKey").is_none(), "the plaintext key must not survive");
+        assert!(stored.get("theme").is_none());
+        assert!(stored.get("updateDeferredVersion").is_none());
+        assert_eq!(stored.get("petScale").and_then(|v| v.as_f64()), Some(1.25));
+        assert_eq!(stored.get("skin").and_then(|v| v.as_str()), Some("bulu"));
+    }
+
+    /// A key cannot be shipped and retired at once: retiring it would delete a
+    /// live setting on every launch.
+    #[test]
+    fn retired_keys_are_not_shipped() {
+        let shipped = defaults();
+        for key in RETIRED_KEYS {
+            assert!(shipped.get(key).is_none(), "{key} is retired but still in defaults()");
+        }
     }
 
     /// Regression: removing a key from the equipment map has to stick, or an

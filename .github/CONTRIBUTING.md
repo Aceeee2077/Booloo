@@ -12,6 +12,8 @@ npm run build            # Front-end build (sprites + brand icons + tsc + assets
 npm test                 # Lightweight-page tests + Rust unit tests / 轻量页面测试 + Rust 单元测试
 npm run tauri:build      # Compile the Tauri debug build / 编译 Tauri 调试版
 npm run tauri:check      # Launch the real windows for a self-check, exit code 0 = pass / 启动真实窗口自检，退出码 0 = 通过
+npm run verify-surface   # No config key or UI string may exist without a reader / 配置键与界面文案都必须有人读
+npm run release:check    # Version files agree, changelog has the version, no key in the tree / 版本一致、日志有条目、仓库无私钥
 npm run dist:win         # Package the Windows installer / 打包 Windows 安装包
 ```
 

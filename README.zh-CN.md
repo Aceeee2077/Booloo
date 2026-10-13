@@ -148,12 +148,19 @@ xattr -dr com.apple.quarantine /Applications/Booloo.app
 ```bash
 npm install
 npm run build      # 生成精灵表与图标 → tsc → 拷贝页面资源 → 导出 src-tauri/resources/i18n.json
-npm test           # 轻量页面行为测试（Node）+ Rust 单元测试
+npm test           # 先跑下面的「接口体检」，再跑轻量页面行为测试（Node）+ Rust 单元测试
 npm run screenshots # 重新生成 README 配图（中英各一套，需要本机有 Chrome / Edge）
 npm run tauri:dev  # 开发模式启动
 ```
 
 `npm run tauri:check` 会构建并启动真实窗口做自检，需要一个可用的 Windows WebView2 图形会话。
+
+两个脚本专门盯住那些会悄悄烂掉的部分：
+
+```bash
+npm run verify-surface # 每个配置键、每条界面文案都必须有人读（已并入 npm test）
+npm run release:check  # 打 tag 前：版本号一致、更新日志有条目、仓库里没有签名私钥
+```
 
 ## 目录结构
 

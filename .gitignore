@@ -83,7 +83,10 @@ builder-effective-config.yaml
 *.p12
 *.pfx
 *.key
-# Stray signing-key folder generated when `~` was not expanded by the shell.
+# A stray signing-key folder is what you get when a shell does not expand `~` — it
+# happened once, and the updater's private key sat in the working copy until it was
+# moved to the user profile. `npm run release:check` now fails on any key file
+# inside the checkout; this line is the belt to that pair of braces.
 /~
 
 # ---------- 7. Generated pet packages, frames and user assets ----------

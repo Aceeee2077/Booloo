@@ -56,6 +56,20 @@ jobs:
       - name: Install npm dependencies
         run: npm ci
 
+      # A tag whose version disagrees with package.json publishes a release the
+      # updater cannot match to the installed build, and a missing changelog entry
+      # ships a version with nothing said about it. Both are seconds to check and
+      # impossible to undo once the assets are up, so they are checked first.
+      # A manual dispatch runs from a branch, where there is no tag to match.
+      - name: Release pre-flight
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            node scripts/release-check.mjs --no-git --tag "$GITHUB_REF_NAME"
+          else
+            node scripts/release-check.mjs --no-git
+          fi
+
       # Verify the signing key + password in seconds instead of waiting for a full
       # build. A bad/missing secret is surfaced as an annotation with the reason.
       - name: Verify signing key

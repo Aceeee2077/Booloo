@@ -319,6 +319,9 @@ const OUTLINE_OFFSETS: ReadonlyArray<readonly [number, number]> =
     // consumed when it was picked, so the animation is only dropped here.
     if (eating) finishEating(true);
     if (tray) tray = null;
+    // The caller is about to set `activeAction`: the pose has to start now, not at
+    // the next backstop, or a pet that was asleep would answer the touch late.
+    scheduleFrame();
   }
 
   function say(line: string, duration = 3600) {
@@ -1272,6 +1275,9 @@ const OUTLINE_OFFSETS: ReadonlyArray<readonly [number, number]> =
     // on the poll timer — never per frame.
     if (loadChanged) void pollLoad();
     if (reload) { void loadCustom(); void loadPack(); }
+    // A new skin, size or opacity is drawn on the next frame; the loop may well be
+    // asleep by now (a settings change while the pet stands still), so ask for one.
+    scheduleFrame();
   }
 
   /**
@@ -1530,7 +1536,83 @@ const OUTLINE_OFFSETS: ReadonlyArray<readonly [number, number]> =
     if (gaps && (facing < 0 ? gaps.left : gaps.right) < 16) stopWalking();
   }
 
+  /**
+   * How long an idle pet may go without a frame. The pet's own one-second check
+   * tick (reminders, hunger, the hourly chime, the machine reading) keeps running
+   * on its own timer, so this is only a backstop for anything those checks turn on.
+   */
+  const IDLE_WAKE_MS = 1000;
+  /** A wake-up that is already armed, or null while the loop is running. */
+  let wakeTimer: number | null = null;
+  /** True between asking for a frame and running it, so two callers cannot double up. */
+  let framePending = false;
+
+  /**
+   * Is anything on screen moving by itself right now?
+   *
+   * Every reason to keep drawing at full rate has to be in here, or the pet freezes
+   * until something else wakes it: the flight integrates, a drag plays the walking
+   * gait, a held button can still become a long press, a reminder trip walks the pet
+   * to the middle of the screen, and the states that read the clock (`walk` / `click`
+   * body bob, the tray, a meal, the feather wand) all animate from `now`.
+   */
+  function animating(now: number): boolean {
+    if (flight || dragging || pressed || reminderRunning) return true;
+    if (walkUntil > now || clickUntil > now) return true;
+    if (activeAction && now < activeAction.started + activeAction.duration) return true;
+    if (tray || eating || toy) return true;
+    return false;
+  }
+
+  /** When a sleeping loop has to look again, in milliseconds from now. */
+  function nextWakeDelay(now: number): number {
+    let wake = now + IDLE_WAKE_MS;
+    // Blinking is the only sub-second event of an idle pet, and the closed-eye
+    // frame is held for 150 ms: both edges of it are deadlines, or the eyes would
+    // stay shut until the next heartbeat.
+    if (blinkUntil > now) wake = Math.min(wake, blinkUntil);
+    else if (nextBlinkAt > now) wake = Math.min(wake, nextBlinkAt);
+    if (activeAction) wake = Math.min(wake, activeAction.started + activeAction.duration);
+    if (walkUntil > now) wake = Math.min(wake, walkUntil);
+    if (sleepUntil > now) wake = Math.min(wake, sleepUntil);
+    if (dreamUntil > now) wake = Math.min(wake, dreamUntil);
+    return Math.max(0, wake - now);
+  }
+
+  /**
+   * Ask for a frame from outside the loop.
+   *
+   * The loop sleeps while nothing moves, so a state change made by an event (the
+   * button going down, a stroke, a menu action, a new skin) has to wake it or the
+   * pet would look frozen until its one-second backstop happened to fire. Calling
+   * this twice is harmless: the second call finds a frame already on its way.
+   */
+  function scheduleFrame() {
+    if (framePending) return;
+    if (wakeTimer !== null) {
+      window.clearTimeout(wakeTimer);
+      wakeTimer = null;
+    }
+    framePending = true;
+    requestAnimationFrame(frame);
+  }
+
+  /**
+   * The pet's frame loop.
+   *
+   * It used to re-arm itself unconditionally, so the canvas was repainted 60 times
+   * a second for as long as the app ran — including the hours it spends standing
+   * still, where nothing changes between two blinks. An app that sells itself on
+   * being a lightweight desktop pet cannot idle at 60 fps, so a frame is only asked
+   * for while something is actually moving and the loop sleeps (at most a second at
+   * a time) otherwise.
+   *
+   * Being the loop's only entry point, `frame` stays callable directly: the test
+   * harnesses drive it by hand with their own clock.
+   */
   function frame(now: number) {
+    framePending = false;
+    wakeTimer = null;
     try {
       checkLongPress(now);
       checkCare(now);
@@ -1540,7 +1622,12 @@ const OUTLINE_OFFSETS: ReadonlyArray<readonly [number, number]> =
     } catch (error) {
       (window as unknown as Record<string, unknown>).__petError = `draw: ${String(error)}`;
     }
-    requestAnimationFrame(frame);
+    if (animating(now)) {
+      framePending = true;
+      requestAnimationFrame(frame);
+      return;
+    }
+    wakeTimer = window.setTimeout(scheduleFrame, nextWakeDelay(now));
   }
 
   // ---------- taps, double taps and holds ----------
@@ -1632,6 +1719,10 @@ const OUTLINE_OFFSETS: ReadonlyArray<readonly [number, number]> =
   });
 
   canvas.addEventListener('mousemove', (event) => {
+    // A pointer on the move can be a stroke, a drag or a hover reaction, and every
+    // one of those is drawn: the loop sleeps while nothing happens, so it is woken
+    // here rather than by its one-second backstop.
+    scheduleFrame();
     petStrokeMove(event.offsetX, event.offsetY, event.buttons);
     const over = dragging || pressed || hit(event.offsetX, event.offsetY);
     if (over !== lastHover) {
@@ -1659,6 +1750,9 @@ const OUTLINE_OFFSETS: ReadonlyArray<readonly [number, number]> =
   });
   canvas.addEventListener('mousedown', (event) => {
     if (event.button !== 0 || !hit(event.offsetX, event.offsetY)) return;
+    // A held button is one of the states the loop stays awake for (the long press is
+    // noticed from a frame), so waking it here is what starts that clock.
+    scheduleFrame();
     // Grabbing a pet in mid-air catches it: the flight ends where it was caught,
     // and the drag that follows starts from there like any other.
     flight = null;
@@ -1753,9 +1847,9 @@ const OUTLINE_OFFSETS: ReadonlyArray<readonly [number, number]> =
       if (config?.updateAutoCheck === false) return;
       void checkForUpdates();
     }, 9000);
-    requestAnimationFrame(frame);
+    scheduleFrame();
   }).catch((error) => {
     (window as unknown as Record<string, unknown>).__petError = `config: ${String(error)}`;
-    requestAnimationFrame(frame);
+    scheduleFrame();
   });
 })();
