@@ -144,6 +144,10 @@ vm.runInContext(readFileSync(join(process.cwd(), 'dist/renderer/lite-care.js'), 
 vm.runInContext(readFileSync(join(process.cwd(), 'dist/renderer/lite-gait.js'), 'utf8'), context);
 vm.runInContext(readFileSync(join(process.cwd(), 'dist/renderer/lite-pack.js'), 'utf8'), context);
 vm.runInContext(readFileSync(join(process.cwd(), 'dist/renderer/lite-throw.js'), 'utf8'), context);
+// The pet loop's two pure helpers: the chime's next hour / reminder bounds and
+// the sticker outline it stamps from a cutout.
+vm.runInContext(readFileSync(join(process.cwd(), 'dist/renderer/lite-pet-timing.js'), 'utf8'), context);
+vm.runInContext(readFileSync(join(process.cwd(), 'dist/renderer/lite-pet-outline.js'), 'utf8'), context);
 vm.runInContext(readFileSync(join(process.cwd(), 'dist/renderer/lite-app.js'), 'utf8'), context);
 await new Promise(resolve => setImmediate(resolve));
 

@@ -90,7 +90,8 @@ const renderer = join(process.cwd(), 'dist', 'renderer');
 const shippedScripts = readdirSync(renderer).filter(name => name.endsWith('.js')).sort();
 assert.deepEqual(shippedScripts, ['lite-affinity.js', 'lite-api.js', 'lite-app.js', 'lite-care.js', 'lite-day.js',
   'lite-file-reaction.js', 'lite-gait.js', 'lite-i18n.js', 'lite-image.js', 'lite-mask.js', 'lite-menu.js',
-  'lite-pack.js', 'lite-report.js', 'lite-settings.js', 'lite-summary.js', 'lite-throw.js']);
+  'lite-pack-editor.js', 'lite-pack.js', 'lite-pet-outline.js', 'lite-pet-timing.js', 'lite-report.js', 'lite-settings.js',
+  'lite-summary.js', 'lite-throw.js']);
 const fileReaction = { liteT: makeTranslate(zhDict) };
 vm.createContext(fileReaction);
 vm.runInContext(readFileSync(join(renderer, 'lite-file-reaction.js'), 'utf8'), fileReaction);
@@ -760,6 +761,21 @@ for (const key of packKeys) {
     assert.equal(typeof packResource[locale][key], 'string', `src-tauri/resources/i18n.json is missing ${locale} ${key}`);
   }
 }
+// The visual editor is the same pack surface seen from the other side: the three
+// Rust commands, the two renderer entry points, and the section that hosts them.
+assert.ok(tauriConfigFile.app.security.assetProtocol.scope.includes('$APPCONFIG/pack-draft/**'),
+  'a draft sheet has to be readable through the asset protocol');
+for (const command of ['pet_editor_open', 'pet_editor_pick', 'pet_save']) {
+  assert.match(apiSource, new RegExp(command), `lite-api is missing the ${command} bridge`);
+  assert.match(libSource, new RegExp(`petpack::${command}`), `${command} is not registered`);
+}
+assert.doesNotMatch(ignoreFile, /^\/src\/renderer\/lite-pack-editor\.ts$/m,
+  'lite-pack-editor.ts must not be gitignored');
+assert.match(settingsHtml, /id="pack-editor"/);
+assert.match(settingsHtml, /id="new-pack"/);
+assert.match(settingsHtml, /lite-pack-editor\.js/);
+assert.match(settingsSource, /litePackEditor\?\.open/);
+assert.match(settingsSource, /'edit'/);
 console.log('Walking gait (one clock for legs, body and ground): passed');
 
 // ---- data backup -----------------------------------------------------------

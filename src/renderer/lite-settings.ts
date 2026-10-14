@@ -61,6 +61,7 @@
   const reportLines = $<HTMLElement>('report-lines');
   const packs = $<HTMLElement>('packs');
   const importPack = $<HTMLButtonElement>('import-pack');
+  const newPack = $<HTMLButtonElement>('new-pack');
   const packStatus = $<HTMLParagraphElement>('pack-status');
   const affinityLevelLabel = $<HTMLElement>('affinity-level');
   const affinityValue = $<HTMLElement>('affinity-value');
@@ -679,7 +680,9 @@
       card.classList.toggle('active', current?.skin === 'pack' && current.currentPetId === pet.id);
       card.append(name);
       if (meta.textContent) card.append(meta);
-      card.append(packButton('lite.pack.use', 'use'), packButton('lite.pack.export', 'export'), packButton('lite.pack.remove', 'remove'));
+      // "Edit…" goes last: the first three actions are the ones the card has
+      // always carried, and their order is what the list is read by.
+      card.append(packButton('lite.pack.use', 'use'), packButton('lite.pack.export', 'export'), packButton('lite.pack.remove', 'remove'), packButton('lite.editor.edit', 'edit'));
       packs.append(card);
     }
   }
@@ -702,6 +705,22 @@
       console.error('[lite-settings] pet packs:', error);
     }
     buildPacks();
+  }
+
+  /**
+   * Show the in-panel editor on `id` — an installed pack, or blank for a new one.
+   *
+   * The form itself lives in its own script (lite-pack-editor.ts), so this only
+   * hands it the id and takes the refresh back: saving rebuilds the list and
+   * reports the new name, while wearing the pack stays the card's "Use" button,
+   * which keeps the two jobs from arguing over one click.
+   */
+  function openEditor(id: string) {
+    window.litePackEditor?.open(id, (pet) => {
+      void refreshPacks();
+      packStatus.classList.remove('error');
+      packStatus.textContent = liteT('lite.editor.saved', { name: pet?.displayName ?? pet?.id ?? '' });
+    });
   }
 
   /** `HH:MM` for a time input, in local time. */
@@ -919,6 +938,7 @@
       await window.api.setConfig({ skin, currentPetId: skin });
     });
   }
+  newPack.addEventListener('click', () => { packStatus.classList.remove('error'); packStatus.textContent = ''; openEditor(''); });
   importPack.addEventListener('click', async () => {
     packStatus.classList.remove('error');
     try {
@@ -942,6 +962,7 @@
     if (!button || !id) return;
     const action = button.dataset.packAction;
     if (action === 'use') { await window.api.setConfig({ skin: 'pack', currentPetId: id }); return; }
+    if (action === 'edit') { openEditor(id); return; }
     packStatus.classList.remove('error');
     try {
       if (action === 'export') {

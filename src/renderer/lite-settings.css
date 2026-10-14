@@ -175,5 +175,35 @@ header button { border: 0; background: transparent; }
 #update-notes-box h3 { margin: 0 0 6px; font-size: 13px; color: #9a7660; }
 #update-notes-box pre { margin: 0; max-height: 140px; overflow: auto; padding: 8px 10px; border: 1px solid #f3e4d8; border-radius: 10px; background: #fffdfb; color: #6b5346; font-size: 12px; white-space: pre-wrap; word-break: break-word; }
 #update-manual { user-select: text; }
+/* The pet-pack editor: a two-column form — the sheet and its grid on the left,
+   the animation under construction on the right — folded behind a <details> so
+   the pack list stays the everyday surface. */
+.editor > summary { margin-bottom: 10px; font-size: 14px; font-weight: 700; color: #513a2c; }
+.editor-meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; }
+.editor-field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
+.editor-field > span { color: #8a6552; }
+.editor-field input, .editor-field textarea, .editor-field select { font: inherit; color: inherit; padding: 5px 8px; border: 1px solid #e9cbb6; border-radius: 8px; background: #ffffffd4; }
+/* The id is the folder name while an installed pack is open, so it reads as fixed. */
+.editor-field input[readonly] { color: #9a7660; background: #f6ece4; }
+.editor-wide { grid-column: 1 / -1; }
+.editor-body { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 12px; }
+.editor-sheet { flex: 1 1 300px; }
+.editor-anims { flex: 1 1 220px; }
+.editor-sheet canvas { display: block; width: 100%; max-width: 360px; height: auto; margin: 8px 0; border: 1px solid #e9cbb6; border-radius: 12px; background: repeating-conic-gradient(#eee 0 25%, white 0 50%) 50% / 20px 20px; cursor: crosshair; }
+.editor-grid-inputs { display: grid; grid-template-columns: repeat(auto-fit, minmax(64px, 1fr)); gap: 8px; }
+#editor-grid-warning { min-height: 18px; }
+#editor-grid-warning.error { color: #ba3e2e; }
+.editor-anims select { width: 100%; }
+.editor-anim-new { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.editor-anim-new input { flex: 1 1 120px; font: inherit; color: inherit; padding: 5px 8px; border: 1px solid #e9cbb6; border-radius: 8px; background: #ffffffd4; }
+.editor-anim-props { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; }
+.editor-anim-props .editor-field { flex: 0 0 72px; }
+.editor-anim-props .check { margin: 0; }
+.editor-frames { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; min-height: 26px; margin: 10px 0; }
+.editor-framechip { font: inherit; font-size: 12px; padding: 3px 8px; border-radius: 8px; }
+/* The "×" is decoration, not a second character the click has to miss. */
+.editor-framechip::after { content: " ×"; color: #a65a37; }
+#editor-preview { display: block; width: 120px; height: 120px; margin-top: 10px; border: 1px solid #e9cbb6; border-radius: 12px; background: repeating-conic-gradient(#eee 0 25%, white 0 50%) 50% / 20px 20px; image-rendering: pixelated; }
+.editor > .actions { margin-top: 12px; }
 [hidden] { display: none !important; }
-@media (max-width: 560px) { .skins { grid-template-columns: repeat(2, 1fr); } header, section { padding-left: 16px; padding-right: 16px; } }
+@media (max-width: 560px) { .skins { grid-template-columns: repeat(2, 1fr); } .editor-meta { grid-template-columns: 1fr; } header, section { padding-left: 16px; padding-right: 16px; } }

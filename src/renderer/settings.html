@@ -44,8 +44,65 @@
       <h2 data-i18n="lite.pack.title">宠物包</h2>
       <p class="note" data-i18n="lite.pack.hint"></p>
       <div id="packs" class="packs"></div>
-      <button id="import-pack" type="button" data-i18n="lite.pack.import">导入宠物包…</button>
+      <div class="actions">
+        <button id="import-pack" type="button" data-i18n="lite.pack.import">导入宠物包…</button>
+        <button id="new-pack" type="button" data-i18n="lite.editor.new">新建宠物包…</button>
+      </div>
       <p id="pack-status" class="status" role="status"></p>
+      <!-- The pack editor is folded away: the list above stays the everyday
+           surface, and this form only opens when a card asks for it ("Edit…")
+           or the "New pet pack…" button does. Its script is lite-pack-editor.js. -->
+      <details id="pack-editor" class="advanced editor" hidden>
+        <summary data-i18n="lite.editor.title">编辑宠物包</summary>
+        <div class="editor-meta">
+          <label class="editor-field"><span data-i18n="lite.editor.name">名字</span><input id="editor-name" type="text" maxlength="60" /></label>
+          <label class="editor-field"><span data-i18n="lite.editor.id">ID（文件夹名）</span><input id="editor-id" type="text" maxlength="60" /></label>
+          <label class="editor-field"><span data-i18n="lite.editor.author">作者</span><input id="editor-author" type="text" maxlength="60" /></label>
+          <label class="editor-field"><span data-i18n="lite.editor.version">版本</span><input id="editor-version" type="text" maxlength="24" /></label>
+          <label class="editor-field editor-wide"><span data-i18n="lite.editor.description">描述</span><textarea id="editor-description" rows="2" maxlength="240"></textarea></label>
+        </div>
+        <div class="editor-body">
+          <div class="editor-sheet">
+            <div class="actions">
+              <button id="editor-pick" type="button" data-i18n="lite.editor.pickSheet">选择精灵图…</button>
+              <span id="editor-sheet-info" class="note"></span>
+            </div>
+            <canvas id="editor-canvas" width="360" height="280"></canvas>
+            <p class="note" data-i18n="lite.editor.framesHint">点击左边的格子把这一帧加进当前动画。</p>
+            <div class="editor-grid-inputs">
+              <label class="editor-field"><span data-i18n="lite.editor.frameWidth">帧宽</span><input id="editor-frame-width" type="number" min="1" step="1" /></label>
+              <label class="editor-field"><span data-i18n="lite.editor.frameHeight">帧高</span><input id="editor-frame-height" type="number" min="1" step="1" /></label>
+              <label class="editor-field"><span data-i18n="lite.editor.columns">列数</span><input id="editor-columns" type="number" min="1" step="1" /></label>
+              <label class="editor-field"><span data-i18n="lite.editor.rows">行数</span><input id="editor-rows" type="number" min="1" step="1" /></label>
+              <label class="editor-field"><span data-i18n="lite.editor.scale">缩放</span><input id="editor-scale" type="number" min="0.1" step="0.1" /></label>
+            </div>
+            <p id="editor-grid-warning" class="note" role="status"></p>
+          </div>
+          <div class="editor-anims">
+            <label class="editor-field"><span data-i18n="lite.editor.animation">动画</span><select id="editor-anim-select"></select></label>
+            <div class="editor-anim-new">
+              <input id="editor-anim-name" type="text" maxlength="40" data-i18n-placeholder="lite.editor.newAnimation" />
+              <button id="editor-anim-add" type="button" data-i18n="lite.editor.addAnimation">添加动画</button>
+              <button id="editor-anim-remove" type="button" data-i18n="lite.editor.removeAnimation">删除动画</button>
+            </div>
+            <div class="editor-anim-props">
+              <label class="editor-field"><span data-i18n="lite.editor.fps">帧率</span><input id="editor-anim-fps" type="number" min="1" max="60" step="1" /></label>
+              <label class="check"><input id="editor-anim-loop" type="checkbox" /><span data-i18n="lite.editor.loop">循环播放</span></label>
+            </div>
+            <div id="editor-frames" class="editor-frames"></div>
+            <div class="actions">
+              <button id="editor-frame-play" type="button" data-i18n="lite.editor.play">播放</button>
+              <button id="editor-frames-clear" type="button" data-i18n="lite.editor.clearFrames">清空帧</button>
+            </div>
+            <canvas id="editor-preview" width="120" height="120"></canvas>
+          </div>
+        </div>
+        <div class="actions">
+          <button id="editor-save" class="primary" type="button" data-i18n="lite.editor.save">保存宠物包</button>
+          <button id="editor-cancel" type="button" data-i18n="lite.editor.cancel">取消</button>
+        </div>
+        <p id="editor-status" class="status" role="status"></p>
+      </details>
     </section>
 
     <section id="import-preview" hidden>
@@ -269,8 +326,10 @@
   <script src="./lite-care.js"></script>
   <script src="./lite-summary.js"></script>
   <script src="./lite-report.js"></script>
+  <script src="./lite-pack.js"></script>
   <script src="./lite-api.js"></script>
   <script src="./lite-image.js"></script>
+  <script src="./lite-pack-editor.js"></script>
   <script src="./lite-settings.js"></script>
 </body>
 </html>

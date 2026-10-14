@@ -519,6 +519,179 @@ pub fn pet_remove(app: AppHandle, id: String) -> Value {
     json!({ "ok": true })
 }
 
+/// Where an in-progress edit keeps its sheet: a sibling of `pets/`, so a draft is
+/// never mistaken for an installed pack by `pet_list`.
+fn pack_draft_dir(app: &AppHandle) -> PathBuf {
+    app.path()
+        .app_config_dir()
+        .unwrap_or_else(|_| PathBuf::from("."))
+        .join("pack-draft")
+}
+
+/// Forget whatever the last edit left behind. A draft that cannot be cleared is
+/// overwritten by the next pick anyway, so the failure is not worth reporting.
+fn clear_draft(app: &AppHandle) {
+    let _ = fs::remove_dir_all(pack_draft_dir(app));
+}
+
+/// The one name a sheet takes inside the draft folder. Only extensions the
+/// webview can draw survive, so a picked file that is not an image is refused
+/// before it is copied anywhere.
+fn draft_sheet_name(extension: &str) -> Option<String> {
+    let extension = extension.trim().trim_start_matches('.').to_ascii_lowercase();
+    SHEET_EXTENSIONS
+        .contains(&extension.as_str())
+        .then(|| format!("sheet.{extension}"))
+}
+
+/// Move a validated manifest and its sheet into `pets/<id>`, replacing whatever
+/// was there. The new copy is assembled under a staging name and renamed into
+/// place only once it is whole, so a failure part-way cannot leave a half-written
+/// pack for the pet window to find.
+fn write_pack(draft: &Path, pets_root: &Path, manifest: &Value) -> std::io::Result<PathBuf> {
+    let id = manifest.get("id").and_then(Value::as_str).unwrap_or_default();
+    let sheet = manifest
+        .pointer("/assets/spritesheet")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
+    let staging = pets_root.join(format!("{id}.staging"));
+    let _ = fs::remove_dir_all(&staging);
+    fs::create_dir_all(&staging)?;
+    fs::copy(draft.join(sheet), staging.join(sheet))?;
+    fs::write(
+        staging.join(MANIFEST),
+        serde_json::to_string_pretty(manifest).unwrap_or_default(),
+    )?;
+    let target = pets_root.join(id);
+    let _ = fs::remove_dir_all(&target);
+    fs::rename(&staging, &target)?;
+    Ok(target)
+}
+
+/// Start a new pack, or reopen an installed one for editing.
+///
+/// A blank `id` clears the draft and reports "new": the editor then waits for a
+/// sheet to be picked. Otherwise the installed sheet is copied into the draft and
+/// the manifest comes back with its sheet name pointing at that copy, so every
+/// save reads from one place no matter where the pack was first imported from.
+#[tauri::command]
+pub fn pet_editor_open(app: AppHandle, id: String) -> Value {
+    let locale = current_locale(&app);
+    clear_draft(&app);
+    let id = slug(&id);
+    if id.is_empty() {
+        return json!({ "ok": true, "manifest": Value::Null });
+    }
+    let source = pets_dir(&app).join(&id);
+    let Some(pet) = (source.is_dir()).then(|| read_pack(&source)).flatten() else {
+        return json!({ "ok": false, "error": translate(&locale, "lite.pack.notFound") });
+    };
+    let sheet_path = pet
+        .pointer("/manifest/assets/spritesheet")
+        .and_then(Value::as_str)
+        .map(|sheet| source.join(sheet))
+        .unwrap_or_default();
+    let Some(sheet) = sheet_path
+        .extension()
+        .and_then(|value| value.to_str())
+        .and_then(draft_sheet_name)
+    else {
+        return json!({ "ok": false, "error": translate(&locale, "lite.pack.notFound") });
+    };
+    let dir = pack_draft_dir(&app);
+    if fs::create_dir_all(&dir).is_err() || fs::copy(&sheet_path, dir.join(&sheet)).is_err() {
+        return json!({ "ok": false, "error": translate(&locale, "dialog.copyFailed") });
+    }
+    let mut manifest = pet.get("manifest").cloned().unwrap_or_else(|| json!({}));
+    if let Some(assets) = manifest.get_mut("assets").and_then(Value::as_object_mut) {
+        assets.insert("spritesheet".into(), json!(sheet));
+    }
+    let path = dir.join(&sheet);
+    let size = image::image_dimensions(&path).ok();
+    json!({
+        "ok": true,
+        "manifest": manifest,
+        "sheet": sheet,
+        "path": path.to_string_lossy(),
+        "url": inline_image(&path),
+        "width": size.map(|value| value.0),
+        "height": size.map(|value| value.1),
+    })
+}
+
+/// Pick a sheet image for the pack being edited. The file is copied into the
+/// draft folder on the spot, so a later save never depends on the original still
+/// sitting where the user found it.
+#[tauri::command]
+pub async fn pet_editor_pick(app: AppHandle) -> Value {
+    let (sender, receiver) = std::sync::mpsc::channel();
+    app.dialog()
+        .file()
+        .add_filter("Images", &["png", "jpg", "jpeg", "webp", "gif"])
+        .pick_file(move |path| { let _ = sender.send(path); });
+    let Some(picked) = receiver.recv().ok().flatten() else {
+        return json!({ "ok": false, "cancelled": true });
+    };
+    let Ok(source) = picked.into_path() else {
+        return json!({ "ok": false, "error": translate(&current_locale(&app), "dialog.readFailed") });
+    };
+    let Some(sheet) = source.extension().and_then(|value| value.to_str()).and_then(draft_sheet_name)
+    else {
+        return json!({ "ok": false, "error": translate(&current_locale(&app), "lite.pack.missingSheet") });
+    };
+    if source.metadata().map(|meta| meta.len()).unwrap_or(0) > MAX_PACK_BYTES {
+        return json!({ "ok": false, "error": translate(&current_locale(&app), "lite.pack.tooLarge") });
+    }
+    let dir = pack_draft_dir(&app);
+    clear_draft(&app);
+    if fs::create_dir_all(&dir).is_err() {
+        return json!({ "ok": false, "error": translate(&current_locale(&app), "dialog.copyFailed") });
+    }
+    let path = dir.join(&sheet);
+    if fs::copy(&source, &path).is_err() {
+        return json!({ "ok": false, "error": translate(&current_locale(&app), "dialog.copyFailed") });
+    }
+    let size = image::image_dimensions(&path).ok();
+    json!({
+        "ok": true,
+        "sheet": sheet,
+        "path": path.to_string_lossy(),
+        "url": inline_image(&path),
+        "width": size.map(|value| value.0),
+        "height": size.map(|value| value.1),
+    })
+}
+
+/// Save the edited pack: validate it, confirm the sheet really is the grid the
+/// manifest claims, then swap it into `pets/<id>` and drop the draft. Whether the
+/// pet then wears it is the card's decision, not this command's.
+#[tauri::command]
+pub fn pet_save(app: AppHandle, manifest: Value) -> Value {
+    let locale = current_locale(&app);
+    let normalized = match validate(&manifest, "") {
+        Ok(normalized) => normalized,
+        Err(error) => return json!({ "ok": false, "error": error_text(&app, error) }),
+    };
+    let draft = pack_draft_dir(&app);
+    if let Err(error) = check_sheet(&draft, &normalized) {
+        return json!({ "ok": false, "error": error_text(&app, error) });
+    }
+    let root = pets_dir(&app);
+    if fs::create_dir_all(&root).is_err() {
+        return json!({ "ok": false, "error": translate(&locale, "dialog.copyFailed") });
+    }
+    let Ok(target) = write_pack(&draft, &root, &normalized) else {
+        return json!({ "ok": false, "error": translate(&locale, "dialog.copyFailed") });
+    };
+    match read_pack(&target) {
+        Some(pet) => {
+            clear_draft(&app);
+            json!({ "ok": true, "pet": pet })
+        }
+        None => json!({ "ok": false, "error": translate(&locale, "lite.editor.saveFailed") }),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -667,5 +840,39 @@ mod tests {
         raw["id"] = json!("已导入");
         let error = validate(&raw, "").err().expect("refused");
         assert_eq!(error.key, "lite.pack.badId");
+    }
+
+    /// Only drawable images get a draft name, and it never keeps the user's
+    /// spelling of the extension (`.PNG` and `png` are the same file).
+    #[test]
+    fn draft_sheets_keep_only_drawable_extensions() {
+        assert_eq!(draft_sheet_name("png").as_deref(), Some("sheet.png"));
+        assert_eq!(draft_sheet_name(".WEBP").as_deref(), Some("sheet.webp"));
+        assert_eq!(draft_sheet_name("jpeg").as_deref(), Some("sheet.jpeg"));
+        assert_eq!(draft_sheet_name("bmp"), None);
+        assert_eq!(draft_sheet_name(""), None);
+    }
+
+    /// A save builds the replacement off to the side and swaps it in, so the pack
+    /// folder never ends up holding the new sheet beside the old manifest.
+    #[test]
+    fn saving_a_pack_replaces_its_folder_wholesale() {
+        let root = std::env::temp_dir().join(format!("booloo-petpack-{}", std::process::id()));
+        let draft = root.join("draft");
+        let pets = root.join("pets");
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&draft).unwrap();
+        fs::write(draft.join("sheet.png"), b"new art").unwrap();
+        // An older install of the same id, holding a file the new manifest drops.
+        fs::create_dir_all(pets.join("demo")).unwrap();
+        fs::write(pets.join("demo").join("stale.txt"), b"old").unwrap();
+
+        let target = write_pack(&draft, &pets, &good_manifest()).expect("written");
+        assert_eq!(target, pets.join("demo"));
+        assert_eq!(fs::read(target.join("sheet.png")).unwrap(), b"new art");
+        assert!(target.join(MANIFEST).is_file());
+        assert!(!target.join("stale.txt").exists(), "the old folder is replaced, not merged");
+        assert!(!pets.join("demo.staging").exists(), "and the staging copy does not linger");
+        let _ = fs::remove_dir_all(&root);
     }
 }

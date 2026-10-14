@@ -457,6 +457,10 @@ const [useButton, exportButton, deleteButton] = packCard.children.slice(2);
 assert.equal(useButton.textContent, zhDict['lite.pack.use']);
 assert.equal(exportButton.textContent, zhDict['lite.pack.export']);
 assert.equal(deleteButton.textContent, zhDict['lite.pack.remove']);
+// "Edit…" trails the three actions the card has always carried, so the earlier
+// slice still reads the first three in order.
+assert.equal(packCard.children[5].dataset.packAction, 'edit');
+assert.equal(packCard.children[5].textContent, zhDict['lite.editor.edit']);
 
 // "Use" is the same config write the skin buttons make, so the pet window picks
 // the pack up through the ordinary config broadcast.
@@ -479,4 +483,9 @@ await settle();
 assert.deepEqual(calls.petRemove, ['demo']);
 assert.equal(calls.petList, 2, 'deleting re-lists the installed packs');
 assert.match(element('pack-status').textContent, /小恐龙/, 'and says which pack went');
+// The editor script is loaded on the real page but not here: the optional call
+// has to degrade to a no-op rather than throw.
+clickPack('edit');
+await settle();
+assert.match(element('pack-status').textContent, /小恐龙/, 'a missing editor is skipped, not fatal');
 console.log('Pet pack section: cards, use / export / delete: passed');

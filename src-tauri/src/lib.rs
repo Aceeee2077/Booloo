@@ -128,6 +128,7 @@ const LITE_SETTINGS_CHECK_JS: &str = r#"
     hasWeeklySummary: !!document.getElementById('summary-days'),
     hasReport: !!document.getElementById('report-days'),
     hasPacks: !!document.getElementById('packs') && !!document.getElementById('import-pack'),
+    hasPackEditor: !!document.getElementById('pack-editor'),
     hasCustomOutline: !!document.getElementById('custom-outline'),
     // The cutout preview is answered by Rust (custom_cutout_preview), so the
     // renderer no longer keys the photo itself; prove the call is wired.
@@ -374,6 +375,9 @@ pub fn run() {
             petpack::pet_import,
             petpack::pet_export,
             petpack::pet_remove,
+            petpack::pet_editor_open,
+            petpack::pet_editor_pick,
+            petpack::pet_save,
             window::autolaunch_get,
             window::autolaunch_set,
             window::show_pet_window,

@@ -56,3 +56,20 @@ function liteDayWeekday(key: string): number {
   if (!start) return 0;
   return (start.getDay() + 6) % 7;
 }
+
+/**
+ * The newest `keepDays` days of a per-day counter map, or the same map when it
+ * already fits.
+ *
+ * Keys are `YYYY-MM-DD`, so a lexicographic sort is a calendar sort and the tail
+ * is the most recent stretch. `keepDays` is a parameter rather than a constant so
+ * the same rule serves both the counters and the day log the config keeps.
+ */
+function liteDayPruneStats(stats: Record<string, DailyStat>, keepDays: number): Record<string, DailyStat> {
+  const days = Object.keys(stats).sort();
+  if (days.length <= keepDays) return stats;
+  const keep = new Set(days.slice(days.length - keepDays));
+  const pruned: Record<string, DailyStat> = {};
+  for (const day of days) if (keep.has(day)) pruned[day] = stats[day];
+  return pruned;
+}

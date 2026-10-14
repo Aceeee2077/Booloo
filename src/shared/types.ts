@@ -217,6 +217,35 @@ interface PetPackActionResult {
   error?: string;
 }
 
+/** Answer of `pet_editor_open` / `pet_editor_pick`. */
+interface PetEditorDraftResult {
+  ok: boolean;
+  /** The user closed the dialog — not a failure, and nothing to report. */
+  cancelled?: boolean;
+  /** The manifest to edit, or null when opening a brand-new pack. */
+  manifest?: PetDefinition | null;
+  /** File name of the sheet in the draft folder, e.g. `sheet.png`. */
+  sheet?: string;
+  /** Ready-to-draw URL, or null when the sheet was too large to inline. */
+  url?: string | null;
+  /** Absolute path of the draft sheet, the fallback preview source. */
+  path?: string;
+  /** Natural pixel size of the sheet, or null when it could not be read. */
+  width?: number | null;
+  height?: number | null;
+  /** Localized failure reason. */
+  error?: string;
+}
+
+/** Answer of `pet_save`. */
+interface PetSaveResult {
+  ok: boolean;
+  /** The pack as it now sits on disk. */
+  pet?: LitePetPackEntry;
+  /** Localized failure reason. */
+  error?: string;
+}
+
 /** Answer of `export_diagnostics`. */
 interface DiagnosticsResult {
   ok: boolean;
@@ -648,6 +677,16 @@ interface PetApi {
   /** Delete an installed pack; the pet falls back to Bulu when it wore it. */
   petRemove(id: string): Promise<PetPackActionResult>;
   /**
+   * Open the pack editor on an installed pack, or start a new one when `id` is
+   * blank. The sheet is copied into the app's draft folder, so what is returned is
+   * a draft to edit rather than the installed pack itself.
+   */
+  petEditorOpen(id: string): Promise<PetEditorDraftResult>;
+  /** Pick a sheet image for the pack being edited and copy it into the draft. */
+  petEditorPick(): Promise<PetEditorDraftResult>;
+  /** Validate a drafted manifest and install it as `pets/<id>`, replacing the old copy. */
+  petSave(manifest: PetDefinition): Promise<PetSaveResult>;
+  /**
    * List the user-imported accessories (one folder per item under
    * %APPCONFIG%/accessories). Broken entries are skipped or flagged by the
    * backend, never thrown.
@@ -702,8 +741,19 @@ interface PetApi {
   onPetClip(cb: (id: string) => void): () => void;
 }
 
+/** The pack editor form exposed on `window` by src/renderer/lite-pack-editor.ts. */
+interface PackEditorApi {
+  /**
+   * Open the editor on an installed pack, or on a brand-new one when `id` is
+   * blank. `onSaved` fires after a successful save, letting the panel refresh.
+   */
+  open(id: string, onSaved?: (pet?: LitePetPackEntry) => void): void;
+}
+
 interface Window {
   api: PetApi;
   /** Legacy global from the pre-lite renderer; lite pages call liteT() instead. */
   BoolooI18n: BoolooI18n;
+  /** The pack editor form; absent until lite-pack-editor.js has loaded. */
+  litePackEditor?: PackEditorApi;
 }

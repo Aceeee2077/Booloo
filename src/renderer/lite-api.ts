@@ -126,6 +126,15 @@
     petImport: () => call<PetPackActionResult>('pet_import'),
     petExport: (id: string) => call<PetPackActionResult>('pet_export', { id }),
     petRemove: (id: string) => call<PetPackActionResult>('pet_remove', { id }),
+    petEditorOpen: async (id: string) => {
+      const result = await call<PetEditorDraftResult>('pet_editor_open', { id });
+      return { ...result, url: result.url ?? (result.path ? urlOf(result.path) ?? null : null) };
+    },
+    petEditorPick: async () => {
+      const result = await call<PetEditorDraftResult>('pet_editor_pick');
+      return { ...result, url: result.url ?? (result.path ? urlOf(result.path) ?? null : null) };
+    },
+    petSave: (manifest: PetDefinition) => call<PetSaveResult>('pet_save', { manifest }),
     updateGetState: () => call<UpdateState>('update_get_state'),
     updateCheck: () => call<UpdateState>('update_check'),
     updateDownload: () => call<UpdateState>('update_download'),

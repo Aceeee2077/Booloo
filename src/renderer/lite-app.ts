@@ -578,18 +578,12 @@ const OUTLINE_OFFSETS: ReadonlyArray<readonly [number, number]> =
     void runStandReminder();
   }
 
-  function nextLocalHour(now: number) {
-    const next = new Date(now);
-    next.setHours(next.getHours() + 1, 0, 0, 0);
-    return next.getTime();
-  }
-
   function checkHourlyChime() {
     if (!config || config.hourlyChime === false || !nextHourAt) return;
     const now = Date.now();
     if (now < nextHourAt) return;
     const overdue = now - nextHourAt;
-    nextHourAt = nextLocalHour(now);
+    nextHourAt = litePetNextLocalHour(now);
     if (overdue > 60_000 || pressed || dragging || reminderRunning) return;
     activity();
     clickUntil = performance.now() + 650;
@@ -611,11 +605,6 @@ const OUTLINE_OFFSETS: ReadonlyArray<readonly [number, number]> =
   const AFFINITY_HISTORY_DAYS = 180;
   /** What each kind of interaction is worth. See lite-affinity.ts for the levels. */
   const AFFINITY_GAINS = { tap: 1, doubleTap: 2, petHead: 2, petBody: 3, fileDrop: 2, feed: 2, play: 1 } as const;
-
-  function clampMinutes(value: unknown, fallback: number) {
-    const minutes = Number(value);
-    return Number.isInteger(minutes) && minutes >= 1 && minutes <= 240 ? minutes : fallback;
-  }
 
   /**
    * Count something for today.
@@ -706,15 +695,6 @@ const OUTLINE_OFFSETS: ReadonlyArray<readonly [number, number]> =
     daysToAdd.add(liteDayKey());
   }
 
-  function pruneDailyStats(stats: Record<string, DailyStat>) {
-    const days = Object.keys(stats).sort();
-    if (days.length <= STATS_KEEP_DAYS) return stats;
-    const keep = new Set(days.slice(days.length - STATS_KEEP_DAYS));
-    const pruned: Record<string, DailyStat> = {};
-    for (const day of days) if (keep.has(day)) pruned[day] = stats[day];
-    return pruned;
-  }
-
   /**
    * Merge the buffered counters into the config and write them once.
    *
@@ -737,7 +717,7 @@ const OUTLINE_OFFSETS: ReadonlyArray<readonly [number, number]> =
       }
       delete pendingStats[day];
     }
-    if (days.length) patch.dailyStats = pruneDailyStats(merged);
+    if (days.length) patch.dailyStats = liteDayPruneStats(merged, STATS_KEEP_DAYS);
     if (affinityTotal >= 0) {
       patch.affinity = affinityTotal;
       const history = (config.affinityHistory ?? []).filter(point => point?.date !== liteDayKey());
@@ -1001,11 +981,11 @@ const OUTLINE_OFFSETS: ReadonlyArray<readonly [number, number]> =
     if (pressed || dragging || reminderRunning) return;
     const now = Date.now();
     if (config.eyeRestEnabled === true && nextEyeRestAt && now >= nextEyeRestAt) {
-      nextEyeRestAt = now + clampMinutes(config.eyeRestMinutes, 20) * 60_000;
+      nextEyeRestAt = now + litePetClampMinutes(config.eyeRestMinutes, 20) * 60_000;
       announceEyeRest();
     }
     if (config.waterEnabled === true && nextWaterAt && now >= nextWaterAt) {
-      nextWaterAt = now + clampMinutes(config.waterMinutes, 45) * 60_000;
+      nextWaterAt = now + litePetClampMinutes(config.waterMinutes, 45) * 60_000;
       announceWater();
     }
   }
@@ -1146,27 +1126,6 @@ const OUTLINE_OFFSETS: ReadonlyArray<readonly [number, number]> =
     }
   }, 1000);
 
-  /**
-   * A white silhouette of the picture, stamped around it as a sticker outline.
-   *
-   * An imperfect cutout reads as ragged on a busy desktop; tracing it makes the
-   * edge look deliberate instead of accidental. Opt-in via `config.customOutline`.
-   */
-  function buildPetOutline(source: HTMLCanvasElement): HTMLCanvasElement {
-    const outline = document.createElement('canvas');
-    outline.width = source.width;
-    outline.height = source.height;
-    const ctx = outline.getContext('2d');
-    if (ctx) {
-      ctx.drawImage(source, 0, 0);
-      // Keep the picture's own silhouette and recolour it.
-      ctx.globalCompositeOperation = 'source-in';
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, outline.width, outline.height);
-    }
-    return outline;
-  }
-
   async function loadCustom() {
     const serial = ++loadSerial;
     custom = null;
@@ -1181,7 +1140,7 @@ const OUTLINE_OFFSETS: ReadonlyArray<readonly [number, number]> =
       const prepared = litePrepareImage(image);
       if (serial !== loadSerial) return;
       custom = prepared;
-      customOutline = config?.customOutline ? buildPetOutline(prepared.canvas) : null;
+      customOutline = config?.customOutline ? litePetOutline(prepared.canvas) : null;
       (window as unknown as Record<string, unknown>).__petError = null;
     } catch (error) {
       if (serial !== loadSerial) return;
@@ -1264,12 +1223,12 @@ const OUTLINE_OFFSETS: ReadonlyArray<readonly [number, number]> =
       const minutes = Math.max(1, Math.min(240, Number(next.standReminderMinutes) || 5));
       nextReminderAt = next.standReminderEnabled === false ? 0 : Date.now() + minutes * 60_000;
     }
-    if (chimeChanged) nextHourAt = next.hourlyChime === false ? 0 : nextLocalHour(Date.now());
+    if (chimeChanged) nextHourAt = next.hourlyChime === false ? 0 : litePetNextLocalHour(Date.now());
     if (healthChanged) {
       // Opt-in habits: a config that predates them (no key at all) arms nothing,
       // and only an explicit `true` starts a countdown.
-      nextEyeRestAt = next.eyeRestEnabled === true ? Date.now() + clampMinutes(next.eyeRestMinutes, 20) * 60_000 : 0;
-      nextWaterAt = next.waterEnabled === true ? Date.now() + clampMinutes(next.waterMinutes, 45) * 60_000 : 0;
+      nextEyeRestAt = next.eyeRestEnabled === true ? Date.now() + litePetClampMinutes(next.eyeRestMinutes, 20) * 60_000 : 0;
+      nextWaterAt = next.waterEnabled === true ? Date.now() + litePetClampMinutes(next.waterMinutes, 45) * 60_000 : 0;
     }
     // Reading the machine is cheap but not free, so it happens on that switch and
     // on the poll timer — never per frame.
