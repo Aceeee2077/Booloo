@@ -175,7 +175,7 @@
       case 'downloaded':
         updateStatus.textContent = offered ? liteT('settings.updateDownloaded', { v: offered }) : liteT('settings.updateIdle');
         break;
-      case 'up-to-date': updateStatus.textContent = liteT('settings.updateUpToDate', { v: running }); break;
+      case 'up-to-date': updateStatus.textContent = liteT('settings.updateUpToDate', { v: state.currentVersion ?? '' }); break;
       case 'dev': updateStatus.textContent = liteT('settings.updateDev'); break;
       case 'unsupported': updateStatus.textContent = liteT('settings.updateUnsupported'); break;
       case 'error':
