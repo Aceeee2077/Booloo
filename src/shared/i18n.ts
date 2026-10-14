@@ -400,6 +400,33 @@ export const zhDict: Record<string, I18nValue> = {
   'lite.diag.reveal': '打开日志',
   'lite.diag.exported': '已导出到 {path}',
   'lite.diag.failed': '导出失败：{error}',
+
+  // 年度回顾 / the year's company — the same per-day counters as the weekly
+  // summary, taken a whole year at a time (see src/renderer/lite-report.ts).
+  'lite.report.title': '年度回顾',
+  'lite.report.range': '{from} ~ {to}（今年至今）',
+  'lite.report.days': '陪伴天数',
+  'lite.report.clicks': '点击次数',
+  'lite.report.stand': '站立提醒',
+  'lite.report.eye': '护眼提醒',
+  'lite.report.water': '喝水提醒',
+  'lite.report.affinity': '全年好感',
+  'lite.report.streakLine': '最长连续陪伴 {n} 天。',
+  'lite.report.busiest': '最勤的一天是 {date}（{count} 次点击）。',
+  'lite.report.firstLine': '今年第一次见面是 {date}。',
+  'lite.report.quiet': '今年还没有记录，摸摸它就开始吧。',
+  'lite.report.hint': '数字同样来自每天已经记录的统计，不会上传。',
+
+  // 数据备份 / data backup — the whole data folder out to a folder the user
+  // picks, and back (see src-tauri/src/backup.rs).
+  'lite.backup.title': '数据备份',
+  'lite.backup.hint': '把配置和宠物数据导出到你选定的文件夹；恢复会用备份整体替换当前数据。',
+  'lite.backup.export': '导出备份',
+  'lite.backup.import': '从备份恢复',
+  'lite.backup.exported': '已导出到 {path}',
+  'lite.backup.restored': '已从 {path} 恢复，重启后完全生效。',
+  'lite.backup.failed': '备份失败：{error}',
+  'lite.backup.notBackup': '这个文件夹不是 Booloo 备份。',
 };
 
 export const enDict: Record<string, I18nValue> = {
@@ -791,6 +818,31 @@ export const enDict: Record<string, I18nValue> = {
   'lite.diag.reveal': 'Open log',
   'lite.diag.exported': 'Exported to {path}',
   'lite.diag.failed': 'Export failed: {error}',
+
+  // The year's company — see the matching block in zhDict.
+  'lite.report.title': 'This year',
+  'lite.report.range': '{from} – {to} (this year so far)',
+  'lite.report.days': 'Days together',
+  'lite.report.clicks': 'Clicks',
+  'lite.report.stand': 'Stand-ups',
+  'lite.report.eye': 'Eye breaks',
+  'lite.report.water': 'Water breaks',
+  'lite.report.affinity': 'Affection',
+  'lite.report.streakLine': 'Your longest run was {n} days in a row.',
+  'lite.report.busiest': 'The busiest day was {date} ({count} clicks).',
+  'lite.report.firstLine': 'You first met on {date} this year.',
+  'lite.report.quiet': 'Nothing recorded yet this year — pet it and it begins.',
+  'lite.report.hint': 'The same per-day counts as the weekly summary — nothing is uploaded.',
+
+  // Data backup — see the matching block in zhDict.
+  'lite.backup.title': 'Data backup',
+  'lite.backup.hint': 'Export the config and pet data to a folder you pick; restoring replaces the current data with the backup.',
+  'lite.backup.export': 'Export backup',
+  'lite.backup.import': 'Restore from backup',
+  'lite.backup.exported': 'Exported to {path}',
+  'lite.backup.restored': 'Restored from {path} — restart to make it fully take effect.',
+  'lite.backup.failed': 'Backup failed: {error}',
+  'lite.backup.notBackup': 'That folder is not a Booloo backup.',
 };
 
 export function getDict(locale: Locale): Record<string, I18nValue> {

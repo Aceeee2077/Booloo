@@ -134,6 +134,8 @@
     openProjectPage: () => send('open_project_page'),
     exportDiagnostics: () => call<DiagnosticsResult>('export_diagnostics'),
     revealLog: () => send('reveal_log'),
+    backupExport: () => call<BackupResult>('backup_export'),
+    backupImport: () => call<BackupResult>('backup_import'),
     onUpdateState: (callback: (state: UpdateState) => void) => subscribe<UpdateState>('update-state', callback),
     dragBegin: (visualBounds?: PetBox) => send('drag_begin', { visualBounds: visualBounds ?? bounds() }),
     dragMove: () => send('drag_move'),

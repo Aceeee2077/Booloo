@@ -290,6 +290,26 @@ impl ConfigState {
             }
         }
     }
+
+    /// Swap the whole document for `restored` and return what was written.
+    ///
+    /// Used by the backup import. The restored file is a complete document, so it
+    /// replaces the in-memory copy as a whole rather than merging into it: a merge
+    /// would keep keys the backup does not carry, and a later `persist` (the pet
+    /// window saves on its own) would then write those back over the restore.
+    /// Retired keys are dropped and this build's defaults fill any gaps, exactly
+    /// like a fresh load, so an old backup cannot reintroduce a dropped key.
+    pub fn replace(&self, restored: Value) -> Value {
+        let mut value = restored;
+        drop_retired_keys(&mut value);
+        fill_missing(&mut value, &defaults());
+        {
+            let mut guard = self.value.lock().unwrap();
+            *guard = value;
+        }
+        self.persist();
+        self.snapshot()
+    }
 }
 
 #[cfg(test)]
@@ -397,5 +417,31 @@ mod tests {
             assert_eq!(stored["skin"], kept);
             assert_eq!(stored["currentPetId"], kept);
         }
+    }
+
+    /// A restore replaces the document as a whole: keys the restored file does
+    /// not carry are dropped (not kept from the running copy), this build's
+    /// defaults still fill the gaps, and the file on disk matches the memory.
+    #[test]
+    fn replace_swaps_the_whole_document() {
+        let dir = std::env::temp_dir().join(format!("booloo-config-replace-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("config.json");
+        let state = ConfigState {
+            path: path.clone(),
+            value: Mutex::new(json!({ "skin": "bulu", "petScale": 1.25, "keepMe": true })),
+        };
+
+        let merged = state.replace(json!({ "skin": "custom", "opacity": 0.5 }));
+
+        assert_eq!(merged.get("skin").and_then(Value::as_str), Some("custom"));
+        assert_eq!(merged.get("opacity").and_then(Value::as_f64), Some(0.5));
+        assert!(merged.get("keepMe").is_none(), "a key the backup lacks is dropped, not kept");
+        assert!(merged.get("petScale").is_some(), "defaults still fill the gaps");
+        let written: Value =
+            serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        assert_eq!(written, merged, "the file on disk is what the memory holds");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

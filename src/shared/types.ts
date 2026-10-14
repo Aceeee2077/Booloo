@@ -228,6 +228,17 @@ interface DiagnosticsResult {
   error?: string;
 }
 
+/** Answer of `backup_export` / `backup_import`. */
+interface BackupResult {
+  ok: boolean;
+  /** The user closed the folder picker — not a failure, and nothing to report. */
+  cancelled?: boolean;
+  /** The backup folder written to / restored from. */
+  path?: string;
+  /** Localized failure reason. */
+  error?: string;
+}
+
 /** Custom image query / selection result */
 interface CustomImageResult {  ok: boolean;
   /** pet-custom:// resource URL, can be assigned directly to img.src / GLTFLoader */
@@ -577,6 +588,16 @@ interface PetApi {
   exportDiagnostics(): Promise<DiagnosticsResult>;
   /** Show the log file in the OS file manager. */
   revealLog(): void;
+  /**
+   * Copy the config and pet data out to a folder the user picks, as a
+   * `booloo-backup-<date>` folder that can be restored later.
+   */
+  backupExport(): Promise<BackupResult>;
+  /**
+   * Replace the current config and pet data with a backup folder the user picks.
+   * What was there first is kept aside as `data-before-restore` before the swap.
+   */
+  backupImport(): Promise<BackupResult>;
   /**
    * Coarse CPU / memory / battery state. Only polled while
    * `AppConfig.loadAwareness` is on; the first call may report a null CPU

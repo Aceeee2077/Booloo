@@ -51,6 +51,14 @@
   const summaryWater = $<HTMLElement>('summary-water');
   const summaryAffinity = $<HTMLElement>('summary-affinity');
   const summaryLine = $<HTMLElement>('summary-line');
+  const reportRange = $<HTMLElement>('report-range');
+  const reportDays = $<HTMLElement>('report-days');
+  const reportClicks = $<HTMLElement>('report-clicks');
+  const reportStand = $<HTMLElement>('report-stand');
+  const reportEye = $<HTMLElement>('report-eye');
+  const reportWater = $<HTMLElement>('report-water');
+  const reportAffinity = $<HTMLElement>('report-affinity');
+  const reportLines = $<HTMLElement>('report-lines');
   const packs = $<HTMLElement>('packs');
   const importPack = $<HTMLButtonElement>('import-pack');
   const packStatus = $<HTMLParagraphElement>('pack-status');
@@ -81,6 +89,9 @@
   const exportDiagnosticsButton = $<HTMLButtonElement>('export-diagnostics');
   const revealLogButton = $<HTMLButtonElement>('reveal-log');
   const diagStatus = $<HTMLParagraphElement>('diag-status');
+  const backupExportButton = $<HTMLButtonElement>('backup-export');
+  const backupImportButton = $<HTMLButtonElement>('backup-import');
+  const backupStatus = $<HTMLParagraphElement>('backup-status');
   let candidate: HTMLImageElement | null = null;
   let current: AppConfig | null = null;
   let lastUpdate: UpdateState | null = null;
@@ -594,6 +605,37 @@
       : headline;
   }
 
+  /**
+   * The year so far, out of the same buckets the heatmap and the weekly summary
+   * draw. Only the current year is shown — the pet prunes its buckets to roughly
+   * a year, so there is nothing older to report on.
+   */
+  function paintReport(cfg: AppConfig) {
+    const year = Number(liteDayKey().slice(0, 4));
+    const report = yearReport(cfg.dailyStats, year);
+    reportRange.textContent = liteT('lite.report.range', {
+      from: dayLabel(report.from), to: dayLabel(report.to),
+    });
+    reportDays.textContent = String(report.days);
+    reportClicks.textContent = String(report.clicks);
+    reportStand.textContent = String(report.stand);
+    reportEye.textContent = String(report.eye);
+    reportWater.textContent = String(report.water);
+    reportAffinity.textContent = `+${report.affinity}`;
+    if (report.days === 0) {
+      reportLines.textContent = liteT('lite.report.quiet');
+      return;
+    }
+    const lines = [liteT('lite.report.streakLine', { n: report.streak })];
+    if (report.busiest) {
+      lines.push(liteT('lite.report.busiest', {
+        date: dayLabel(report.busiest.date), count: report.busiest.clicks,
+      }));
+    }
+    if (report.first) lines.push(liteT('lite.report.firstLine', { date: dayLabel(report.first) }));
+    reportLines.textContent = lines.join(' ');
+  }
+
   // ---------- pet packs ----------
   /**
    * Installed pet packs, as last listed by the backend.
@@ -819,6 +861,7 @@
     paintHealth(cfg);
     paintHeatmap(cfg);
     paintSummary(cfg);
+    paintReport(cfg);
     // The pack cards are translated markup, so a language switch rebuilds them;
     // otherwise only the "in use" outline can have changed.
     if (packsLocale !== liteCurrentLocale()) buildPacks(); else paintPackSelection(cfg);
@@ -1030,6 +1073,47 @@
     }
   });
   revealLogButton.addEventListener('click', () => window.api.revealLog());
+  // Backup: write the data folder to a folder the user picks, or restore one
+  // over the current data. Restoring replaces everything, so the backend keeps a
+  // copy of what was there first (nothing is asked of the user in advance).
+  backupExportButton.addEventListener('click', async () => {
+    backupExportButton.disabled = true;
+    backupStatus.classList.remove('error');
+    try {
+      const result = await window.api.backupExport();
+      if (result.cancelled) return;
+      if (!result.ok) {
+        backupStatus.classList.add('error');
+        backupStatus.textContent = liteT('lite.backup.failed', { error: result.error ?? '' });
+        return;
+      }
+      backupStatus.textContent = liteT('lite.backup.exported', { path: result.path ?? '' });
+    } catch (error) {
+      backupStatus.classList.add('error');
+      backupStatus.textContent = liteT('lite.backup.failed', { error: String(error) });
+    } finally {
+      backupExportButton.disabled = false;
+    }
+  });
+  backupImportButton.addEventListener('click', async () => {
+    backupImportButton.disabled = true;
+    backupStatus.classList.remove('error');
+    try {
+      const result = await window.api.backupImport();
+      if (result.cancelled) return;
+      if (!result.ok) {
+        backupStatus.classList.add('error');
+        backupStatus.textContent = liteT('lite.backup.failed', { error: result.error ?? '' });
+        return;
+      }
+      backupStatus.textContent = liteT('lite.backup.restored', { path: result.path ?? '' });
+    } catch (error) {
+      backupStatus.classList.add('error');
+      backupStatus.textContent = liteT('lite.backup.failed', { error: String(error) });
+    } finally {
+      backupImportButton.disabled = false;
+    }
+  });
   window.api.onUpdateState(renderUpdate);
   autoLaunch.addEventListener('change', () => void window.api.autoLaunchSet(autoLaunch.checked).then((enabled) => {
     autoLaunch.checked = enabled;

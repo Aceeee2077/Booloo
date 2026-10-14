@@ -121,7 +121,7 @@ fn rotate(path: &Path) {
 
 /// Local wall-clock timestamp for a log line.
 #[cfg(target_os = "windows")]
-fn timestamp() -> String {
+pub(crate) fn timestamp() -> String {
     #[repr(C)]
     struct LocalTime {
         year: u16,
@@ -157,7 +157,7 @@ fn timestamp() -> String {
 /// UTC timestamp for a log line (the other platforms have no cheap local-time
 /// call, and a UTC clock is enough to line up a report).
 #[cfg(not(target_os = "windows"))]
-fn timestamp() -> String {
+pub(crate) fn timestamp() -> String {
     use std::time::{SystemTime, UNIX_EPOCH};
     let elapsed = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default();
     let seconds = elapsed.as_secs() as i64;

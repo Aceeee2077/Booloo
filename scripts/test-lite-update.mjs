@@ -133,6 +133,9 @@ vm.runInContext(readFileSync(join(process.cwd(), 'dist', 'renderer', 'lite-affin
 vm.runInContext(readFileSync(join(process.cwd(), 'dist', 'renderer', 'lite-care.js'), 'utf8'), context);
 // The weekly summary is built from the same per-day buckets the heatmap draws.
 vm.runInContext(readFileSync(join(process.cwd(), 'dist', 'renderer', 'lite-summary.js'), 'utf8'), context);
+// The year report reads those buckets a year at a time, and the settings script
+// paints it alongside the week.
+vm.runInContext(readFileSync(join(process.cwd(), 'dist', 'renderer', 'lite-report.js'), 'utf8'), context);
 vm.runInContext(readFileSync(join(process.cwd(), 'dist', 'renderer', 'lite-settings.js'), 'utf8'), context);
 const settle = async () => { await new Promise(resolve => setImmediate(resolve)); await new Promise(resolve => setImmediate(resolve)); };
 await settle();

@@ -90,7 +90,7 @@ const renderer = join(process.cwd(), 'dist', 'renderer');
 const shippedScripts = readdirSync(renderer).filter(name => name.endsWith('.js')).sort();
 assert.deepEqual(shippedScripts, ['lite-affinity.js', 'lite-api.js', 'lite-app.js', 'lite-care.js', 'lite-day.js',
   'lite-file-reaction.js', 'lite-gait.js', 'lite-i18n.js', 'lite-image.js', 'lite-mask.js', 'lite-menu.js',
-  'lite-pack.js', 'lite-settings.js', 'lite-summary.js', 'lite-throw.js']);
+  'lite-pack.js', 'lite-report.js', 'lite-settings.js', 'lite-summary.js', 'lite-throw.js']);
 const fileReaction = { liteT: makeTranslate(zhDict) };
 vm.createContext(fileReaction);
 vm.runInContext(readFileSync(join(renderer, 'lite-file-reaction.js'), 'utf8'), fileReaction);
@@ -615,6 +615,65 @@ const settingsSource = readFileSync(join(process.cwd(), 'src', 'renderer', 'lite
 assert.match(settingsSource, /paintSummary\(cfg\)/, 'the panel has to paint the week');
 assert.match(readFileSync(join(renderer, 'settings.html'), 'utf8'), /id="summary-days"/);
 
+// ---- the year report -------------------------------------------------------
+// The weekly counters read a whole year at a time. Only the current year is ever
+// shown — the buckets are pruned to about a year — and the window has to end
+// today rather than December, or every figure would understate the year.
+const report = {};
+vm.createContext(report);
+vm.runInContext(readFileSync(join(renderer, 'lite-day.js'), 'utf8'), report);
+vm.runInContext(readFileSync(join(renderer, 'lite-summary.js'), 'utf8'), report);
+vm.runInContext(readFileSync(join(renderer, 'lite-report.js'), 'utf8'), report);
+const reportJson = (value) => JSON.parse(JSON.stringify(value));
+const today = report.liteDayKey();
+const thisYear = Number(today.slice(0, 4));
+const thisWindow = report.reportYearWindow(thisYear);
+assert.equal(thisWindow.from, `${thisYear}-01-01`);
+assert.equal(thisWindow.to, today, 'the year so far ends today, not in December');
+const pastWindow = report.reportYearWindow(thisYear - 1);
+assert.equal(pastWindow.from, `${thisYear - 1}-01-01`);
+assert.equal(pastWindow.to, `${thisYear - 1}-12-31`, 'a finished year ends in December');
+// A whole year's arithmetic on the finished year, so nothing shifts with the
+// clock: three days in a row, a quiet gap, then one more.
+const lastYear = thisYear - 1;
+const yearStats = {
+  [`${lastYear}-03-01`]: { clicks: 2, stand: 1 },
+  [`${lastYear}-03-02`]: { clicks: 3, eye: 1 },
+  [`${lastYear}-03-03`]: { clicks: 40, water: 1, affinity: 15 },
+  [`${lastYear}-03-05`]: { clicks: 1 },
+  [`${thisYear}-01-01`]: { clicks: 99 },
+};
+const year = reportJson(report.yearReport(yearStats, lastYear));
+assert.equal(year.year, lastYear);
+assert.equal(year.from, `${lastYear}-01-01`);
+assert.equal(year.to, `${lastYear}-12-31`);
+assert.equal(year.days, 4);
+assert.equal(year.clicks, 46);
+assert.equal(year.stand, 1);
+assert.equal(year.eye, 1);
+assert.equal(year.water, 1);
+assert.equal(year.affinity, 15);
+assert.equal(year.streak, 3, 'the gap on the 4th breaks the run');
+assert.equal(year.busiest.date, `${lastYear}-03-03`);
+assert.equal(year.busiest.clicks, 40);
+assert.equal(year.first, `${lastYear}-03-01`);
+// The other year's bucket stays out of the window it does not belong to.
+assert.equal(reportJson(report.yearReport(yearStats, thisYear)).clicks, 99);
+// A silent year reports a floor, not a negative or a crash.
+const quietYear = reportJson(report.yearReport(undefined, thisYear));
+assert.equal(quietYear.days, 0);
+assert.equal(quietYear.streak, 0);
+assert.equal(quietYear.busiest, null);
+assert.equal(quietYear.first, null);
+assert.match(settingsSource, /paintReport\(cfg\)/, 'the panel has to paint the year');
+assert.match(settingsHtml, /id="report-days"/);
+assert.match(settingsHtml, /lite-report\.js/, 'the page has to load the year report');
+for (const key of ['lite.report.title', 'lite.report.range', 'lite.report.quiet',
+  'lite.report.streakLine', 'lite.report.busiest', 'lite.report.firstLine', 'lite.report.hint']) {
+  assert.equal(typeof zhDict[key], 'string', `zh is missing ${key}`);
+  assert.equal(typeof enDict[key], 'string', `en is missing ${key}`);
+}
+
 // ---- pet packs -------------------------------------------------------------
 // An imported character is drawn out of its own sheet: the frames, the grid and
 // the walking pace all come from the pack. This is what makes "import a pet" mean
@@ -702,6 +761,34 @@ for (const key of packKeys) {
   }
 }
 console.log('Walking gait (one clock for legs, body and ground): passed');
+
+// ---- data backup -----------------------------------------------------------
+// A backup is a folder of the three data parts, and a restore replaces the live
+// data rather than merging into it. The Rust half cannot be driven through a
+// dialog here, so it is checked by name; the renderer half by its bridge and the
+// two buttons it hangs on.
+for (const command of ['backup_export', 'backup_import']) {
+  assert.match(apiSource, new RegExp(command), `lite-api is missing the ${command} bridge`);
+}
+assert.match(libSource, /mod backup;/);
+assert.match(libSource, /backup::backup_export/);
+assert.match(libSource, /backup::backup_import/);
+assert.doesNotMatch(ignoreFile, /^\/src-tauri\/src\/backup\.rs$/m, 'backup.rs must not be gitignored');
+assert.doesNotMatch(ignoreFile, /^\/src\/renderer\/lite-report\.ts$/m, 'lite-report.ts must not be gitignored');
+assert.match(settingsHtml, /id="backup-export"/);
+assert.match(settingsHtml, /id="backup-import"/);
+assert.match(settingsSource, /backupExport\(\)/);
+assert.match(settingsSource, /backupImport\(\)/);
+const backupKeys = ['lite.backup.title', 'lite.backup.hint', 'lite.backup.export', 'lite.backup.import',
+  'lite.backup.exported', 'lite.backup.restored', 'lite.backup.failed', 'lite.backup.notBackup'];
+for (const key of backupKeys) {
+  assert.equal(typeof zhDict[key], 'string', `zhDictionary in src/shared/i18n.ts is missing ${key}`);
+  assert.equal(typeof enDict[key], 'string', `enDictionary in src/shared/i18n.ts is missing ${key}`);
+  for (const locale of ['zh', 'en']) {
+    assert.equal(typeof packResource[locale][key], 'string', `src-tauri/resources/i18n.json is missing ${locale} ${key}`);
+  }
+}
+console.log('Data backup (export a folder, replace on restore): passed');
 // ---- the throw --------------------------------------------------------------
 // Dragging is native (window.rs); everything that happens after the button comes
 // up is this model: the release velocity, the friction, and the four walls.

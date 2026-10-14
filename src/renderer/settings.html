@@ -171,6 +171,21 @@
       <p class="note" data-i18n="lite.summary.hint"></p>
     </section>
 
+    <section id="report">
+      <h2 data-i18n="lite.report.title">年度回顾</h2>
+      <p id="report-range" class="note"></p>
+      <div class="update-grid">
+        <span data-i18n="lite.report.days">陪伴天数</span><span id="report-days" class="value">0</span>
+        <span data-i18n="lite.report.clicks">点击次数</span><span id="report-clicks" class="value">0</span>
+        <span data-i18n="lite.report.stand">站立提醒</span><span id="report-stand" class="value">0</span>
+        <span data-i18n="lite.report.eye">护眼提醒</span><span id="report-eye" class="value">0</span>
+        <span data-i18n="lite.report.water">喝水提醒</span><span id="report-water" class="value">0</span>
+        <span data-i18n="lite.report.affinity">全年好感</span><span id="report-affinity" class="value">+0</span>
+      </div>
+      <p id="report-lines" class="note"></p>
+      <p class="note" data-i18n="lite.report.hint"></p>
+    </section>
+
     <section id="reminders">
       <h2 data-i18n="lite.reminders.title">待办提醒</h2>
       <div class="reminder-form">
@@ -237,12 +252,23 @@
       </div>
       <p id="diag-status" class="status" role="status"></p>
     </section>
+
+    <section id="backup">
+      <h2 data-i18n="lite.backup.title">数据备份</h2>
+      <p class="note" data-i18n="lite.backup.hint"></p>
+      <div class="actions">
+        <button id="backup-export" type="button" data-i18n="lite.backup.export">导出备份</button>
+        <button id="backup-import" type="button" data-i18n="lite.backup.import">从备份恢复</button>
+      </div>
+      <p id="backup-status" class="status" role="status"></p>
+    </section>
   </main>
   <script src="./lite-i18n.js"></script>
   <script src="./lite-day.js"></script>
   <script src="./lite-affinity.js"></script>
   <script src="./lite-care.js"></script>
   <script src="./lite-summary.js"></script>
+  <script src="./lite-report.js"></script>
   <script src="./lite-api.js"></script>
   <script src="./lite-image.js"></script>
   <script src="./lite-settings.js"></script>

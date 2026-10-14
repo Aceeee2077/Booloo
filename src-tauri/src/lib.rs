@@ -8,6 +8,7 @@
 #![recursion_limit = "512"]
 
 mod autostart;
+mod backup;
 mod config;
 mod cutout;
 mod custom;
@@ -125,6 +126,7 @@ const LITE_SETTINGS_CHECK_JS: &str = r#"
     hasHealth: !!document.getElementById('health') && !!document.getElementById('eye-rest'),
     hasHeatmap: !!document.getElementById('heatmap-grid'),
     hasWeeklySummary: !!document.getElementById('summary-days'),
+    hasReport: !!document.getElementById('report-days'),
     hasPacks: !!document.getElementById('packs') && !!document.getElementById('import-pack'),
     hasCustomOutline: !!document.getElementById('custom-outline'),
     // The cutout preview is answered by Rust (custom_cutout_preview), so the
@@ -132,6 +134,7 @@ const LITE_SETTINGS_CHECK_JS: &str = r#"
     hasCutoutPreviewApi: typeof window.api.cutoutPreview === 'function',
     hasGithubButton: !!document.getElementById('open-github'),
     hasDiagnostics: !!document.getElementById('diagnostics'),
+    hasBackup: !!document.getElementById('backup-export'),
     // The button's label is translated markup, so the real window is the only
     // place its aria-label can be checked.
     githubLabel: document.getElementById('open-github')?.getAttribute('aria-label') ?? null,
@@ -376,6 +379,8 @@ pub fn run() {
             window::show_pet_window,
             logfile::export_diagnostics,
             logfile::reveal_log,
+            backup::backup_export,
+            backup::backup_import,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Booloo");
