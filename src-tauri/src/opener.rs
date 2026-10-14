@@ -12,7 +12,7 @@
 // ============================================================================
 
 /// The project's public repository.
-const PROJECT_URL: &str = "https://github.com/Aceeee2077/Booloo";
+const PROJECT_URL: &str = "https://github.com/Aceeee2077/BoolooPet";
 
 #[cfg(target_os = "windows")]
 fn launch(url: &str) -> Result<(), String> {
@@ -87,7 +87,7 @@ mod tests {
 
     #[test]
     fn the_button_points_at_this_repository() {
-        assert_eq!(PROJECT_URL, "https://github.com/Aceeee2077/Booloo");
+        assert_eq!(PROJECT_URL, "https://github.com/Aceeee2077/BoolooPet");
         // The renderer never supplies the address, so an https prefix here is the
         // whole security story of this command.
         assert!(PROJECT_URL.starts_with("https://"));

@@ -55,7 +55,7 @@
   "plugins": {
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDM4MURBNjQ1RkM3NjJGRgpSV1QvWXNkZlpOcUJBOUVxOFFDV0VMV3hRT3ZSSjI2N3U1b0ZGbWhjQWFWVk5CZU5VZk1lZm83Sgo=",
-      "endpoints": ["https://github.com/Aceeee2077/Booloo/releases/latest/download/latest.json"]
+      "endpoints": ["https://github.com/Aceeee2077/BoolooPet/releases/latest/download/latest.json"]
     }
   }
 }

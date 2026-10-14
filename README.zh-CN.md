@@ -8,7 +8,7 @@
 
 **一只常驻在窗口最上层的透明小猫。** 布噜会走动、会打瞌睡、会对你电脑的状态做出反应，也会把拖给它的一张照片变成桌宠——全部在本机完成，不用登录，也不上传。
 
-[![Release](https://img.shields.io/github/v/release/Aceeee2077/Booloo?label=release&color=ff8fb0)](https://github.com/Aceeee2077/Booloo/releases)
+[![Release](https://img.shields.io/github/v/release/Aceeee2077/BoolooPet?label=release&color=ff8fb0)](https://github.com/Aceeee2077/BoolooPet/releases)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS-4c8bf5)
 ![Tauri](https://img.shields.io/badge/Tauri-2-24c8db)
 ![Rust](https://img.shields.io/badge/Rust-1.77.2%2B-dea584)
@@ -34,7 +34,7 @@ Booloo 会读 CPU、内存和电池。处理器持续吃紧它会出汗并嘟囔
 
 | 平台 | 方式 |
 | :--- | :--- |
-| **Windows 10/11** | [⬇ 到 Releases 下载最新安装包](https://github.com/Aceeee2077/Booloo/releases/latest)（NSIS `.exe`）。需要 WebView2 运行时（Win11 自带，Win10 需装一次） |
+| **Windows 10/11** | [⬇ 到 Releases 下载最新安装包](https://github.com/Aceeee2077/BoolooPet/releases/latest)（NSIS `.exe`）。需要 WebView2 运行时（Win11 自带，Win10 需装一次） |
 | **macOS 10.15+** | Releases 里有 `Booloo_<版本>_aarch64.dmg`（Apple Silicon）和 `_x64.dmg`（Intel）。**未签名也未公证**，首次打开需在「应用程序」里**右键 → 打开**，或执行 `xattr -dr com.apple.quarantine /Applications/Booloo.app` |
 | **Linux** | 暂未提供正式包。**Build** workflow 每次运行都会产出 AppImage / deb（Actions → Build → Artifacts），也可以按下文源码构建。注意：CPU / 内存 / 电量感知在 Linux 上尚未实现，桌宠在那边会保持安静 |
 | **从源码构建** | `npm install && npm run tauri:dev`，见[源码构建](#源码构建) |
@@ -189,8 +189,8 @@ docs/              README 配图与演示 GIF
 
 ## 社区
 
-- **来晒你的宠物** — 用自家猫狗的照片做了桌宠？发到 [Discussions](https://github.com/Aceeee2077/Booloo/discussions)，让别人看看抠图能做到什么程度。
-- **发现 bug 或想提功能？** [Issue 模板](https://github.com/Aceeee2077/Booloo/issues/new/choose)只问真正有用的两件事：你的系统，以及你是用开发构建还是安装包。
+- **来晒你的宠物** — 用自家猫狗的照片做了桌宠？发到 [Discussions](https://github.com/Aceeee2077/BoolooPet/discussions)，让别人看看抠图能做到什么程度。
+- **发现 bug 或想提功能？** [Issue 模板](https://github.com/Aceeee2077/BoolooPet/issues/new/choose)只问真正有用的两件事：你的系统，以及你是用开发构建还是安装包。
 - **想一起做？** [CONTRIBUTING.md](.github/CONTRIBUTING.md) 写了开发流程，[CODE_OF_CONDUCT.md](.github/CODE_OF_CONDUCT.md) 是基本约定。美术、翻译和文档和代码一样欢迎。
 
 ## 如果 Booloo 对你有用

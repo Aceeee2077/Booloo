@@ -6,7 +6,7 @@
 # in search results and social cards, the topics that make the repo findable,
 # and Discussions (which the README links to).
 #
-#   ./scripts/setup-github-metadata.sh                 # edits Aceeee2077/Booloo
+#   ./scripts/setup-github-metadata.sh                 # edits Aceeee2077/BoolooPet
 #   ./scripts/setup-github-metadata.sh OWNER/REPO      # or another fork
 #
 # Requires the GitHub CLI, authenticated with write access to the repository:
@@ -17,7 +17,7 @@
 
 set -euo pipefail
 
-REPO="${1:-${BOOLOO_REPO:-Aceeee2077/Booloo}}"
+REPO="${1:-${BOOLOO_REPO:-Aceeee2077/BoolooPet}}"
 
 # Search results and social cards cut this off around 160 characters, so the
 # useful words have to be at the front: what it is, what it is built with, and

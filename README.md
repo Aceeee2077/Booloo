@@ -8,7 +8,7 @@
 
 **A tiny transparent cat that lives on top of your windows.** Booloo walks, naps, reacts to what your computer is doing, and turns a photo you drop on it into a pet — locally, with no account and nothing uploaded.
 
-[![Release](https://img.shields.io/github/v/release/Aceeee2077/Booloo?label=release&color=ff8fb0)](https://github.com/Aceeee2077/Booloo/releases)
+[![Release](https://img.shields.io/github/v/release/Aceeee2077/BoolooPet?label=release&color=ff8fb0)](https://github.com/Aceeee2077/BoolooPet/releases)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS-4c8bf5)
 ![Tauri](https://img.shields.io/badge/Tauri-2-24c8db)
 ![Rust](https://img.shields.io/badge/Rust-1.77.2%2B-dea584)
@@ -34,8 +34,8 @@ Petting it, poking it and dropping files on it raise affinity through five level
 
 | Platform | How |
 | :--- | :--- |
-| **Windows 10/11** | [⬇ Download the latest installer](https://github.com/Aceeee2077/Booloo/releases/latest) — an NSIS `.exe`. Needs the WebView2 runtime (built into Windows 11, a one-time install on 10). |
-| **macOS 10.15+** | `Booloo_<version>_aarch64.dmg` (Apple Silicon) or `_x64.dmg` (Intel) from [Releases](https://github.com/Aceeee2077/Booloo/releases/latest). They are **not signed or notarised**, so the first launch needs right-click → Open in Applications, or `xattr -dr com.apple.quarantine /Applications/Booloo.app`. |
+| **Windows 10/11** | [⬇ Download the latest installer](https://github.com/Aceeee2077/BoolooPet/releases/latest) — an NSIS `.exe`. Needs the WebView2 runtime (built into Windows 11, a one-time install on 10). |
+| **macOS 10.15+** | `Booloo_<version>_aarch64.dmg` (Apple Silicon) or `_x64.dmg` (Intel) from [Releases](https://github.com/Aceeee2077/BoolooPet/releases/latest). They are **not signed or notarised**, so the first launch needs right-click → Open in Applications, or `xattr -dr com.apple.quarantine /Applications/Booloo.app`. |
 | **Linux** | No published bundle yet. The **Build** workflow produces AppImage and deb artifacts on every run (Actions → Build → Artifacts), or build from source below. Heads-up: the CPU / memory / battery awareness is not implemented on Linux yet, so the pet simply stays quiet there. |
 | **From source** | `npm install && npm run tauri:dev` — see [Build from source](#build-from-source). |
 
@@ -189,8 +189,8 @@ docs/              README images and the demo GIF
 
 ## Community
 
-- **Share your pet** — imported a photo of your own cat or dog? Post it in [Discussions](https://github.com/Aceeee2077/Booloo/discussions) so other people can see what the cutout can do.
-- **Found a bug or want a feature?** The [issue templates](https://github.com/Aceeee2077/Booloo/issues/new/choose) ask for the two things that actually help: your OS and whether you ran the dev build or the installer.
+- **Share your pet** — imported a photo of your own cat or dog? Post it in [Discussions](https://github.com/Aceeee2077/BoolooPet/discussions) so other people can see what the cutout can do.
+- **Found a bug or want a feature?** The [issue templates](https://github.com/Aceeee2077/BoolooPet/issues/new/choose) ask for the two things that actually help: your OS and whether you ran the dev build or the installer.
 - **Want to contribute?** [CONTRIBUTING.md](.github/CONTRIBUTING.md) has the dev loop, and [CODE_OF_CONDUCT.md](.github/CODE_OF_CONDUCT.md) the house rules. Art, translations and docs are just as welcome as code.
 
 ## If Booloo is useful to you

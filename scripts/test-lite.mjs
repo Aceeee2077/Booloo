@@ -27,7 +27,7 @@ const installer = readFileSync(join(process.cwd(), 'src-tauri', appConfig.bundle
 assert.ok(installer.includes('!define UNINSTKEY "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Prismoo"'));
 assert.ok(installer.includes('!define MANUPRODUCTKEY "Software\\Prismoo\\Prismoo"'));
 assert.deepEqual(appConfig.plugins.updater.endpoints,
-  ['https://github.com/Aceeee2077/Booloo/releases/latest/download/latest.json']);
+  ['https://github.com/Aceeee2077/BoolooPet/releases/latest/download/latest.json']);
 assert.equal(zhDict['bubble.greeting'], '喵～ 我是布噜！');
 assert.equal(enDict['bubble.greeting'], "Meow~ I'm Bulu!");
 const makeTranslate = (dict) => (key, params) => {
@@ -313,7 +313,7 @@ for (const [file, pattern] of [
   ['src-tauri/tauri.conf.json', /"createUpdaterArtifacts": true/],
   // The decoded public-key file and original identity are validated above.
   ['src-tauri/tauri.conf.json', /"pubkey": "[A-Za-z0-9+/]+={0,2}"/],
-  ['src-tauri/tauri.conf.json', /Aceeee2077\/Booloo\/releases\/latest\/download\/latest\.json/],
+  ['src-tauri/tauri.conf.json', /Aceeee2077\/BoolooPet\/releases\/latest\/download\/latest\.json/],
   ['.github/workflows/release.yml', /tauri-apps\/tauri-action@v1/],
 ]) {
   assert.match(readFileSync(join(process.cwd(), file), 'utf8'), pattern, `${file} lost its updater wiring`);

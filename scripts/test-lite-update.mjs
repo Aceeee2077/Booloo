@@ -14,7 +14,7 @@ import vm from 'node:vm';
 const require = createRequire(import.meta.url);
 const { zhDict, enDict } = require(join(process.cwd(), 'dist', 'shared', 'i18n.js'));
 
-const RELEASES = 'https://github.com/Aceeee2077/Booloo/releases/latest';
+const RELEASES = 'https://github.com/Aceeee2077/BoolooPet/releases/latest';
 const events = new Map();
 const elements = new Map();
 const calls = {
@@ -223,7 +223,7 @@ assert.equal(calls.download, 1);
 updateState({ status: 'unsupported', currentVersion: '0.6.5', manualUrl: RELEASES,
   autoCheck: true, autoDownload: true, channel: 'stable' });
 assert.equal(manual.hidden, false);
-assert.match(manual.textContent, /Booloo\/releases\/latest/);
+assert.match(manual.textContent, /BoolooPet\/releases\/latest/);
 assert.equal(checkButton.disabled, true, 'an unsupported build cannot check');
 assert.equal(status.textContent, '当前版本无法自动更新，请手动下载新版本');
 
