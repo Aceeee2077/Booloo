@@ -400,7 +400,11 @@ pub fn spawn_position_saver(app: &AppHandle) {
             if last != Some(current) {
                 last = Some(current);
                 let payload = serde_json::json!({ "x": current.0, "y": current.1 }).to_string();
-                let _ = fs::write(position_path(&handle), payload);
+                // Only written when the pet actually moved, so a failure here can
+                // only repeat as often as the window does — not every tick.
+                if let Err(error) = fs::write(position_path(&handle), payload) {
+                    crate::logfile::warn(format!("the pet position could not be saved: {error}"));
+                }
             }
         }
     });

@@ -321,11 +321,44 @@ fn copy_tree(from: &Path, to: &Path) -> std::io::Result<()> {
 /// broken pack must not stop the others from loading.
 fn read_pack(dir: &Path) -> Option<Value> {
     let hint = dir.file_name().and_then(|name| name.to_str()).unwrap_or("pack");
-    let raw: Value = fs::read_to_string(dir.join(MANIFEST))
-        .ok()
-        .and_then(|text| serde_json::from_str(&text).ok())?;
-    let manifest = validate(&raw, hint).ok()?;
-    check_sheet(dir, &manifest).ok()?;
+    // A pack that fails to load is skipped rather than reported to the user, but
+    // silently dropping it leaves no way to explain why it vanished — so the log
+    // gets the reason. `PackError` is rendered from its key and params here
+    // because this path has no `AppHandle` to translate with.
+    let raw: Value = match fs::read_to_string(dir.join(MANIFEST)) {
+        Ok(text) => match serde_json::from_str(&text) {
+            Ok(parsed) => parsed,
+            Err(error) => {
+                crate::logfile::warn(format!(
+                    "skipping pet pack '{hint}': the manifest is not valid JSON ({error})"
+                ));
+                return None;
+            }
+        },
+        Err(error) => {
+            crate::logfile::warn(format!(
+                "skipping pet pack '{hint}': the manifest could not be read ({error})"
+            ));
+            return None;
+        }
+    };
+    let manifest = match validate(&raw, hint) {
+        Ok(manifest) => manifest,
+        Err(error) => {
+            crate::logfile::warn(format!(
+                "skipping pet pack '{hint}': {} {}",
+                error.key, error.params
+            ));
+            return None;
+        }
+    };
+    if let Err(error) = check_sheet(dir, &manifest) {
+        crate::logfile::warn(format!(
+            "skipping pet pack '{hint}': {} {}",
+            error.key, error.params
+        ));
+        return None;
+    }
     let sheet = manifest
         .pointer("/assets/spritesheet")
         .and_then(Value::as_str)

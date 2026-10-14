@@ -394,6 +394,12 @@ export const zhDict: Record<string, I18nValue> = {
   'lite.pack.badSheet': '精灵图是 {width}×{height}，与 sprite 声明的 {expected} 不符',
   'lite.pack.tooLarge': '宠物包太大（超过 120 MB）',
   'lite.pack.badId': '宠物包的 id 不能用作文件夹名',
+  'lite.diag.title': '诊断',
+  'lite.diag.hint': '遇到问题时，可以把本地日志打包发给开发者。',
+  'lite.diag.export': '导出诊断信息',
+  'lite.diag.reveal': '打开日志',
+  'lite.diag.exported': '已导出到 {path}',
+  'lite.diag.failed': '导出失败：{error}',
 };
 
 export const enDict: Record<string, I18nValue> = {
@@ -779,6 +785,12 @@ export const enDict: Record<string, I18nValue> = {
   'lite.pack.badSheet': 'The sheet is {width}×{height} but the sprite block describes {expected}',
   'lite.pack.tooLarge': 'That pet pack is too large (over 120 MB)',
   'lite.pack.badId': 'That pet pack id cannot be used as a folder name',
+  'lite.diag.title': 'Diagnostics',
+  'lite.diag.hint': 'When something goes wrong, package the local log to send to the developer.',
+  'lite.diag.export': 'Export diagnostics',
+  'lite.diag.reveal': 'Open log',
+  'lite.diag.exported': 'Exported to {path}',
+  'lite.diag.failed': 'Export failed: {error}',
 };
 
 export function getDict(locale: Locale): Record<string, I18nValue> {

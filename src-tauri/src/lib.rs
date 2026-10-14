@@ -13,6 +13,7 @@ mod cutout;
 mod custom;
 mod i18n;
 mod load;
+mod logfile;
 mod opener;
 mod petpack;
 mod tray;
@@ -130,6 +131,7 @@ const LITE_SETTINGS_CHECK_JS: &str = r#"
     // renderer no longer keys the photo itself; prove the call is wired.
     hasCutoutPreviewApi: typeof window.api.cutoutPreview === 'function',
     hasGithubButton: !!document.getElementById('open-github'),
+    hasDiagnostics: !!document.getElementById('diagnostics'),
     // The button's label is translated markup, so the real window is the only
     // place its aria-label can be checked.
     githubLabel: document.getElementById('open-github')?.getAttribute('aria-label') ?? null,
@@ -280,11 +282,14 @@ pub fn run() {
         // `plugins.updater`, and updater.rs exposes the renderer's commands.
         .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
+            // Everything below this point is allowed to write to the log.
+            logfile::init(app.handle());
             // Never register the development/self-check executable as a login app.
             #[cfg(not(debug_assertions))]
             if std::env::var("BOOLOO_SELFCHECK").is_err() {
                 if let Err(error) = autostart::migrate(app.handle()) {
                     eprintln!("Booloo startup migration: {error}");
+                    logfile::error(format!("the login-item migration failed: {error}"));
                 }
             }
             // macOS: a desktop pet must not claim a Dock / ⌘-Tab slot — the tray
@@ -297,7 +302,10 @@ pub fn run() {
             app.manage(window::DragState::default());
             app.manage(updater::DownloadedState::default());
             app.manage(load::LoadState::default());
-            tray::build(app.handle())?;
+            if let Err(error) = tray::build(app.handle()) {
+                logfile::error(format!("the tray icon could not be created: {error}"));
+                return Err(error.into());
+            }
             window::spawn_position_saver(app.handle());
 
             // Safety net: the pet window starts hidden and is revealed by
@@ -308,6 +316,7 @@ pub fn run() {
                 std::thread::sleep(std::time::Duration::from_millis(4000));
                 if let Some(pet) = watchdog.get_webview_window("pet") {
                     if !pet.is_visible().unwrap_or(true) {
+                        logfile::warn("the pet window was still hidden after 4s — showing it from the watchdog");
                         let _ = pet.show();
                     }
                 }
@@ -365,6 +374,8 @@ pub fn run() {
             window::autolaunch_get,
             window::autolaunch_set,
             window::show_pet_window,
+            logfile::export_diagnostics,
+            logfile::reveal_log,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Booloo");

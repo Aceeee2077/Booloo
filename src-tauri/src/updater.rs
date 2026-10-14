@@ -16,7 +16,7 @@ use tauri::{AppHandle, Emitter, State};
 use tauri_plugin_updater::UpdaterExt;
 
 /// Manual fallback URL, shown while the updater is not configured or a check fails.
-const RELEASES_URL: &str = "https://github.com/Aceeee2077/Booloo/releases/latest";
+const RELEASES_URL: &str = "https://github.com/Aceeee2077/BoolooPet/releases/latest";
 
 /// Holds the verified installer bytes between `update_download` and `update_install`.
 #[derive(Default)]
@@ -132,6 +132,7 @@ pub async fn update_check(
     let updater = match app.updater() {
         Ok(updater) => updater,
         Err(err) => {
+            crate::logfile::error(format!("the updater is unavailable: {err}"));
             state.status = "unsupported".to_string();
             state.error = Some(err.to_string());
             emit_state(&app, &state);
@@ -141,16 +142,19 @@ pub async fn update_check(
 
     match updater.check().await {
         Ok(Some(update)) => {
+            crate::logfile::info(format!("update {} is available", update.version));
             state.status = "available".to_string();
             state.version = Some(update.version);
             state.notes = update.body;
             state.error = None;
         }
         Ok(None) => {
+            crate::logfile::info("no update is available");
             state.status = "up-to-date".to_string();
             state.error = None;
         }
         Err(err) => {
+            crate::logfile::error(format!("the update check failed: {err}"));
             state.status = "error".to_string();
             state.error = Some(err.to_string());
         }
@@ -171,6 +175,7 @@ pub async fn update_download(
     let updater = match app.updater() {
         Ok(updater) => updater,
         Err(err) => {
+            crate::logfile::error(format!("the updater is unavailable: {err}"));
             state.status = "error".to_string();
             state.error = Some(err.to_string());
             emit_state(&app, &state);
@@ -187,6 +192,7 @@ pub async fn update_download(
             return Ok(state);
         }
         Err(err) => {
+            crate::logfile::error(format!("the update check failed: {err}"));
             state.status = "error".to_string();
             state.error = Some(err.to_string());
             emit_state(&app, &state);
@@ -230,6 +236,7 @@ pub async fn update_download(
     let bytes = match bytes {
         Ok(bytes) => bytes,
         Err(err) => {
+            crate::logfile::error(format!("the update download failed: {err}"));
             state.status = "error".to_string();
             state.error = Some(err.to_string());
             emit_state(&app, &state);
@@ -237,6 +244,7 @@ pub async fn update_download(
         }
     };
 
+    crate::logfile::info(format!("update {version} downloaded"));
     *downloaded.0.lock().unwrap() = Some(bytes);
 
     state.status = "downloaded".to_string();
@@ -252,6 +260,19 @@ pub async fn update_install(
     app: AppHandle,
     downloaded: State<'_, DownloadedState>,
 ) -> Result<(), String> {
+    // The install is the step that can still fail after a download that looked
+    // fine — signature verification lives in here — so it is the one place worth
+    // wrapping: every failure mode ends up in the log with the same shape.
+    match run_install(&app, downloaded.inner()).await {
+        Ok(()) => Ok(()),
+        Err(error) => {
+            crate::logfile::error(format!("the update could not be installed: {error}"));
+            Err(error)
+        }
+    }
+}
+
+async fn run_install(app: &AppHandle, downloaded: &DownloadedState) -> Result<(), String> {
     let bytes = downloaded
         .0
         .lock()
@@ -278,6 +299,7 @@ pub async fn update_install_when_ready(
     let updater = match app.updater() {
         Ok(updater) => updater,
         Err(err) => {
+            crate::logfile::error(format!("the updater is unavailable: {err}"));
             state.status = "error".to_string();
             state.error = Some(err.to_string());
             emit_state(&app, &state);
@@ -294,6 +316,7 @@ pub async fn update_install_when_ready(
             return Ok(state);
         }
         Err(err) => {
+            crate::logfile::error(format!("the update check failed: {err}"));
             state.status = "error".to_string();
             state.error = Some(err.to_string());
             emit_state(&app, &state);
@@ -337,12 +360,14 @@ pub async fn update_install_when_ready(
     match result {
         Ok(()) => {
             // On Windows this launches the installer and exits before returning.
+            crate::logfile::info(format!("update {version} downloaded and installing"));
             state.status = "downloaded".to_string();
             state.version = Some(version);
             state.progress = None;
             state.error = None;
         }
         Err(err) => {
+            crate::logfile::error(format!("the update download/install failed: {err}"));
             state.status = "error".to_string();
             state.error = Some(err.to_string());
         }

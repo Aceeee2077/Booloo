@@ -78,6 +78,9 @@
   const checkUpdateButton = $<HTMLButtonElement>('btn-check-update');
   const downloadUpdateButton = $<HTMLButtonElement>('btn-download-update');
   const installUpdateButton = $<HTMLButtonElement>('btn-install-update');
+  const exportDiagnosticsButton = $<HTMLButtonElement>('export-diagnostics');
+  const revealLogButton = $<HTMLButtonElement>('reveal-log');
+  const diagStatus = $<HTMLParagraphElement>('diag-status');
   let candidate: HTMLImageElement | null = null;
   let current: AppConfig | null = null;
   let lastUpdate: UpdateState | null = null;
@@ -1006,6 +1009,27 @@
   });
   updateAutoCheck.addEventListener('change', () => void window.api.setConfig({ updateAutoCheck: updateAutoCheck.checked }));
   updateAutoDownload.addEventListener('change', () => void window.api.setConfig({ updateAutoDownload: updateAutoDownload.checked }));
+  // Diagnostics: bundle the log into a folder the user picks, or open it in place.
+  exportDiagnosticsButton.addEventListener('click', async () => {
+    exportDiagnosticsButton.disabled = true;
+    diagStatus.classList.remove('error');
+    try {
+      const result = await window.api.exportDiagnostics();
+      if (result.cancelled) return;
+      if (!result.ok) {
+        diagStatus.classList.add('error');
+        diagStatus.textContent = liteT('lite.diag.failed', { error: result.error ?? '' });
+        return;
+      }
+      diagStatus.textContent = liteT('lite.diag.exported', { path: result.path ?? '' });
+    } catch (error) {
+      diagStatus.classList.add('error');
+      diagStatus.textContent = liteT('lite.diag.failed', { error: String(error) });
+    } finally {
+      exportDiagnosticsButton.disabled = false;
+    }
+  });
+  revealLogButton.addEventListener('click', () => window.api.revealLog());
   window.api.onUpdateState(renderUpdate);
   autoLaunch.addEventListener('change', () => void window.api.autoLaunchSet(autoLaunch.checked).then((enabled) => {
     autoLaunch.checked = enabled;

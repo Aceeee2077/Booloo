@@ -183,10 +183,25 @@ pub fn init(app: &AppHandle) -> ConfigState {
     let _ = fs::create_dir_all(&dir);
     let path = dir.join("config.json");
 
-    let mut value = fs::read_to_string(&path)
-        .ok()
-        .and_then(|raw| serde_json::from_str::<Value>(&raw).ok())
-        .unwrap_or_else(|| Value::Object(Map::new()));
+    let mut value = match fs::read_to_string(&path) {
+        Ok(raw) => match serde_json::from_str::<Value>(&raw) {
+            Ok(parsed) => parsed,
+            Err(error) => {
+                crate::logfile::error(format!(
+                    "config.json could not be parsed, starting from defaults: {error}"
+                ));
+                Value::Object(Map::new())
+            }
+        },
+        // A first run has no file yet; that is expected and not worth a line.
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Value::Object(Map::new()),
+        Err(error) => {
+            crate::logfile::error(format!(
+                "config.json could not be read, starting from defaults: {error}"
+            ));
+            Value::Object(Map::new())
+        }
+    };
     // Existing users chose a skin before PetPack existed; preserve that selection.
     if value.get("currentPetId").is_none() {
         if let Some(skin) = value.get("skin").and_then(Value::as_str).map(str::to_string) {
@@ -264,8 +279,15 @@ impl ConfigState {
 
     pub fn persist(&self) {
         let value = self.snapshot();
-        if let Ok(raw) = serde_json::to_string_pretty(&value) {
-            let _ = fs::write(&self.path, raw);
+        match serde_json::to_string_pretty(&value) {
+            Ok(raw) => {
+                if let Err(error) = fs::write(&self.path, raw) {
+                    crate::logfile::error(format!("the config could not be saved: {error}"));
+                }
+            }
+            Err(error) => {
+                crate::logfile::error(format!("the config could not be serialized: {error}"));
+            }
         }
     }
 }

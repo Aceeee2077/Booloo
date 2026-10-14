@@ -132,6 +132,8 @@
     updateInstall: () => call<void>('update_install'),
     updateInstallWhenReady: () => call<UpdateState>('update_install_when_ready'),
     openProjectPage: () => send('open_project_page'),
+    exportDiagnostics: () => call<DiagnosticsResult>('export_diagnostics'),
+    revealLog: () => send('reveal_log'),
     onUpdateState: (callback: (state: UpdateState) => void) => subscribe<UpdateState>('update-state', callback),
     dragBegin: (visualBounds?: PetBox) => send('drag_begin', { visualBounds: visualBounds ?? bounds() }),
     dragMove: () => send('drag_move'),

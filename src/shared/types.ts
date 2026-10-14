@@ -217,6 +217,17 @@ interface PetPackActionResult {
   error?: string;
 }
 
+/** Answer of `export_diagnostics`. */
+interface DiagnosticsResult {
+  ok: boolean;
+  /** The user closed the folder picker — not a failure, and nothing to report. */
+  cancelled?: boolean;
+  /** The folder the bundle was written to. */
+  path?: string;
+  /** Localized failure reason. */
+  error?: string;
+}
+
 /** Custom image query / selection result */
 interface CustomImageResult {  ok: boolean;
   /** pet-custom:// resource URL, can be assigned directly to img.src / GLTFLoader */
@@ -559,6 +570,13 @@ interface PetApi {
    * so the page cannot use it to launch arbitrary links.
    */
   openProjectPage(): void;
+  /**
+   * Bundle the local log plus an environment snapshot into a folder the user
+   * picks, ready to attach to a bug report.
+   */
+  exportDiagnostics(): Promise<DiagnosticsResult>;
+  /** Show the log file in the OS file manager. */
+  revealLog(): void;
   /**
    * Coarse CPU / memory / battery state. Only polled while
    * `AppConfig.loadAwareness` is on; the first call may report a null CPU
