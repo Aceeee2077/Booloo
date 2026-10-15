@@ -142,6 +142,7 @@ Thumbs.db
 # what the GitHub Releases page already says, and RECORDING.md only explains how
 # to re-record the README demo. Both stay on disk, neither is pushed.
 /CHANGELOG.md
+/README-EN.md
 /docs/RECORDING.md
 /legacy/
 /examples/
